@@ -1,85 +1,110 @@
 # Architecture
 
-This is the implementation contract for the parallel Reader and Writer
-streams. It is normative for names, ownership, and observable behaviour.
+This document is the implementation contract for the TOML 1.1.0 reader and
+writer. The reader returns the values described here and the writer accepts
+those same values.
 
 ## Ownership and layout
 
-The foundation owns `src/package.lisp`, `src/conditions.lisp`, `src/data.lisp`,
-`src/model-macros.lisp`, and model/condition tests. Reader owns only
-`src/reader*.lisp` and `t/reader*-test.lisp`; Writer owns only
-`src/writer*.lisp` and `t/writer*-test.lisp`. `t/fixtures/` is owned by the
-conformance stream and must not be edited by any of these streams.
+The foundation owns `src/package.lisp`, `src/conditions.lisp`,
+`src/data.lisp`, `src/model.lisp`, and their tests. Reader owns
+`src/reader*.lisp` and `t/reader*-test.lisp`. Writer owns `src/writer*.lisp`
+and `t/writer*-test.lisp`. Reader owns the shared fixture loaders in
+`t/fixture-*.lisp`; neither stream edits `t/fixtures/`.
 
-ASDF loads package, data tables, conditions, model macros, model, then reader
-and writer files. Reader and Writer may use model and conditions, never each
-other's private helpers.
+ASDF loads package, conditions, data, model, then reader and writer files.
+Reader and Writer use the common value and condition contracts but do not use
+each other's private helpers.
 
 ## Public API
 
+The public operations are ordinary functions:
+
 ```lisp
 (parse source &key source-name)
-(encode value &key pretty)
+(parse-file pathname)
+(encode value)
+(write-toml value stream)
 ```
 
-`source` is a string or character input stream. `source-name` labels
-diagnostics. `parse` returns one ordered TOML table and signals
-`toml-parse-error` for invalid input. `encode` returns a string and signals
-`toml-encoding-error` for unrepresentable values. `pretty` controls spacing;
-the default is deterministic compact output. These are functions, not macros.
+`source` is a string or character input stream. `parse` returns the top-level
+hash table. `encode` returns a string, while `write-toml` writes directly to a
+character stream. Invalid input and unsupported values signal the documented
+conditions. `+toml-false+` and `toml-false-p` represent TOML false.
 
-The model API is `make-string-value`, `make-integer-value`,
-`make-float-value`, `make-boolean-value`, `make-array-value`,
-`make-table-value`, `value-type`, `value-p`, `array-elements`,
-`table-entries`, and `table-value`. Date values are the cl-date-kit objects
-directly, without adapters.
+## Native value contract
 
-## Data model
+| TOML | Lisp value |
+| --- | --- |
+| table, inline table, or table-array element | hash table, equal test, string keys |
+| array, including an array of tables | `simple-vector` |
+| string | `string` |
+| integer | signed 64-bit `integer` |
+| float | `double-float`, including SBCL infinity and NaN |
+| true | `t` |
+| false | `+toml-false+` |
+| offset date-time | `cl-date-kit:offset-date-time` |
+| local date-time | `cl-date-kit:local-date-time` |
+| local date | `cl-date-kit:local-date` |
+| local time | `cl-date-kit:local-time` |
 
-| TOML value | Lisp representation | Notes |
-| --- | --- | --- |
-| string | string value object | Separate from table keys. |
-| integer | integer value object | Never coerced to float. |
-| float | float value object | Includes infinity and NaN. |
-| boolean | boolean value object | False is distinct from `nil` and absence. |
-| offset date-time | `cl-date-kit:offset-date-time` | Used directly. |
-| local date-time | `cl-date-kit:local-date-time` | Used directly. |
-| local date | `cl-date-kit:local-date` | Used directly. |
-| local time | `cl-date-kit:local-time` | Used directly. |
-| array | ordered array value object | Empty arrays remain present. |
-| table | ordered table value object | Key order is retained. |
-| inline table | table value with inline marker | Controls writer layout. |
-| array of tables | table-entry metadata | Distinct from an ordinary array. |
+`nil` and lists are not TOML values. The writer signals
+`toml-encoding-error` for them. Date values are the required cl-date-kit
+objects directly; there are no adapter structs and TOML has no zoned date-time
+or offset-time value.
 
-The declarative value-type table in `src/data.lisp` is the source of truth;
-`src/model-macros.lisp` generates predicates and constructors from it. This
-is an internal definition DSL, not the public data API.
+Reader inserts table keys in source order and never removes them. Writer uses
+`maphash` order. This project intentionally relies on SBCL's insertion-order
+hash-table traversal and fixes that property with tests; it is not a portable
+hash-table guarantee.
+
+The value declarations in `src/data.lisp` are data. Macros derive the native
+type declarations and value dispatch from that table. They must not introduce
+wrapper objects or duplicate public aliases.
 
 ## Conditions
 
-`toml-kit-error` is the root. `toml-parse-error` adds `source-name`, `line`,
-`column`, and `offset`. `toml-encoding-error` identifies the offending value
-and path. Concrete conditions include `toml-invalid-syntax`,
-`toml-invalid-value`, and `toml-unsupported-value`. Every condition has a
-`:report` method and readers for public diagnostic slots.
+`toml-kit-error` is the root condition. `toml-parse-error` adds source name,
+position, line, column, path, expected token, context, and text. Each slot has
+its exported reader. `toml-encoding-error` adds message and path. Both
+concrete conditions define `:report`; callers should inspect accessors rather
+than parse report strings.
 
 ## CPS and macros
 
-Parser token and grammar helpers may use CPS for success, failure, and source
-location propagation. CPS stays inside Reader; `parse` presents ordinary
-values and conditions. Writer may use a continuation for streaming output,
-but `encode` returns a string. Tables, labels, and diagnostic text are data;
-traversal and validation are logic.
+Reader grammar and token code may use CPS for success, failure, and source
+location propagation. CPS is an internal implementation detail: the public
+reader remains a function that returns a value or signals a condition. Writer
+may use a continuation around direct stream writes. Hot continuations should
+be `dynamic-extent` or expanded inline so parsing and writing do not allocate
+one closure per character.
 
-Macros are used only for generated definitions and repetitive syntax. Public
-parse/encode operations remain functions, as required by the API standard.
+Macros generate declarations and repetitive dispatch only. Public operations,
+condition construction, and I/O remain functions.
 
-## Tests and fixtures
+## Performance policy
 
-Foundation tests cover every model constructor, predicate, accessor, empty
-collection, ordered-table operation, direct date-kit value, and condition
-report/accessor. `cl-weave` is the test framework. Conformance fixtures are
-read from `t/fixtures/` and never copied or modified. Reader tests assert
-parsed values; Writer tests assert deterministic output and round trips.
-Property tests cover parse/encode round trips after both streams land. Flake
-checks include tests, coverage, formatting, and paredit lint.
+The implementation targets linear work in input length. It is SBCL-only and
+must not use `(safety 0)` or a partial `declaim (optimize ...)`; optimization
+declarations, when needed, specify the complete project policy. Reader input
+is normalized to `simple-string` and scanned by index. Character classes are
+data tables, and scanners do not build intermediate substrings. Writer emits
+directly to the supplied stream; `encode` is the string-output convenience
+wrapper around that path.
+
+Containers are hash tables and simple vectors so lookup and append do not
+degrade to alist/list quadratic construction. Benchmarks in `benchmark/` are
+diagnostic only and never decide merges.
+
+## Tests and verification
+
+cl-weave tests cover every value kind, false sentinel, 64-bit boundaries,
+invalid nil/list values, date object identity, insertion order, and every
+condition report and accessor. Reader tests cover conformance fixtures and
+source streams. Writer tests cover direct streams, unsupported values, and
+round trips. Coverage is measured by cl-weave and the foundation target is
+100%.
+
+The canonical repository gate is `timeout 1800 nix flake check`. The benchmark
+workflow is separate, has a timeout, and is diagnostic rather than a merge
+gate.

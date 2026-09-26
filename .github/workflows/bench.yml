@@ -1,0 +1,20 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+# Benchmarks need a real runner clock and are diagnostic, not a merge check.
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Run diagnostic benchmarks
+        run: timeout 600 nix develop -c sbcl --script run-benchmarks.lisp

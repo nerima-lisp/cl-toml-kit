@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-exec sbcl --script run-tests.lisp
+exec timeout 600 sbcl --script run-tests.lisp

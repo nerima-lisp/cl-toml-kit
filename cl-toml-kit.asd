@@ -38,3 +38,13 @@
              (unless (funcall (symbol-function
                                (find-symbol "RUN-TESTS" "CL-TOML-KIT/TEST")))
                (error "cl-toml-kit test suite failed"))))
+
+(asdf:defsystem "cl-toml-kit/benchmark"
+  :description "Diagnostic benchmark definitions for cl-toml-kit"
+  :author "takeokunn <bararararatty@gmail.com>"
+  :license "MIT"
+  :version "0.1.0"
+  :depends-on ("cl-toml-kit")
+  :pathname "benchmark"
+  :serial t
+  :components ((:file "runner")))

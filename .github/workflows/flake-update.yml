@@ -1,0 +1,26 @@
+name: Flake update
+
+on:
+  schedule:
+    - cron: '29 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Update lockfile
+        run: nix flake update
+      - name: Open update pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: 'chore: update flake inputs'
+          commit-message: 'chore: update flake inputs'
+          branch: automation/flake-update
