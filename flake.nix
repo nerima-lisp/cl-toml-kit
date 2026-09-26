@@ -24,6 +24,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    cl-json-kit = {
+      url = "github:nerima-lisp/cl-json-kit/v1.2.0";
+      flake = false;
+    };
+
     paredit-cli = {
       url = "github:nerima-lisp/paredit-cli/v1.6.3";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -35,7 +40,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, cl-nix-forge, cl-parser-kit, cl-date-kit, cl-weave, paredit-cli, treefmt-nix }:
+  outputs = { self, nixpkgs, cl-nix-forge, cl-parser-kit, cl-date-kit, cl-weave, cl-json-kit, paredit-cli, treefmt-nix }:
     let
       systems = [ "x86_64-linux" "aarch64-darwin" ];
     in
@@ -65,7 +70,15 @@
           lispSystem = "cl-date-kit";
         })
       ];
-      lispCheckDependencies = ctx: [ cl-weave.packages.${ctx.system}.cl-weave ];
+      lispCheckDependencies = ctx: [
+        cl-weave.packages.${ctx.system}.cl-weave
+        (ctx.cl.lispDerivation {
+          pname = "cl-json-kit";
+          version = ctx.cl.fromAsdSystem "${cl-json-kit}/cl-json-kit.asd";
+          src = cl-json-kit;
+          lispSystem = "cl-json-kit";
+        })
+      ];
 
       timeoutSeconds = 120;
       killAfterSeconds = 30;
