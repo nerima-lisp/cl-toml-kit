@@ -1,6 +1,7 @@
 (in-package #:cl-toml-kit)
 
-(defparameter *toml-writer-emitter-specifications*
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *toml-writer-emitter-specifications*
   '((:string (%write-string-value value stream))
     (:integer (%write-integer-value value stream path))
     (:float (%write-float-value value stream))
@@ -16,7 +17,7 @@
      (write-string (cl-date-kit:format-local-date value) stream))
     (:local-time
      (write-string (cl-date-kit:format-local-time
-                    value :profile :rfc3339) stream))))
+                    value :profile :rfc3339) stream)))))
 
 (defparameter *toml-bare-key-character-p*
   (let ((table (make-array 128 :element-type 'bit :initial-element 0)))

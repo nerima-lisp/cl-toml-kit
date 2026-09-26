@@ -4,12 +4,11 @@
 (defconstant +toml-max-integer+ 9223372036854775807)
 
 (defun %signal-encoding-error (message value path)
-  (error (make-toml-encoding-error
-          :message (format nil "~A (value ~S)" message value)
-          :path (reverse path))))
-
-(defun %valid-table-p (table)
-  (and (hash-table-p table) (eq (hash-table-test table) 'equal)))
+  (let ((*print-length* 10)
+        (*print-level* 3))
+    (error (make-toml-encoding-error
+            :message (format nil "~A (value ~S)" message value)
+            :path (reverse path)))))
 
 (declaim (ftype function %write-string-value %write-value))
 
@@ -41,28 +40,15 @@
       (%signal-encoding-error "Integer is outside TOML's signed 64-bit range"
                               value path)))
 
-(defun %float-text (value)
-  (cond ((sb-ext:float-nan-p value) "nan")
-        ((sb-ext:float-infinity-p value)
-         (if (minusp value) "-inf" "inf"))
-        (t
-         (let* ((*read-default-float-format* 'double-float)
-                (text (substitute #\e #\d (prin1-to-string value)))
-                (zero-exponent (search "e0" text)))
-           (if zero-exponent
-               (subseq text 0 zero-exponent)
-               text)))))
-
 (defun %write-float-value (value stream)
   (cond ((sb-ext:float-nan-p value) (write-string "nan" stream))
         ((sb-ext:float-infinity-p value)
          (write-string (if (minusp value) "-inf" "inf") stream))
-        (t (write-string (%float-text value) stream))))
-
-(define-toml-emitter %write-scalar-value (value stream path))
+        (t (let ((*read-default-float-format* 'double-float))
+             (prin1 value stream)))))
 
 (defun %write-inline-table (table stream path)
-  (unless (%valid-table-p table)
+  (unless (toml-table-p table)
     (%signal-encoding-error "Table must use the EQUAL hash-table test"
                             table path))
   (if (zerop (hash-table-count table))
@@ -94,14 +80,32 @@
   (write-char #\] stream))
 
 (defun %write-value (value stream path)
-  (toml-value-typecase value
-    (:table (%write-inline-table value stream path))
-    (:array (%write-array value stream path))
-    (:string (%write-string-value value stream))
-    (t (%write-scalar-value value stream path))))
+  (typecase value
+    (integer (%write-integer-value value stream path))
+    (hash-table (if (toml-table-p value)
+                    (%write-inline-table value stream path)
+                    (%signal-encoding-error
+                     "Table must use the EQUAL hash-table test" value path)))
+    (simple-vector (%write-array value stream path))
+    (string (%write-string-value value stream))
+    (double-float (%write-float-value value stream))
+    ((eql t) (write-string "true" stream))
+    (toml-false-sentinel (write-string "false" stream))
+    (cl-date-kit:offset-date-time
+     (write-string (cl-date-kit:format-offset-date-time
+                    value :profile :rfc3339) stream))
+    (cl-date-kit:local-date-time
+     (write-string (cl-date-kit:format-local-date-time
+                    value :profile :rfc3339) stream))
+    (cl-date-kit:local-date
+     (write-string (cl-date-kit:format-local-date value) stream))
+    (cl-date-kit:local-time
+     (write-string (cl-date-kit:format-local-time
+                    value :profile :rfc3339) stream))
+    (t (%signal-encoding-error "Unsupported TOML value" value path))))
 
 (defun %entry-kind (value)
-  (cond ((and (hash-table-p value) (%valid-table-p value)
+  (cond ((and (toml-table-p value)
               (plusp (hash-table-count value))) :table)
         ((and (vectorp value) (%array-of-tables-p value)) :array-table)
         (t :value)))
@@ -112,8 +116,9 @@
     (write-char #\. stream))
   (%write-key key stream))
 
-(defun %write-table-content (table stream path)
-  (unless (%valid-table-p table)
+(defun write-table (table path stream continuation)
+  (declare (dynamic-extent continuation))
+  (unless (toml-table-p table)
     (%signal-encoding-error "Table must use the EQUAL hash-table test"
                             table path))
   (maphash (lambda (key value)
@@ -126,30 +131,44 @@
                (%write-value value stream (cons key path))
                (write-char #\Newline stream)))
            table)
-  (maphash (lambda (key value)
-             (when (and (stringp key) (eq :table (%entry-kind value)))
-               (write-char #\[ stream)
-               (%write-key-path path key stream)
-               (write-string "]" stream)
-               (write-char #\Newline stream)
-               (%write-table-content value stream (cons key path))))
-           table)
-  (maphash (lambda (key value)
-             (when (and (stringp key) (eq :array-table (%entry-kind value)))
-               (loop for item across value
-                     do (write-string "[[" stream)
-                        (%write-key-path path key stream)
-                        (write-string "]]" stream)
-                        (write-char #\Newline stream)
-                        (%write-table-content item stream
-                                              (cons key path)))))
-           table))
+  (flet ((write-child-table (key value next)
+           (write-char #\[ stream)
+           (%write-key-path path key stream)
+           (write-string "]" stream)
+           (write-char #\Newline stream)
+           (write-table value (cons key path) stream next))
+         (write-child-array-table (key value next)
+           (loop for item across value
+                 do (write-string "[[" stream)
+                    (%write-key-path path key stream)
+                    (write-string "]]" stream)
+                    (write-char #\Newline stream)
+                    (write-table item (cons key path) stream next))))
+    (declare (dynamic-extent (function write-child-table)
+                             (function write-child-array-table)))
+    (maphash (lambda (key value)
+               (when (and (stringp key) (eq :array-table (%entry-kind value)))
+                 (let ((child-key key) (child-value value) (next continuation))
+                   (setf continuation
+                         (lambda ()
+                           (write-child-array-table child-key child-value next))))))
+             table)
+    (maphash (lambda (key value)
+               (when (and (stringp key) (eq :table (%entry-kind value)))
+                 (let ((child-key key) (child-value value) (next continuation))
+                   (setf continuation
+                         (lambda ()
+                           (write-child-table child-key child-value next))))))
+             table)
+    (funcall continuation)))
 
 (defun %write-root (value stream)
   (unless (hash-table-p value)
     (%signal-encoding-error "The top-level TOML value must be a hash-table"
                             value nil))
-  (%write-table-content value stream nil))
+  (flet ((finish () nil))
+    (declare (dynamic-extent (function finish)))
+    (write-table value nil stream #'finish)))
 
 (defun write-toml (value stream)
   "Write VALUE as TOML to STREAM and return VALUE."
