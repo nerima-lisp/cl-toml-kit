@@ -56,8 +56,9 @@
       (expect (toml-table-p equal-table))
       (expect (toml-value-p equal-table))
       (expect (not (toml-table-p eql-table)))))
-  (it "expands the declarative value model"
-    (expect (consp (macroexpand-1 '(define-toml-value-model)))))
+  (it "rejects unrepresentable finite floats"
+    (expect (signals toml-parse-error (parse "value = 1e309")))
+    (expect (signals toml-parse-error (parse "value = 1e-400"))))
   (it "dispatches directly by type"
     (expect (eq :string
                 (toml-value-typecase "value"

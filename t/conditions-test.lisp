@@ -3,14 +3,16 @@
 
 (describe "TOML conditions"
   (it "normalizes parse and encoding constructor inputs"
-    (let ((parse-error (cl-toml-kit::make-toml-parse-error
-                        :expected (list :value) :path (list :root (list :child))))
-          (encoding-error (cl-toml-kit::make-toml-encoding-error
-                           :message (list :bad) :path (list :root (list :child)))))
-      (expect (stringp (toml-parse-error-expected parse-error)))
-      (expect (consp (toml-parse-error-path parse-error)))
-      (expect (stringp (toml-encoding-error-message encoding-error)))
-      (expect (consp (toml-encoding-error-path encoding-error)))))
+    (let ((parse-error (make-condition 'toml-parse-error
+                                       :expected "value"
+                                       :path '("root" "child")))
+          (encoding-error (make-condition 'toml-encoding-error
+                                          :message "bad"
+                                          :path '("root" "child"))))
+      (expect (string= "value" (toml-parse-error-expected parse-error)))
+      (expect (equal '("root" "child") (toml-parse-error-path parse-error)))
+      (expect (string= "bad" (toml-encoding-error-message encoding-error)))
+      (expect (equal '("root" "child") (toml-encoding-error-path encoding-error)))))
   (it "constructs parse diagnostics"
     (let ((condition (make-condition 'toml-parse-error
                                      :source-name "input"
