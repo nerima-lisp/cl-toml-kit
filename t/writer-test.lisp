@@ -221,7 +221,7 @@
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
             (:non-string-key "Table keys must be strings" ("BAD"))
-            (:adjustable-vector "Not a TOML value" nil))
+            (:adjustable-vector "Unsupported TOML value" ("outer" "inner")))
       "signals a bounded encoding error for ~S"
       (kind expected-message expected-path)
     (let ((condition
