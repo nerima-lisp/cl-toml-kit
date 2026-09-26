@@ -9,9 +9,13 @@
 
 (in-package #:cl-toml-kit/test)
 
+(defvar *reader-conformance-tests-registered-p* nil)
+
 (defun run-tests ()
   "Run the foundation data and condition specifications."
-  (%register-reader-conformance-tests)
+  (unless *reader-conformance-tests-registered-p*
+    (%register-reader-conformance-tests)
+    (setf *reader-conformance-tests-registered-p* t))
   (unless (run-all :reporter :spec :timeout-ms 10000)
     (error "cl-toml-kit test suite failed"))
   t)

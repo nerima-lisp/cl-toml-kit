@@ -40,7 +40,8 @@
           do (multiple-value-bind (value present) (gethash key table)
                (cond
                  ((not present)
-                  (unless create (%error-at state (toml-reader-state-position state) "defined table" path))
+                  (unless create
+                    (%error-at state (toml-reader-state-position state) "defined table" path))
                   (setf value (make-hash-table :test #'equal)
                         (gethash key table) value
                         (gethash value (toml-reader-state-table-states state))
@@ -157,9 +158,12 @@
                               (setf index value-end)
                               (setf (toml-reader-state-position state) value-end)
                               (%skip-space-and-comments state)
-                              (unless (member (%source-char state (toml-reader-state-position state))
-                                              '(nil #\Newline #\Return))
-                                (%error-at state (toml-reader-state-position state) "line ending" path))
+                              (unless
+                                  (member (%source-char state
+                                                         (toml-reader-state-position state))
+                                         '(nil #\Newline #\Return))
+                                (%error-at state (toml-reader-state-position state)
+                                           "line ending" path))
                               (%skip-line-ending state)
                               (setf index (toml-reader-state-position state))))))))))
 
