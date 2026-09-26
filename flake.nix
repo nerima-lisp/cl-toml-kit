@@ -95,7 +95,8 @@
         })
       ];
 
-      timeoutSeconds = 120;
+      # Allow the full 1006-case suite to finish after the Nix build phase.
+      timeoutSeconds = 600;
       killAfterSeconds = 30;
 
       devShellPackages = ctx: [
