@@ -63,11 +63,12 @@
                               value path)))
 
 (defun %write-float-value (value stream)
-  (cond ((sb-ext:float-nan-p value) (write-string "nan" stream))
-        ((sb-ext:float-infinity-p value)
-         (write-string (if (minusp value) "-inf" "inf") stream))
-        (t (let ((*read-default-float-format* 'double-float))
-             (prin1 value stream)))))
+  (sb-int:with-float-traps-masked (:invalid)
+    (cond ((sb-ext:float-nan-p value) (write-string "nan" stream))
+          ((sb-ext:float-infinity-p value)
+           (write-string (if (minusp value) "-inf" "inf") stream))
+          (t (let ((*read-default-float-format* 'double-float))
+               (prin1 value stream))))))
 
 (defun %write-inline-table (table stream path)
   (unless (toml-table-p table)

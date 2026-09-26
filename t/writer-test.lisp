@@ -7,8 +7,9 @@
     table))
 
 (defun %writer-nan ()
-  (sb-int:with-float-traps-masked (:invalid)
-    (/ 0.0d0 0.0d0)))
+  (let ((zero (coerce (random 1) 'double-float)))
+    (sb-int:with-float-traps-masked (:invalid)
+      (/ zero zero))))
 
 (defun %writer-float-value (text)
   (cond ((string= text "inf") sb-ext:double-float-positive-infinity)
@@ -22,9 +23,10 @@
   (subseq encoded (length "value = ") (1- (length encoded))))
 
 (defun %writer-float= (expected actual)
-  (if (sb-ext:float-nan-p expected)
-      (sb-ext:float-nan-p actual)
-      (= expected actual)))
+  (sb-int:with-float-traps-masked (:invalid)
+    (if (sb-ext:float-nan-p expected)
+        (sb-ext:float-nan-p actual)
+        (= expected actual))))
 
 (defun %writer-valid-line-p (line)
   (or (and (> (length line) 2)
