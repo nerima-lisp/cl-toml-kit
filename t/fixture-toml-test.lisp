@@ -9,15 +9,13 @@
                    (asdf:system-source-directory "cl-toml-kit")))
 
 (defun %fixture-files (directory type)
-    (let ((manifest (merge-pathnames "files-toml-1.1.0.txt" (%fixture-root))))
-    (with-open-file (stream manifest)
-      (sort (loop for relative = (read-line stream nil)
-                  while relative
-                  when (and (uiop:string-prefix-p (format nil "~A/" directory)
-                                                  relative)
-                            (string= type (pathname-type relative)))
-                    collect (merge-pathnames relative (%fixture-root)))
-            #'string< :key #'namestring))))
+  (labels ((collect (root)
+             (append (remove-if-not (lambda (pathname)
+                                     (string= type (pathname-type pathname)))
+                                   (uiop:directory-files root))
+                     (mapcan #'collect (uiop:subdirectories root)))))
+    (sort (collect (merge-pathnames (format nil "~A/" directory) (%fixture-root)))
+          #'string< :key #'namestring)))
 
 (defun %read-file-text (pathname)
   (with-open-file (stream pathname :direction :input)
