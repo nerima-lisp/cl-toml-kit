@@ -35,9 +35,22 @@
     };
   };
 
-  outputs = { self, nixpkgs, cl-nix-forge, cl-parser-kit, cl-date-kit, cl-weave, paredit-cli, treefmt-nix }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      cl-nix-forge,
+      cl-parser-kit,
+      cl-date-kit,
+      cl-weave,
+      paredit-cli,
+      treefmt-nix,
+    }:
     let
-      systems = [ "x86_64-linux" "aarch64-darwin" ];
+      systems = [
+        "x86_64-linux"
+        "aarch64-darwin"
+      ];
     in
     cl-nix-forge.lib.${builtins.head systems}.mkPackageFlake {
       inherit self systems nixpkgs;
