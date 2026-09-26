@@ -1,18 +1,22 @@
 ;;;; t/model-test.lisp
 (in-package #:cl-toml-kit/test)
 
-(describe "TOML value model"
-  (it "keeps false distinct from absence"
-    (let ((value (make-boolean-value nil)))
-      (expect (boolean-value-p value))
-      (expect (not (null (toml-value-p value))))
-      (expect (eq :boolean (toml-value-kind value)))))
-  (it "preserves table insertion order and empty collections"
-    (let ((table (make-table-value))
-          (array (make-array-value)))
-      (toml-table-set table "first" (make-integer-value 1))
-      (toml-table-set table "second" (make-string-value "two"))
-      (expect (null (array-elements array)))
-      (expect (equal '("first" "second")
-                     (mapcar #'car (table-entries table))))
-      (expect (= 1 (integer-value (table-value table "first")))))))
+(describe "native TOML value model"
+  (it "uses native scalar values"
+    (expect (toml-value-p "text"))
+    (expect (toml-value-p 42))
+    (expect (toml-value-p 1.0d0))
+    (expect (toml-value-p t))
+    (expect (toml-false-p +toml-false+))
+    (expect (not (toml-value-p nil))))
+  (it "uses equal hash tables and simple vectors for containers"
+    (let ((table (make-hash-table :test 'equal))
+          (array (make-array 2 :element-type t)))
+      (setf (gethash "key" table) 42)
+      (expect (toml-table-p table))
+      (expect (toml-array-p array))
+      (expect (eq :table (toml-value-kind table)))
+      (expect (eq :array (toml-value-kind array)))))
+  (it "rejects unsupported container representations"
+    (expect (not (toml-value-p nil)))
+    (expect (not (toml-value-p '(1 2))))))
