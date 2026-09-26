@@ -262,8 +262,9 @@
                    thereis (member (char source index) '(#\e #\E)))))))
 
 (defparameter +toml-nan+
-  (sb-int:with-float-traps-masked (:invalid)
-    (/ 0.0d0 0.0d0)))
+  (let ((zero 0.0d0))
+    (sb-int:with-float-traps-masked (:invalid)
+      (/ zero zero))))
 
 (define-toml-rule toml-read-value (state position)
   (let* ((source (toml-reader-state-source state)) (char (%source-char state position)))

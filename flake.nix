@@ -15,7 +15,7 @@
     };
 
     cl-date-kit = {
-      url = "github:nerima-lisp/cl-date-kit/v1.1.0";
+      url = "github:nerima-lisp/cl-date-kit/v1.1.1";
       flake = false;
     };
 
@@ -63,6 +63,7 @@
       pname = "cl-toml-kit";
       asd = ./cl-toml-kit.asd;
       root = ./.;
+      sourceInclude = [ ./t/fixtures ];
 
       meta = {
         description = "Common Lisp toolkit for parsing and emitting TOML";
