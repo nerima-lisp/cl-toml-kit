@@ -1,0 +1,56 @@
+;;;; src/reader.lisp
+(in-package #:cl-toml-kit)
+
+(defun %source-string (source)
+  (etypecase source
+    (string (coerce source 'simple-string))
+    (stream (let ((text (make-array 256 :element-type 'character :adjustable t :fill-pointer 0)))
+              (loop for char = (read-char source nil nil)
+                    while char do (vector-push-extend char text))
+              (coerce text 'simple-string)))))
+
+(defun parse (source &key source-name)
+  (let* ((text (%source-string source))
+         (root (make-hash-table :test #'equal))
+         (state (%make-reader-state :source text :source-name source-name
+                                    :length (length text) :root root)))
+    (toml-read-document state 0 (lambda (value position)
+                                  (declare (ignore position))
+                                  (%finalize-value value)))))
+
+(defun parse-file (pathname)
+  (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
+    (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))
+      (read-sequence bytes stream)
+      (let ((text (make-array (length bytes) :element-type 'character
+                              :adjustable t :fill-pointer 0))
+            (index 0))
+        (loop while (< index (length bytes))
+              for first = (aref bytes index)
+              do (cond
+                   ((< first #x80)
+                    (vector-push-extend (code-char first) text)
+                    (incf index))
+                   ((and (<= #xC2 first #xDF) (< (1+ index) (length bytes)))
+                    (vector-push-extend
+                     (code-char (+ (ash (logand first #x1F) 6)
+                                   (logand (aref bytes (1+ index)) #x3F))) text)
+                    (incf index 2))
+                   ((and (<= #xE0 first #xEF) (< (+ index 2) (length bytes)))
+                    (vector-push-extend
+                     (code-char (+ (ash (logand first #x0F) 12)
+                                   (ash (logand (aref bytes (1+ index)) #x3F) 6)
+                                   (logand (aref bytes (+ index 2)) #x3F))) text)
+                    (incf index 3))
+                   ((and (<= #xF0 first #xF4) (< (+ index 3) (length bytes)))
+                    (let ((value (+ (ash (logand first #x07) 18)
+                                    (ash (logand (aref bytes (1+ index)) #x3F) 12)
+                                    (ash (logand (aref bytes (+ index 2)) #x3F) 6)
+                                    (logand (aref bytes (+ index 3)) #x3F))))
+                      (if (> value #xFFFF)
+                          (vector-push-extend (code-char #xFFFD) text)
+                          (vector-push-extend (code-char value) text)))
+                    (incf index 4))
+                   (t (error (make-toml-parse-error :source-name (namestring pathname)
+                                                   :position index :expected "UTF-8"))))
+        (parse (coerce text 'simple-string) :source-name (namestring pathname)))))))
