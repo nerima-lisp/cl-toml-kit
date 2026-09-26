@@ -2,6 +2,20 @@
 
 (in-package #:asdf-user)
 
+(defun %toml-fixture-components ()
+  (let ((root (merge-pathnames "t/fixtures/toml-test/"
+                               (make-pathname :name nil :type nil
+                                              :defaults *load-truename*)))
+        (test-root (merge-pathnames "t/"
+                                    (make-pathname :name nil :type nil
+                                                   :defaults *load-truename*))))
+    (labels ((collect (directory)
+               (append (uiop:directory-files directory)
+                       (mapcan #'collect (uiop:subdirectories directory)))))
+      (mapcar (lambda (pathname)
+                `(:static-file ,(enough-namestring pathname test-root)))
+              (collect root)))))
+
 (asdf:defsystem "cl-toml-kit"
   :description "Common Lisp toolkit for parsing and emitting TOML"
   :author "takeokunn <bararararatty@gmail.com>"
@@ -38,12 +52,13 @@
   :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
-  :components ((:file "package")
-               (:file "conditions-test")
-               (:file "data-test")
-               (:file "writer-test")
-               (:file "fixture-toml-test")
-               (:file "reader-conformance-test"))
+  :components #.(append '((:file "package")
+                          (:file "conditions-test")
+                          (:file "data-test")
+                          (:file "writer-test")
+                          (:file "fixture-toml-test")
+                          (:file "reader-conformance-test"))
+                    (%toml-fixture-components))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function
