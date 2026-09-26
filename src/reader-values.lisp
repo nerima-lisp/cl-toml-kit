@@ -39,10 +39,32 @@
                  (+ position 2 count))))
       (t (%error-at state position "valid escape sequence")))))
 
+(defun %read-simple-string-at (state position quote)
+  (let ((source (toml-reader-state-source state))
+        (index (1+ position))
+        (length (toml-reader-state-length state)))
+    (loop while (< index length)
+          for char = (char source index)
+          do (cond
+               ((char= char quote)
+                (return (values (subseq source (1+ position) index)
+                                (1+ index) t)))
+               ((or (and (char= quote #\") (char= char #\\))
+                    (member char '(#\Newline #\Return))
+                    (and (%control-char-p char) (not (char= char #\Tab))))
+                (return (values nil nil nil)))
+               (t (incf index)))
+          finally (return (values nil nil nil)))))
+
 (defun %read-string-at (state position quote)
   (let* ((triple (and (char= (%source-char state (1+ position)) quote)
                       (char= (%source-char state (+ position 2)) quote)))
          (index (+ position (if triple 3 1))))
+    (unless triple
+      (multiple-value-bind (value next found)
+          (%read-simple-string-at state position quote)
+        (when found
+          (return-from %read-string-at (values value next)))))
     (%buffer-reset state)
     (when (and triple (member (%source-char state index) '(#\Newline #\Return)))
       (%advance-to state (1+ index))
@@ -351,8 +373,14 @@
         (setf index (toml-reader-state-position state))
         (toml-read-value state index
                          (lambda (value value-end)
-                           (let ((target table))
-                             (loop for key in (butlast keys)
+                           (let ((target table)
+                                 (components (%path-parent keys)))
+                             (loop for key = (cond ((null components) nil)
+                                                   ((stringp components)
+                                                    (prog1 components
+                                                      (setf components nil)))
+                                                   (t (pop components)))
+                                   while key
                                    do (multiple-value-bind (child present) (gethash key target)
                                         (cond
                                           ((not present)
@@ -370,7 +398,7 @@
                                            (unless (member child created :test #'eq)
                                              (%error-at state value-end "inline table"))))
                                         (setf target child)))
-                             (let ((key (car (last keys))))
+                             (let ((key (%path-last keys)))
                                (when (nth-value 1 (gethash key target))
                                  (%error-at state value-end "unique inline key"))
                                (setf (gethash key target) value)))

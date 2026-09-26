@@ -118,24 +118,24 @@
            (write-char #\. stream))
   (%write-key key stream))
 
-(defun write-table (table reversed-path stream)
-  (declare (type (and vector (not simple-array)) reversed-path))
+(defun write-table (table path stream)
+  (declare (type (and vector (not simple-array)) path))
   (unless (toml-table-p table)
     (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table reversed-path))
+                            table path))
   (let ((tables nil)
         (array-tables nil))
     (maphash (lambda (key value)
                (unless (stringp key)
-                 (%with-writer-path reversed-path key
+                 (%with-writer-path path key
                    (%signal-encoding-error "Table keys must be strings"
-                                           key reversed-path)))
+                                           key path)))
                (case (%entry-kind value)
                  (:value
                   (%write-key key stream)
                   (write-string " = " stream)
-                  (%with-writer-path reversed-path key
-                    (%write-value value stream reversed-path))
+                  (%with-writer-path path key
+                    (%write-value value stream path))
                   (write-char #\Newline stream))
                  (:table (push (cons key value) tables))
                  (:array-table (push (cons key value) array-tables))))
@@ -144,21 +144,21 @@
       (let ((key (car entry))
             (value (cdr entry)))
         (write-char #\[ stream)
-        (%write-key-path reversed-path key stream)
+        (%write-key-path path key stream)
         (write-string "]" stream)
         (write-char #\Newline stream)
-        (%with-writer-path reversed-path key
-          (write-table value reversed-path stream))))
+        (%with-writer-path path key
+          (write-table value path stream))))
     (dolist (entry (nreverse array-tables))
       (let ((key (car entry))
             (value (cdr entry)))
         (loop for item across value
               do (write-string "[[" stream)
-                 (%write-key-path reversed-path key stream)
+                 (%write-key-path path key stream)
                  (write-string "]]" stream)
                  (write-char #\Newline stream)
-                 (%with-writer-path reversed-path key
-                   (write-table item reversed-path stream)))))))
+                 (%with-writer-path path key
+                   (write-table item path stream)))))))
 
 (defun %write-root (value stream)
   (unless (hash-table-p value)
