@@ -50,4 +50,5 @@
   :depends-on ("cl-toml-kit")
   :pathname "benchmark"
   :serial t
-  :components ((:file "runner")))
+  :components ((:file "runner")
+               (:file "cases")))
