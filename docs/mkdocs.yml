@@ -1,20 +1,144 @@
+# cl-toml-kit documentation - MkDocs + Material configuration.
+#
+# Build:   mkdocs build -f docs/mkdocs.yml --strict
+# Serve:   mkdocs serve  -f docs/mkdocs.yml
+# The Nix flake (`nix build .#docs`) drives the same config offline.
+
 site_name: cl-toml-kit
-site_description: A Common Lisp TOML v1.1.0 reader and writer
-strict: true
+site_description: Common Lisp toolkit for parsing and emitting TOML
+site_author: cl-toml-kit contributors
+site_url: https://nerima-lisp.github.io/cl-toml-kit/
+
+repo_name: nerima-lisp/cl-toml-kit
+repo_url: https://github.com/nerima-lisp/cl-toml-kit
+edit_uri: edit/main/docs/src/
+
+# Content lives in docs/src; the rendered site is written to docs/../site.
 docs_dir: src
+site_dir: ../site
+use_directory_urls: true
+
+# Also passed as --strict by the flake's docs build. Declaring it here as well
+# means `mkdocs serve` applies the same gate, so no invocation path silently
+# tolerates a broken link or a page missing from the nav. Use
+# `mkdocs serve --no-strict` while drafting.
+strict: true
+
+copyright: Copyright &copy; cl-toml-kit contributors. MIT License.
+
 theme:
   name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/file-code-outline
+  favicon: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/nerima-lisp/cl-toml-kit
+      name: cl-toml-kit on GitHub
+  generator: false
+
 plugins:
   - search
+
+markdown_extensions:
+  # Callouts / admonitions.
+  - admonition
+  - pymdownx.details
+  # Code blocks: syntax highlighting, line numbers, inline highlighting.
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  # Content tabs.
+  - pymdownx.tabbed:
+      alternate_style: true
+  # Task lists, key bindings, smart symbols.
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+      title: On this page
+
+# Sections follow DOCS_STANDARD.md: Home, Getting Started, Guide, Reference.
+# There is no Project section because this repository has no project-specific
+# pages. index.md and getting-started.md stay at the root rather than under
+# guide/: a reader who has not run anything yet should not have to open the
+# Guide first.
+#
+# Every page under docs/src/ must appear here: `strict: true` fails the build
+# on an unlisted page, which is what keeps this list from falling behind.
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Guide:
-      - Data model: guide/data-model.md
+      - Data Model: guide/data-model.md
       - Reader: guide/reader.md
       - Writer: guide/writer.md
+      - Troubleshooting: guide/troubleshooting.md
   - Reference:
       - API: reference/api.md
+      - Architecture: reference/architecture.md
       - Conditions: reference/conditions.md
-  - Project:
-      - Architecture: project/architecture.md
+      - Compatibility: reference/compatibility.md
+
+# docs/notes/ holds measurements worth keeping but not worth publishing.
+# Without this declaration --strict fails the build the moment one is added.
+not_in_nav: |
+  notes/
