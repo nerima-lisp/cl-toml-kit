@@ -5,4 +5,7 @@
      (toml-value-typecase ,value
        ,@(loop for (kind . forms) in *toml-writer-emitter-specifications*
                collect `(,kind ,@forms))
-       (t (%signal-encoding-error "Unsupported TOML value" ,value ,path)))))
+       (t (if (integerp ,value)
+              (%write-integer-value ,value ,stream ,path)
+              (%signal-encoding-error "Unsupported TOML value"
+                                      ,value ,path))))))

@@ -2,7 +2,9 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *toml-writer-emitter-specifications*
-  '((:string (%write-string-value value stream))
+  '((:table (%write-inline-table value stream path))
+    (:array (%write-array value stream path))
+    (:string (%write-string-value value stream))
     (:integer (%write-integer-value value stream path))
     (:float (%write-float-value value stream))
     (:true (write-string "true" stream))

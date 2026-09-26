@@ -79,34 +79,10 @@
            (%write-value (aref value index) stream (cons index path)))
   (write-char #\] stream))
 
-(defun %write-value (value stream path)
-  (typecase value
-    (integer (%write-integer-value value stream path))
-    (hash-table (if (toml-table-p value)
-                    (%write-inline-table value stream path)
-                    (%signal-encoding-error
-                     "Table must use the EQUAL hash-table test" value path)))
-    (simple-vector (%write-array value stream path))
-    (string (%write-string-value value stream))
-    (double-float (%write-float-value value stream))
-    ((eql t) (write-string "true" stream))
-    (toml-false-sentinel (write-string "false" stream))
-    (cl-date-kit:offset-date-time
-     (write-string (cl-date-kit:format-offset-date-time
-                    value :profile :rfc3339) stream))
-    (cl-date-kit:local-date-time
-     (write-string (cl-date-kit:format-local-date-time
-                    value :profile :rfc3339) stream))
-    (cl-date-kit:local-date
-     (write-string (cl-date-kit:format-local-date value) stream))
-    (cl-date-kit:local-time
-     (write-string (cl-date-kit:format-local-time
-                    value :profile :rfc3339) stream))
-    (t (%signal-encoding-error "Unsupported TOML value" value path))))
+(define-toml-emitter %write-value (value stream path))
 
 (defun %entry-kind (value)
-  (cond ((and (toml-table-p value)
-              (plusp (hash-table-count value))) :table)
+  (cond ((hash-table-p value) :table)
         ((and (vectorp value) (%array-of-tables-p value)) :array-table)
         (t :value)))
 
@@ -116,59 +92,49 @@
     (write-char #\. stream))
   (%write-key key stream))
 
-(defun write-table (table path stream continuation)
-  (declare (dynamic-extent continuation))
+(defun write-table (table reversed-path stream)
   (unless (toml-table-p table)
     (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table path))
+                            table reversed-path))
   (maphash (lambda (key value)
              (unless (stringp key)
                (%signal-encoding-error "Table keys must be strings"
-                                       key (cons key path)))
+                                       key (cons key reversed-path)))
              (when (eq :value (%entry-kind value))
                (%write-key key stream)
                (write-string " = " stream)
-               (%write-value value stream (cons key path))
+               (%write-value value stream (cons key reversed-path))
                (write-char #\Newline stream)))
            table)
-  (flet ((write-child-table (key value next)
-           (write-char #\[ stream)
-           (%write-key-path path key stream)
-           (write-string "]" stream)
-           (write-char #\Newline stream)
-           (write-table value (cons key path) stream next))
-         (write-child-array-table (key value next)
-           (loop for item across value
-                 do (write-string "[[" stream)
-                    (%write-key-path path key stream)
-                    (write-string "]]" stream)
-                    (write-char #\Newline stream)
-                    (write-table item (cons key path) stream next))))
-    (declare (dynamic-extent (function write-child-table)
-                             (function write-child-array-table)))
-    (maphash (lambda (key value)
-               (when (and (stringp key) (eq :array-table (%entry-kind value)))
-                 (let ((child-key key) (child-value value) (next continuation))
-                   (setf continuation
-                         (lambda ()
-                           (write-child-array-table child-key child-value next))))))
-             table)
-    (maphash (lambda (key value)
-               (when (and (stringp key) (eq :table (%entry-kind value)))
-                 (let ((child-key key) (child-value value) (next continuation))
-                   (setf continuation
-                         (lambda ()
-                           (write-child-table child-key child-value next))))))
-             table)
-    (funcall continuation)))
+  (maphash (lambda (key value)
+             (unless (stringp key)
+               (%signal-encoding-error "Table keys must be strings"
+                                       key (cons key reversed-path)))
+             (when (eq :table (%entry-kind value))
+               (write-char #\[ stream)
+               (%write-key-path reversed-path key stream)
+               (write-string "]" stream)
+               (write-char #\Newline stream)
+               (write-table value (cons key reversed-path) stream)))
+           table)
+  (maphash (lambda (key value)
+             (unless (stringp key)
+               (%signal-encoding-error "Table keys must be strings"
+                                       key (cons key reversed-path)))
+             (when (eq :array-table (%entry-kind value))
+               (loop for item across value
+                     do (write-string "[[" stream)
+                        (%write-key-path reversed-path key stream)
+                        (write-string "]]" stream)
+                        (write-char #\Newline stream)
+                        (write-table item (cons key reversed-path) stream))))
+           table))
 
 (defun %write-root (value stream)
   (unless (hash-table-p value)
     (%signal-encoding-error "The top-level TOML value must be a hash-table"
                             value nil))
-  (flet ((finish () nil))
-    (declare (dynamic-extent (function finish)))
-    (write-table value nil stream #'finish)))
+  (write-table value nil stream))
 
 (defun write-toml (value stream)
   "Write VALUE as TOML to STREAM and return VALUE."

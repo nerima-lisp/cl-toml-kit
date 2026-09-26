@@ -59,7 +59,28 @@
                                   (%writer-nan)))
    (gen-member (%writer-date-values)))
    (gen-map (lambda (item) (%writer-table "child" item)) self)
-   (cl-weave:gen-vector self :min-length 0 :max-length 3)))
+   (cl-weave:gen-vector self :min-length 0 :max-length 3)
+   (gen-map (lambda (items) (coerce items 'vector))
+            (cl-weave:gen-vector
+             (gen-map (lambda (item) (%writer-table "item" item)) self)
+             :min-length 1 :max-length 3))))
+
+(defun %writer-value-line-count (table)
+  "Count the value lines that encoding TABLE must emit, excluding headers."
+  (loop for key being the hash-keys of table
+        using (hash-value value)
+        sum (cond ((toml-table-p value)
+                   (%writer-value-line-count value))
+                  ((and (vectorp value)
+                        (plusp (length value))
+                        (loop for item across value always (hash-table-p item)))
+                   (loop for item across value
+                         sum (%writer-value-line-count item)))
+                  (t 1))))
+
+(defun %writer-line-count (text)
+  "Count newline-terminated lines in encoded TEXT."
+  (count #\Newline text))
 
 (describe "TOML writer scalar data"
   (it-each (("hello" "message = \"hello\"~%")
@@ -119,21 +140,64 @@
     (expect (string= (format nil expected) (encode (%writer-table key 1))))))
 
 (describe "TOML writer containers and paths"
-  (it "writes empty tables as empty inline tables"
-    (expect (string= (format nil "empty = {}~%")
-                     (encode (%writer-table "empty"
-                                             (make-hash-table :test 'equal))))))
+  (it-each (("scalar table" :scalar
+             "a = 1~%b = 2~%")
+            ("one nested table" :one-nested
+             "[child]~%value = 1~%")
+            ("two nested tables" :two-nested
+             "[child]~%[child.grand]~%leaf = 2~%")
+            ("one array table" :one-array
+             "[[items]]~%name = \"a\"~%")
+            ("two array tables" :two-array
+             "[[items]]~%name = \"a\"~%[[items]]~%name = \"b\"~%")
+            ("array table with nested table" :array-nested
+             "[[items]]~%name = \"a\"~%[items.meta]~%leaf = 1~%")
+            ("mixed array and table" :mixed
+             "[other]~%value = 2~%[[items]]~%name = \"a\"~%")
+            ("empty table" :empty
+             "[empty]~%")
+            ("array of scalars" :scalar-array
+             "values = [1, 2]~%")
+            ("inline table in an array" :inline-array
+             "values = [1, { b = 2 }]~%")
+            ("insertion order" :order
+             "first = 1~%second = 2~%third = 3~%"))
+      "encodes ~A exactly and deterministically"
+      (name kind expected)
+    (let* ((value (case kind
+                    (:scalar (%writer-table "a" 1 "b" 2))
+                    (:one-nested (%writer-table "child" (%writer-table "value" 1)))
+                    (:two-nested
+                     (%writer-table "child"
+                                    (%writer-table "grand" (%writer-table "leaf" 2))))
+                    (:one-array (%writer-table "items"
+                                               (vector (%writer-table "name" "a"))))
+                    (:two-array (%writer-table "items"
+                                               (vector (%writer-table "name" "a")
+                                                       (%writer-table "name" "b"))))
+                    (:array-nested
+                     (%writer-table "items"
+                                    (vector (%writer-table "name" "a"
+                                                           "meta" (%writer-table "leaf" 1)))))
+                    (:mixed (%writer-table "items"
+                                           (vector (%writer-table "name" "a"))
+                                           "other" (%writer-table "value" 2)))
+                    (:empty (%writer-table "empty" (make-hash-table :test 'equal)))
+                    (:scalar-array (%writer-table "values" (vector 1 2)))
+                    (:inline-array (%writer-table "values"
+                                                  (vector 1 (%writer-table "b" 2))))
+                    (:order (%writer-table "first" 1 "second" 2 "third" 3))))
+           (first (encode value))
+           (second (encode value)))
+      (declare (ignore name))
+      (expect (and (string= first (format nil expected))
+                   (string= first second)))))
   (it "writes values before nested tables and preserves paths"
     (let ((child (%writer-table "value" 1))
           (grandchild (%writer-table "leaf" 2)))
       (setf (gethash "grand" child) grandchild)
       (expect (string= (format nil "root = true~%[child]~%value = 1~%[child.grand]~%leaf = 2~%")
                        (encode (%writer-table "child" child "root" t))))))
-  (it "writes arrays of tables"
-    (let ((first (%writer-table "name" "a"))
-          (second (%writer-table "name" "b")))
-      (expect (string= (format nil "[[items]]~%name = \"a\"~%[[items]]~%name = \"b\"~%")
-                       (encode (%writer-table "items" (vector first second)))))))
   (it-property "generated arrays and nested tables are deterministic and line-valid"
       ((value (gen-recursive
                (gen-one-of (gen-integer :min -10 :max 10)
@@ -145,7 +209,9 @@
            (first (encode table))
            (second (encode table)))
       (expect (string= first second))
-      (expect (%writer-valid-toml-lines-p first)))))
+      (expect (%writer-valid-toml-lines-p first))
+      (expect (>= (%writer-line-count first)
+                  (%writer-value-line-count table))))))
 
 (describe "TOML writer errors"
   (it-each ((:nil "Unsupported TOML value" ("outer" "inner"))
