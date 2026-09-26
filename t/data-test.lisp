@@ -14,7 +14,7 @@
             (42 toml-integer)
             (1.0d0 toml-float)
             (t (eql t))
-            (+toml-false+ cl-toml-kit::toml-false-sentinel))
+            (+toml-false+ (satisfies toml-false-p)))
       "matches generated type ~S"
       (value type)
     (expect (typep value type)))
@@ -56,7 +56,7 @@
       (expect (not (toml-table-p eql-table)))))
   (it "keeps false sentinel identity across source reload"
     (let ((sentinel +toml-false+))
-      (load (asdf:system-relative-pathname "cl-toml-kit" "data.lisp"))
+      (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
       (expect (eq sentinel +toml-false+))))
   (it "dispatches directly by type"
     (expect (eq :string
