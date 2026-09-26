@@ -21,6 +21,7 @@
                (:file "reader-data")
                (:file "reader-macros")
                (:file "reader-scan")
+               (:file "reader-path")
                (:file "reader-values")
                (:file "reader-document")
                (:file "writer-data")

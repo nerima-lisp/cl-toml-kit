@@ -40,24 +40,13 @@
               (unless (eql (%source-char state index) #\.)
                 (return (values (nreverse keys) index)))))))))
 
-(defun %path-length (path)
-  (if (stringp path) 1 (length path)))
-
-(defun %path-parent (path)
-  (if (stringp path) nil (butlast path)))
-
-(defun %path-last (path)
-  (if (stringp path) path (car (last path))))
-
 (defun %table-for-path (state path &key (create nil) (dotted nil) base)
   (let ((table (or base (toml-reader-state-root state)))
         (components path))
-    (loop for key = (cond ((null components) nil)
-                          ((stringp components)
-                           (prog1 components (setf components nil)))
-                          (t (pop components)))
-          while key
-          do (multiple-value-bind (value present) (gethash key table)
+    (loop while components
+          do (multiple-value-bind (key rest) (%path-next components)
+               (setf components rest)
+               (multiple-value-bind (value present) (gethash key table)
                (cond
                  ((not present)
                   (unless create
@@ -81,7 +70,7 @@
                   (when (eq (gethash value (toml-reader-state-table-states state)) :inline)
                     (%error-at state (toml-reader-state-position state) "inline table" path)))
                  (t (%error-at state (toml-reader-state-position state) "table" path)))
-               (setf table value)))
+                 (setf table value))))
     table))
 
 (defun %define-assignment (state path value)

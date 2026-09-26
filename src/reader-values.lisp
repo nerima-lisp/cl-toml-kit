@@ -375,13 +375,12 @@
                          (lambda (value value-end)
                            (let ((target table)
                                  (components (%path-parent keys)))
-                             (loop for key = (cond ((null components) nil)
-                                                   ((stringp components)
-                                                    (prog1 components
-                                                      (setf components nil)))
-                                                   (t (pop components)))
-                                   while key
-                                   do (multiple-value-bind (child present) (gethash key target)
+                             (loop while components
+                                   do (multiple-value-bind (key rest)
+                                          (%path-next components)
+                                        (setf components rest)
+                                        (multiple-value-bind (child present)
+                                            (gethash key target)
                                         (cond
                                           ((not present)
                                            (setf child (make-hash-table :test #'equal)
@@ -397,7 +396,7 @@
                                                :inline)
                                            (unless (member child created :test #'eq)
                                              (%error-at state value-end "inline table"))))
-                                        (setf target child)))
+                                          (setf target child))))
                              (let ((key (%path-last keys)))
                                (when (nth-value 1 (gethash key target))
                                  (%error-at state value-end "unique inline key"))
