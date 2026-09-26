@@ -39,10 +39,32 @@
                  (+ position 2 count))))
       (t (%error-at state position "valid escape sequence")))))
 
+(defun %read-simple-string-at (state position quote)
+  (let ((source (toml-reader-state-source state))
+        (index (1+ position))
+        (length (toml-reader-state-length state)))
+    (loop while (< index length)
+          for char = (char source index)
+          do (cond
+               ((char= char quote)
+                (return (values (subseq source (1+ position) index)
+                                (1+ index) t)))
+               ((or (and (char= quote #\") (char= char #\\))
+                    (member char '(#\Newline #\Return))
+                    (and (%control-char-p char) (not (char= char #\Tab))))
+                (return (values nil nil nil)))
+               (t (incf index)))
+          finally (return (values nil nil nil)))))
+
 (defun %read-string-at (state position quote)
   (let* ((triple (and (char= (%source-char state (1+ position)) quote)
                       (char= (%source-char state (+ position 2)) quote)))
          (index (+ position (if triple 3 1))))
+    (unless triple
+      (multiple-value-bind (value next found)
+          (%read-simple-string-at state position quote)
+        (when found
+          (return-from %read-string-at (values value next)))))
     (%buffer-reset state)
     (when (and triple (member (%source-char state index) '(#\Newline #\Return)))
       (%advance-to state (1+ index))

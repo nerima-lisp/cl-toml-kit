@@ -70,6 +70,11 @@ behavior.
 The final 16,384-entry run had a median time of 0.040083 seconds. The time
 value is a local wall-clock observation and is noisier than allocation.
 
+For single-line strings without escapes, the Reader now returns one `subseq`
+of the source instead of filling and coercing the shared character buffer. In
+the competitor harness correctness input, this changed kit allocation from
+134,848 to 129,088 bytes per call.
+
 ### Reader allocation classification
 
 The following classification is based on `sb-sprof` allocation samples for the
@@ -112,9 +117,9 @@ passed the normalized-output correctness gate:
 
 | Assignments | kit sec | clop sec | kit bytes | clop bytes | clop / kit |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| 256 | 0.000218 | 0.003951 | 134,848 | 6,244,160 | 46.3x |
-| 512 | 0.000463 | 0.006915 | 230,528 | 12,412,608 | 53.8x |
-| 1,024 | 0.000829 | 0.053528 | 358,528 | 24,374,208 | 68.0x |
+| 256 | 0.000232 | 0.003444 | 129,088 | 6,204,416 | 48.1x |
+| 512 | 0.000411 | 0.008469 | 228,096 | 12,185,024 | 53.4x |
+| 1,024 | 0.000835 | 0.044255 | 398,336 | 24,342,272 | 61.1x |
 
 The comparison is diagnostic only and does not relax TOML 1.1.0 conformance
 checks. The benchmark gate treats strings as scalar values and compares the
