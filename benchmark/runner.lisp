@@ -18,6 +18,7 @@
 (defparameter *benchmarks* nil)
 (defparameter *benchmark-warmup-rounds* 2)
 (defparameter *benchmark-sample-count* 10)
+(defparameter *benchmark-iterations* 10)
 (defparameter *max-order-ratio* 4d0)
 (defparameter *max-case-bytes* (* 256 1024 1024))
 
@@ -37,7 +38,9 @@
   (sb-ext:gc :full t)
   (let ((started (get-internal-real-time))
         (before (sb-ext:get-bytes-consed)))
-    (funcall (benchmark-thunk benchmark))
+    (dotimes (iteration *benchmark-iterations*)
+      (declare (ignore iteration))
+      (funcall (benchmark-thunk benchmark)))
     (list (%seconds started (get-internal-real-time))
           (- (sb-ext:get-bytes-consed) before))))
 
@@ -53,7 +56,9 @@
       (progn
         (dotimes (round *benchmark-warmup-rounds*)
           (declare (ignorable round))
-          (funcall (benchmark-thunk benchmark)))
+          (dotimes (iteration *benchmark-iterations*)
+            (declare (ignore iteration))
+            (funcall (benchmark-thunk benchmark))))
         (let ((samples (loop repeat *benchmark-sample-count*
                              collect (%measure-once benchmark))))
           (flet ((field (index)
@@ -62,16 +67,21 @@
                   (bytes (field 1)))
               (make-benchmark-result
                :benchmark benchmark
-               :status (if (<= (apply #'max bytes)
+               :status (if (<= (/ (apply #'max bytes)
+                                   *benchmark-iterations*)
                               (benchmark-upper-bytes benchmark))
                            :pass
                            :upper-bound)
-               :median-seconds (%median seconds)
-               :minimum-seconds (apply #'min seconds)
-               :maximum-seconds (apply #'max seconds)
-               :median-bytes (%median bytes)
-               :minimum-bytes (apply #'min bytes)
-               :maximum-bytes (apply #'max bytes))))))
+               :median-seconds (/ (%median seconds) *benchmark-iterations*)
+               :minimum-seconds (/ (apply #'min seconds)
+                                   *benchmark-iterations*)
+               :maximum-seconds (/ (apply #'max seconds)
+                                   *benchmark-iterations*)
+               :median-bytes (/ (%median bytes) *benchmark-iterations*)
+               :minimum-bytes (/ (apply #'min bytes)
+                                 *benchmark-iterations*)
+               :maximum-bytes (/ (apply #'max bytes)
+                                 *benchmark-iterations*))))))
     (benchmark-pending (condition)
       (declare (ignore condition))
       (make-benchmark-result :benchmark benchmark :status :pending))
@@ -153,7 +163,7 @@
                          "# name~Coperation~Csize~Csamples~Cmedian-seconds~C"
                          "min-seconds~Cmax-seconds~Cmedian-bytes~Cmin-bytes~C"
                          "max-bytes~Cstatus~Ctime-ratio~Cbytes-ratio~Corder~%")
-          #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab
+                         #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab #\Tab
           #\Tab #\Tab #\Tab)
   (let* ((results (%attach-order-results
                    (mapcar #'%measure (nreverse *benchmarks*))))
