@@ -6,7 +6,7 @@
 (in-package #:cl-toml-kit/benchmark)
 
 (defstruct benchmark
-  name operation input-size thunk upper-seconds upper-bytes)
+  name operation input-size thunk upper-bytes)
 
 (defstruct benchmark-result
   benchmark status median-seconds minimum-seconds maximum-seconds
@@ -19,16 +19,13 @@
 (defparameter *benchmark-warmup-rounds* 2)
 (defparameter *benchmark-sample-count* 10)
 (defparameter *max-order-ratio* 4d0)
-(defparameter *max-case-seconds* 30d0)
 (defparameter *max-case-bytes* (* 256 1024 1024))
 
 (defmacro define-benchmark (name (&key operation input-size
-                                       (upper-seconds '*max-case-seconds*)
                                        (upper-bytes '*max-case-bytes*))
                               &body body)
   `(push (make-benchmark :name ,name :operation ,operation
                          :input-size ,input-size
-                         :upper-seconds ,upper-seconds
                          :upper-bytes ,upper-bytes
                          :thunk (lambda () ,@body))
          *benchmarks*))
@@ -37,12 +34,12 @@
   (/ (- ended started) (float internal-time-units-per-second 1d0)))
 
 (defun %measure-once (benchmark)
-  #+sbcl (sb-ext:gc :full t)
+  (sb-ext:gc :full t)
   (let ((started (get-internal-real-time))
-        (before #+sbcl (sb-ext:get-bytes-consed) #-sbcl 0))
+        (before (sb-ext:get-bytes-consed)))
     (funcall (benchmark-thunk benchmark))
     (list (%seconds started (get-internal-real-time))
-          (- #+sbcl (sb-ext:get-bytes-consed) #-sbcl 0 before))))
+          (- (sb-ext:get-bytes-consed) before))))
 
 (defun %median (values)
   (let* ((sorted (sort (copy-list values) #'<))
@@ -65,10 +62,8 @@
                   (bytes (field 1)))
               (make-benchmark-result
                :benchmark benchmark
-               :status (if (and (<= (apply #'max seconds)
-                                    (benchmark-upper-seconds benchmark))
-                                (<= (apply #'max bytes)
-                                    (benchmark-upper-bytes benchmark)))
+               :status (if (<= (apply #'max bytes)
+                              (benchmark-upper-bytes benchmark))
                            :pass
                            :upper-bound)
                :median-seconds (%median seconds)
@@ -129,7 +124,9 @@
 
 (defun %print-result (result)
   (let ((benchmark (benchmark-result-benchmark result)))
-    (format t "~A~C~A~C~D~C~D~C~,6F~C~,6F~C~,6F~C~D~C~D~C~D~C~(~A~)~C~@[~,3F~]~C~@[~,3F~]~C~(~A~)~%"
+    (format t (concatenate 'string
+                           "~A~C~A~C~D~C~D~C~,6F~C~,6F~C~,6F~C~D~C~D~C~D~C~(~A~)~C~"
+                           "@[~,3F~]~C~@[~,3F~]~C~(~A~)~%")
             (benchmark-name benchmark) #\Tab
             (benchmark-operation benchmark) #\Tab
             (benchmark-input-size benchmark) #\Tab
