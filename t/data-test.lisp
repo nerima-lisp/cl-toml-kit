@@ -4,8 +4,7 @@
 (describe "native TOML value model"
   (it-each (("text" :string)
             (42 :integer)
-            (t :true)
-            (+toml-false+ :false))
+            (t :true))
       "classifies scalar ~S as ~S"
       (value expected)
     (expect (toml-value-p value))
@@ -13,11 +12,14 @@
   (it-each (("text" string)
             (42 toml-integer)
             (1.0d0 toml-float)
-            (t (eql t))
-            (+toml-false+ cl-toml-kit::toml-false-sentinel))
+            (t (eql t)))
       "matches generated type ~S"
       (value type)
     (expect (typep value type)))
+  (it "classifies the false sentinel"
+    (expect (eq :false (toml-value-kind +toml-false+))))
+  (it "matches the generated false sentinel type"
+    (expect (typep +toml-false+ '(satisfies toml-false-p))))
   (it "classifies all native containers and date values"
     (let ((table (make-hash-table :test 'equal))
           (array (make-array 0 :element-type t))
@@ -56,7 +58,7 @@
       (expect (not (toml-table-p eql-table)))))
   (it "keeps false sentinel identity across source reload"
     (let ((sentinel +toml-false+))
-      (load (asdf:system-relative-pathname "cl-toml-kit" "data.lisp"))
+      (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
       (expect (eq sentinel +toml-false+))))
   (it "dispatches directly by type"
     (expect (eq :string

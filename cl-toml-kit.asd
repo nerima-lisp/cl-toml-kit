@@ -23,6 +23,9 @@
                (:file "reader-scan")
                (:file "reader-values")
                (:file "reader-document")
+               (:file "writer-data")
+               (:file "writer-macros")
+               (:file "writer")
                (:file "reader"))
   :in-order-to ((test-op (test-op "cl-toml-kit/test"))))
 
@@ -37,7 +40,8 @@
   :serial t
   :components ((:file "package")
                (:file "conditions-test")
-               (:file "data-test"))
+               (:file "data-test")
+               (:file "writer-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function
