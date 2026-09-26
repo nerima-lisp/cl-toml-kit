@@ -13,12 +13,13 @@ samples. Each sample runs a full GC before the measurement and records
 `sb-ext:get-bytes-consed`.
 
 ```sh
+REPOS=${NERIMA_LISP_REPOS:?Set this to the directory containing the dependency clones}
 DEPS=$(mktemp -d)
-git -C ../cl-parser-kit.git archive --prefix=cl-parser-kit/ v1.1.1 \
+git -C "$REPOS/cl-parser-kit.git" archive --prefix=cl-parser-kit/ v1.1.1 \
   | tar -x -C "$DEPS"
-git -C ../cl-date-kit.git archive --prefix=cl-date-kit/ v1.1.0 \
+git -C "$REPOS/cl-date-kit.git" archive --prefix=cl-date-kit/ v1.1.0 \
   | tar -x -C "$DEPS"
-git -C ../cl-weave.git archive --prefix=cl-weave/ v1.3.0 \
+git -C "$REPOS/cl-weave.git" archive --prefix=cl-weave/ v1.3.0 \
   | tar -x -C "$DEPS"
 sbcl --dynamic-space-size 4096 --non-interactive \
   --eval '(require :asdf)' \
