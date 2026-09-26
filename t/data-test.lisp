@@ -19,7 +19,7 @@
   (it "classifies the false sentinel"
     (expect (eq :false (toml-value-kind +toml-false+))))
   (it "matches the generated false sentinel type"
-    (expect (typep +toml-false+ (satisfies toml-false-p))))
+    (expect (typep +toml-false+ '(satisfies toml-false-p))))
   (it "classifies all native containers and date values"
     (let ((table (make-hash-table :test 'equal))
           (array (make-array 0 :element-type t))
