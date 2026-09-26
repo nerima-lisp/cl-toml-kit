@@ -10,7 +10,7 @@
 (defmethod print-object ((value toml-false-sentinel) stream)
   (print-unreadable-object (value stream :type t :identity nil)))
 
-(sb-ext:defglobal +toml-false+ (make-toml-false-sentinel)
+(sb-ext:define-load-time-global +toml-false+ (make-toml-false-sentinel)
   "The opaque value used for TOML false.")
 
 (defun toml-false-p (value)
