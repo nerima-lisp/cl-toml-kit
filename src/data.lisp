@@ -7,97 +7,99 @@
             (:copier nil)
             (:predicate nil)))
 
-(defparameter +toml-false+ (make-toml-false-sentinel)
+(defmethod print-object ((value toml-false-sentinel) stream)
+  (print-unreadable-object (value stream :type t :identity nil)))
+
+(sb-ext:defglobal +toml-false+ (make-toml-false-sentinel)
   "The opaque value used for TOML false.")
-
-(deftype toml-table () 'hash-table)
-(deftype toml-array () 'simple-vector)
-(deftype toml-integer () '(signed-byte 64))
-(deftype toml-float () 'double-float)
-(deftype toml-value () t)
-
-(defparameter *toml-value-specifications*
-  '((:table hash-table)
-    (:array simple-vector)
-    (:string string)
-    (:integer (signed-byte 64))
-    (:float double-float)
-    (:true (eql t))
-    (:false toml-false-sentinel)
-    (:offset-date-time cl-date-kit:offset-date-time)
-    (:local-date-time cl-date-kit:local-date-time)
-    (:local-date cl-date-kit:local-date)
-    (:local-time cl-date-kit:local-time)))
 
 (defun toml-false-p (value)
   (eq value +toml-false+))
 
-(defun toml-table-p (value)
-  (and (hash-table-p value)
-       (eq (hash-table-test value) 'equal)
-       (block valid
-         (maphash (lambda (key ignored)
-                   (declare (ignore ignored))
-                   (unless (stringp key) (return-from valid nil)))
-                 value)
-         t)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *toml-value-specifications*
+    '((:table hash-table toml-table)
+      (:array simple-vector toml-array)
+      (:string string nil)
+      (:integer (signed-byte 64) toml-integer)
+      (:float double-float toml-float)
+      (:true (eql t) nil)
+      (:false toml-false-sentinel nil)
+      (:offset-date-time cl-date-kit:offset-date-time nil)
+      (:local-date-time cl-date-kit:local-date-time nil)
+      (:local-date cl-date-kit:local-date nil)
+      (:local-time cl-date-kit:local-time nil))))
 
-(defun toml-array-p (value)
-  (simple-vector-p value))
+(defmacro define-toml-value-model ()
+  (let ((specifications *toml-value-specifications*))
+    (labels ((find-specification (kind)
+               (or (find kind specifications :key #'first)
+                   (error "Unknown TOML value kind ~S." kind)))
+             (predicate-form (kind value)
+               (case kind
+                 (:table `(and (hash-table-p ,value)
+                               (eq (hash-table-test ,value) 'equal)))
+                 (:true `(eq ,value t))
+                 (:false `(toml-false-p ,value))
+                 (otherwise
+                  `(typep ,value ',(second (find-specification kind))))))
+             (kind-typecase-clause (specification)
+               (destructuring-bind (kind type alias) specification
+                 (declare (ignore alias))
+                 `(,type (when ,(predicate-form kind 'object) ,kind)))))
+      `(progn
+         ,@(loop for (kind type alias) in specifications
+                 when alias
+                   collect `(deftype ,alias () ',type))
+         (deftype toml-value ()
+           '(or ,@(mapcar (lambda (item) (second item)) specifications)))
+         (defun toml-table-p (value)
+           ,(predicate-form :table 'value))
+         (defun toml-array-p (value)
+           ,(predicate-form :array 'value))
+         (defun toml-integer-p (value)
+           ,(predicate-form :integer 'value))
+         (defun toml-float-p (value)
+           ,(predicate-form :float 'value))
+         (defun toml-value-kind (value)
+           (let ((object value))
+             (typecase object
+               ,@(mapcar #'kind-typecase-clause specifications)
+               (otherwise nil))))
+         (defun toml-value-p (value)
+           (not (null (toml-value-kind value))))))))
 
-(defun toml-integer-p (value)
-  (typep value '(signed-byte 64)))
-
-(defun toml-float-p (value)
-  (typep value 'double-float))
-
-(defun toml-value-p (value)
-  (or (toml-table-p value)
-      (toml-array-p value)
-      (stringp value)
-      (toml-integer-p value)
-      (toml-float-p value)
-      (eq value t)
-      (toml-false-p value)
-      (cl-date-kit:offset-date-time-p value)
-      (cl-date-kit:local-date-time-p value)
-      (cl-date-kit:local-date-p value)
-      (cl-date-kit:local-time-p value)))
+(define-toml-value-model)
 
 (defmacro toml-value-typecase (value &body clauses)
-  "Dispatch VALUE by the native TOML value model."
-  (let ((object (gensym "VALUE")))
+  "Dispatch VALUE by the native TOML value model.
+
+Clause keys are TOML kind keywords.  Unknown keys are rejected at macro
+expansion time."
+  (let ((known-kinds (mapcar #'first *toml-value-specifications*))
+        (object (gensym "VALUE"))
+        (forms-by-kind (make-hash-table :test #'eq))
+        (otherwise-forms nil))
+    (dolist (clause clauses)
+      (destructuring-bind (key &body forms) clause
+        (if (eq key t)
+            (setf otherwise-forms forms)
+            (progn
+              (unless (member key known-kinds)
+                (error "Unknown TOML value kind ~S." key))
+              (setf (gethash key forms-by-kind) forms)))))
     `(let ((,object ,value))
        (typecase ,object
-         (hash-table
-          (if (toml-table-p ,object)
-              (toml-value-typecase-dispatch ,object ,clauses)
-              (error 'toml-encoding-error :message "Invalid TOML table")))
-         (simple-vector (toml-value-typecase-dispatch ,object ,clauses))
-         (string (toml-value-typecase-dispatch ,object ,clauses))
-         (integer (toml-value-typecase-dispatch ,object ,clauses))
-         (double-float (toml-value-typecase-dispatch ,object ,clauses))
-         (t (toml-value-typecase-dispatch ,object ,clauses))))))
-
-(defmacro toml-value-typecase-dispatch (value clauses)
-  `(case (toml-value-kind ,value)
-     ,@(mapcar (lambda (clause)
-                 (destructuring-bind (key &body forms) clause
-                   (if (eq key t)
-                       `(t ,@forms)
-                       `(,key ,@forms))))
-               clauses)
-     (otherwise (error 'toml-encoding-error :message "Not a TOML value"))))
-
-(defun toml-value-kind (value)
-  (cond ((toml-table-p value) :table)
-        ((toml-array-p value) :array)
-        ((stringp value) :string)
-        ((toml-integer-p value) :integer)
-        ((toml-float-p value) :float)
-        ((eq value t) :true)
-        ((toml-false-p value) :false)
-        ((cl-date-kit:offset-date-time-p value) :offset-date-time)
-        ((cl-date-kit:local-date-time-p value) :local-date-time)
-        ((cl-date-kit:local-date-p value) :local-date)
-        ((cl-date-kit:local-time-p value) :local-time)))
+         ,@(loop for (kind type alias) in *toml-value-specifications*
+                 for forms = (gethash kind forms-by-kind)
+                 when forms
+                   collect `(,type
+                             ,(if (eq kind :table)
+                                  `(if (toml-table-p ,object)
+                                       (progn ,@forms)
+                                       (error 'toml-encoding-error
+                                              :message "Invalid TOML table"))
+                                  `(progn ,@forms))))
+         (otherwise ,@(or otherwise-forms
+                           '((error 'toml-encoding-error
+                                    :message "Not a TOML value"))))))))

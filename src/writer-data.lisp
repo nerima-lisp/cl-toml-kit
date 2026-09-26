@@ -1,19 +1,22 @@
 (in-package #:cl-toml-kit)
 
-;;;; This table is the single source for writer value dispatch.  The macro
-;;;; below turns the declarative entries into a typecase-like cond.
-(defparameter *toml-writer-value-specifications*
-  '((:table hash-table)
-    (:array vector)
-    (:string string)
-    (:integer integer)
-    (:float double-float)
-    (:true (eql t))
-    (:false toml-false-sentinel)
-    (:offset-date-time cl-date-kit:offset-date-time)
-    (:local-date-time cl-date-kit:local-date-time)
-    (:local-date cl-date-kit:local-date)
-    (:local-time cl-date-kit:local-time)))
+(defparameter *toml-writer-emitter-specifications*
+  '((:string (%write-string-value value stream))
+    (:integer (%write-integer-value value stream path))
+    (:float (%write-float-value value stream))
+    (:true (write-string "true" stream))
+    (:false (write-string "false" stream))
+    (:offset-date-time
+     (write-string (cl-date-kit:format-offset-date-time
+                    value :profile :rfc3339) stream))
+    (:local-date-time
+     (write-string (cl-date-kit:format-local-date-time
+                    value :profile :rfc3339) stream))
+    (:local-date
+     (write-string (cl-date-kit:format-local-date value) stream))
+    (:local-time
+     (write-string (cl-date-kit:format-local-time
+                    value :profile :rfc3339) stream))))
 
 (defparameter *toml-bare-key-character-p*
   (let ((table (make-array 128 :element-type 'bit :initial-element 0)))
@@ -27,12 +30,13 @@
           (aref table (char-code #\_)) 1)
     table))
 
-(defmacro define-toml-emitter (name (value stream path) &body clauses)
-  `(defun ,name (,value ,stream ,path)
-     (cond
-       ,@(mapcar (lambda (clause)
-                   (destructuring-bind (tag type &body body) clause
-                     (declare (ignore tag))
-                     `((typep ,value ',type) ,@body)))
-                 clauses)
-       (t (%signal-encoding-error "Unsupported TOML value" ,value ,path)))))
+(defparameter *toml-basic-string-escape*
+  (let ((table (make-array 128 :initial-element nil)))
+    (setf (aref table (char-code #\Backspace)) "\\b"
+          (aref table (char-code #\Tab)) "\\t"
+          (aref table (char-code #\Newline)) "\\n"
+          (aref table (char-code #\Page)) "\\f"
+          (aref table (char-code #\Return)) "\\r"
+          (aref table (char-code #\")) "\\\""
+          (aref table (char-code #\\)) "\\\\")
+    table))

@@ -9,7 +9,7 @@
   (:export
    ;; Reader / writer protocol
    #:parse #:parse-file #:encode #:write-toml
-   ;; Native values
+   ;; Native values. Table keys are validated by the writer, not predicates.
    #:+toml-false+ #:toml-false-p #:toml-value #:toml-value-p
    #:toml-value-kind #:toml-value-typecase
    #:toml-table #:toml-table-p #:toml-array #:toml-array-p

@@ -7,12 +7,12 @@ those same values.
 ## Ownership and layout
 
 The foundation owns `src/package.lisp`, `src/conditions.lisp`,
-`src/data.lisp`, `src/model.lisp`, and their tests. Reader owns
+`src/data.lisp`, and their tests. Reader owns
 `src/reader*.lisp` and `t/reader*-test.lisp`. Writer owns `src/writer*.lisp`
 and `t/writer*-test.lisp`. Reader owns the shared fixture loaders in
 `t/fixture-*.lisp`; neither stream edits `t/fixtures/`.
 
-ASDF loads package, conditions, data, model, then reader and writer files.
+ASDF loads package, conditions, data, then reader and writer files.
 Reader and Writer use the common value and condition contracts but do not use
 each other's private helpers.
 
@@ -36,7 +36,7 @@ conditions. `+toml-false+` and `toml-false-p` represent TOML false.
 
 | TOML | Lisp value |
 | --- | --- |
-| table, inline table, or table-array element | hash table, equal test, string keys |
+| table, inline table, or table-array element | hash table with equal test |
 | array, including an array of tables | `simple-vector` |
 | string | `string` |
 | integer | signed 64-bit `integer` |
@@ -48,7 +48,9 @@ conditions. `+toml-false+` and `toml-false-p` represent TOML false.
 | local date | `cl-date-kit:local-date` |
 | local time | `cl-date-kit:local-time` |
 
-`nil` and lists are not TOML values. The writer signals
+`nil` and lists are not TOML values. Table recognition is O(1): it checks only
+that the value is a hash table whose test is `equal`. The writer validates that
+each key is a string while emitting it, and signals
 `toml-encoding-error` for them. Date values are the required cl-date-kit
 objects directly; there are no adapter structs and TOML has no zoned date-time
 or offset-time value.
@@ -58,9 +60,11 @@ Reader inserts table keys in source order and never removes them. Writer uses
 hash-table traversal and fixes that property with tests; it is not a portable
 hash-table guarantee.
 
-The value declarations in `src/data.lisp` are data. Macros derive the native
-type declarations and value dispatch from that table. They must not introduce
-wrapper objects or duplicate public aliases.
+The value declarations in `src/data.lisp` are the single source of truth.
+Definition macros derive the native type declarations, predicates, kind
+dispatch, and `toml-value-typecase` from that table. The latter expands to one
+`typecase` and rejects unknown kind keywords at macro expansion time. They must
+not introduce wrapper objects or duplicate public aliases.
 
 ## Conditions
 
