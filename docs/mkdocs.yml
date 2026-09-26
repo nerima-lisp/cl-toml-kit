@@ -1,0 +1,20 @@
+site_name: cl-toml-kit
+site_description: A Common Lisp TOML v1.1.0 reader and writer
+strict: true
+docs_dir: src
+theme:
+  name: material
+plugins:
+  - search
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guide:
+      - Data model: guide/data-model.md
+      - Reader: guide/reader.md
+      - Writer: guide/writer.md
+  - Reference:
+      - API: reference/api.md
+      - Conditions: reference/conditions.md
+  - Project:
+      - Architecture: project/architecture.md

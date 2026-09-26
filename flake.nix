@@ -1,0 +1,86 @@
+{
+  description = "Common Lisp toolkit for parsing and emitting TOML";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    cl-nix-forge = {
+      url = "github:nerima-lisp/cl-nix-forge/v0.6.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    cl-parser-kit = {
+      url = "github:nerima-lisp/cl-parser-kit/v1.1.1";
+      flake = false;
+    };
+
+    cl-date-kit = {
+      url = "github:nerima-lisp/cl-date-kit/v1.0.0";
+      flake = false;
+    };
+
+    cl-weave = {
+      url = "github:nerima-lisp/cl-weave/v1.3.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    paredit-cli = {
+      url = "github:nerima-lisp/paredit-cli/v1.6.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, nixpkgs, cl-nix-forge, cl-parser-kit, cl-date-kit, cl-weave, paredit-cli, treefmt-nix }:
+    let
+      systems = [ "x86_64-linux" "aarch64-darwin" ];
+    in
+    cl-nix-forge.lib.${builtins.head systems}.mkPackageFlake {
+      inherit self systems nixpkgs;
+      pname = "cl-toml-kit";
+      asd = ./cl-toml-kit.asd;
+      root = ./.;
+
+      meta = {
+        description = "Common Lisp toolkit for parsing and emitting TOML";
+        homepage = "https://github.com/nerima-lisp/cl-toml-kit";
+        license = nixpkgs.lib.licenses.mit;
+      };
+
+      lispDependencies = ctx: [
+        (ctx.cl.lispDerivation {
+          pname = "cl-parser-kit";
+          version = ctx.cl.fromAsdSystem "${cl-parser-kit}/cl-parser-kit.asd";
+          src = cl-parser-kit;
+          lispSystem = "cl-parser-kit";
+        })
+        (ctx.cl.lispDerivation {
+          pname = "cl-date-kit";
+          version = ctx.cl.fromAsdSystem "${cl-date-kit}/cl-date-kit.asd";
+          src = cl-date-kit;
+          lispSystem = "cl-date-kit";
+        })
+      ];
+      lispCheckDependencies = ctx: [ cl-weave.packages.${ctx.system}.cl-weave ];
+
+      timeoutSeconds = 120;
+      killAfterSeconds = 30;
+
+      devShellPackages = ctx: [
+        ctx.pkgs.sbcl
+        paredit-cli.packages.${ctx.system}.default
+      ];
+      treefmt.evalModule = treefmt-nix.lib.evalModule;
+
+      extraOutputs = ctx: {
+        checks.paredit-lint = paredit-cli.lib.${ctx.system}.mkLintCheck {
+          src = ./.;
+          name = "cl-toml-kit-paredit-lint";
+        };
+      };
+    };
+}
