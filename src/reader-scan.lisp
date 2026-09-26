@@ -64,8 +64,7 @@
         finally (return position)))
 
 (defun %scan-value-end (state position)
-  (let* ((source (toml-reader-state-source state))
-         (end (%scan-atom-end state position)))
+  (let ((end (%scan-atom-end state position)))
     (if (and (= (- end position) 10)
              (char= (%source-char state (+ position 4)) #\-)
              (member (%source-char state end) '(#\Space #\Tab))

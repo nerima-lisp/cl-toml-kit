@@ -21,9 +21,9 @@
 
 (defun %read-file-text (pathname)
   (with-open-file (stream pathname :direction :input)
-    (let ((text (make-string (file-length stream))))
-      (read-sequence text stream)
-      text)))
+    (with-output-to-string (out)
+      (loop for char = (read-char stream nil nil)
+            while char do (write-char char out)))))
 
 (defun %read-json-file (pathname)
   (json-kit:parse (%read-file-text pathname)))
@@ -45,21 +45,35 @@
     ((string= expected "nan") (and (floatp actual) (sb-ext:float-nan-p actual)))
     ((string= expected "inf") (= actual sb-ext:double-float-positive-infinity))
     ((string= expected "-inf") (= actual sb-ext:double-float-negative-infinity))
-    (t (= actual (read-from-string expected)))))
+    (t (= actual (let ((*read-default-float-format* 'double-float))
+                   (read-from-string expected))))))
+
+(defun %datetime-text= (expected actual)
+  (handler-case
+      (let ((normalized
+              (cl-date-kit:format-offset-date-time
+               (cl-date-kit:parse-offset-date-time expected :profile :rfc3339)
+               :profile :rfc3339)))
+        (and (cl-date-kit:offset-date-time-p actual)
+             (string= normalized
+                      (cl-date-kit:format-offset-date-time actual :profile :rfc3339))))
+    (cl-date-kit:cl-date-kit-error () nil)))
 
 (defun %expected-value= (expected actual)
   (cond
     ((hash-table-p expected)
      (multiple-value-bind (type value) (%expected-type-value expected)
-       (if type
+       (if (and (stringp type) (stringp value))
            (cond
          ((string= type "string") (and (stringp actual) (string= value actual)))
          ((string= type "integer") (and (integerp actual) (= (parse-integer value) actual)))
          ((string= type "float") (and (floatp actual) (%float-text= value actual)))
-         ((string= type "bool") (eql actual (string= value "true")))
+         ((string= type "bool")
+          (if (string= value "true")
+              (eql actual t)
+              (eql actual +toml-false+)))
          ((string= type "datetime")
-          (and (cl-date-kit:offset-date-time-p actual)
-               (string= value (cl-date-kit:format-offset-date-time actual :profile :rfc3339))))
+          (%datetime-text= value actual))
          ((string= type "datetime-local")
           (and (cl-date-kit:local-date-time-p actual)
                (string= value (cl-date-kit:format-local-date-time actual :profile :rfc3339))))

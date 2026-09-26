@@ -40,16 +40,12 @@
 (defparameter +toml-escape-table+
   #(#\Backspace #\Tab #\Newline #\Page #\Return #\Escape #\" #\\)
   "Values for b, t, n, f, r, e, quote, and backslash escapes.")
-(defparameter +toml-escape-letters+ "btnfre\\\""
+(defparameter +toml-escape-letters+
+  (coerce '(#\b #\t #\n #\f #\r #\e #\" #\\) 'simple-string)
   "The escape letters corresponding to +TOML-ESCAPE-TABLE+.")
 (defparameter +toml-number-prefixes+
   '((#\x 16 . +toml-hex-table+) (#\o 8 . +toml-octal-table+)
     (#\b 2 . +toml-binary-table+)))
-(defparameter +toml-error-messages+
-  '((:syntax . "invalid TOML syntax") (:string . "invalid string")
-    (:number . "invalid number") (:date . "invalid date or time")
-    (:duplicate . "duplicate TOML definition") (:table . "invalid table")))
-
 (defun %ascii-member-p (table char)
   (and char (< (char-code char) 128) (= 1 (sbit table (char-code char)))))
 
