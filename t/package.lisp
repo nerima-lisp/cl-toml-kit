@@ -15,8 +15,8 @@
   "Run the foundation data and condition specifications."
   (unless *reader-conformance-tests-registered-p*
     (%register-reader-conformance-tests)
+    (%register-roundtrip-tests)
     (setf *reader-conformance-tests-registered-p* t))
-  (sb-int:with-float-traps-masked (:invalid :overflow :underflow :divide-by-zero)
-    (unless (run-all :reporter :spec :timeout-ms 10000)
-      (error "cl-toml-kit test suite failed")))
+  (unless (run-all :reporter :spec :timeout-ms 10000)
+    (error "cl-toml-kit test suite failed"))
   t)

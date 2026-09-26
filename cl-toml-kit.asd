@@ -2,20 +2,6 @@
 
 (in-package #:asdf-user)
 
-(defun %toml-fixture-components ()
-  (let ((root (merge-pathnames "t/fixtures/toml-test/"
-                               (make-pathname :name nil :type nil
-                                              :defaults *load-truename*)))
-        (test-root (merge-pathnames "t/"
-                                    (make-pathname :name nil :type nil
-                                                   :defaults *load-truename*))))
-    (labels ((collect (directory)
-               (append (uiop:directory-files directory)
-                       (mapcan #'collect (uiop:subdirectories directory)))))
-      (mapcar (lambda (pathname)
-                `(:static-file ,(enough-namestring pathname test-root)))
-              (collect root)))))
-
 (asdf:defsystem "cl-toml-kit"
   :description "Common Lisp toolkit for parsing and emitting TOML"
   :author "takeokunn <bararararatty@gmail.com>"
@@ -28,7 +14,7 @@
   :pathname "src"
   :serial t
   :depends-on ((:version "cl-parser-kit" "1.1.1")
-               (:version "cl-date-kit" "1.1.0"))
+               (:version "cl-date-kit" "1.1.1"))
   :components ((:file "package")
                (:file "conditions")
                (:file "data")
@@ -52,13 +38,16 @@
   :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
-  :components #.(append '((:file "package")
-                          (:file "conditions-test")
-                          (:file "data-test")
-                          (:file "writer-test")
-                          (:file "fixture-toml-test")
-                          (:file "reader-conformance-test"))
-                    (%toml-fixture-components))
+  :components ((:file "package")
+               (:file "conditions-test")
+               (:file "data-test")
+               (:file "writer-test")
+               (:file "fixture-toml-test")
+               (:file "reader-values-test")
+               (:file "reader-document-test")
+               (:file "reader-errors-test")
+               (:file "roundtrip-test")
+               (:file "reader-conformance-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function
@@ -73,5 +62,4 @@
   :depends-on ("cl-toml-kit")
   :pathname "benchmark"
   :serial t
-  :components ((:file "runner")
-               (:file "cases")))
+  :components ((:file "runner")))
