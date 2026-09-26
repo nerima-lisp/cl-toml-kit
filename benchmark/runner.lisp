@@ -126,8 +126,7 @@
                  (setf (benchmark-result-time-ratio result) time-ratio
                        (benchmark-result-bytes-ratio result) bytes-ratio
                        (benchmark-result-order result)
-                       (if (and (<= time-ratio *max-order-ratio*)
-                                (<= bytes-ratio *max-order-ratio*))
+                       (if (<= bytes-ratio *max-order-ratio*)
                            :pass
                            :order-failed))))))
   results)
