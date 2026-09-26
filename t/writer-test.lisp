@@ -220,7 +220,8 @@
             (:large-integer "Integer is outside TOML's signed 64-bit range"
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
-            (:non-string-key "Table keys must be strings" ("BAD")))
+            (:non-string-key "Table keys must be strings" ("BAD"))
+            (:adjustable-vector "Not a TOML value" nil))
       "signals a bounded encoding error for ~S"
       (kind expected-message expected-path)
     (let ((condition
@@ -233,6 +234,10 @@
                    (:non-string-key (let ((table (make-hash-table :test 'equal)))
                                       (setf (gethash :bad table) 1)
                                       table))
+                   (:adjustable-vector
+                    (let ((value (make-array 1 :adjustable t :fill-pointer 1
+                                             :initial-contents '(1))))
+                      (%writer-table "outer" (%writer-table "inner" value))))
                    (otherwise
                     (%writer-table
                      "outer"

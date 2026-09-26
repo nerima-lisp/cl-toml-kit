@@ -30,7 +30,11 @@
                    (write-string (aref *toml-basic-string-escape* code)
                                  stream))
                   ((or (< code 32) (= code 127))
-                   (format stream "\\u~4,'0X" code))
+                   (write-string "\\u" stream)
+                   (loop for shift from 12 downto 0 by 4
+                         do (write-char (char "0123456789ABCDEF"
+                                               (ldb (byte 4 shift) code))
+                                        stream)))
                   (t (write-char character stream))))
   (write-char #\" stream))
 
@@ -83,7 +87,7 @@
 
 (defun %entry-kind (value)
   (cond ((hash-table-p value) :table)
-        ((and (vectorp value) (%array-of-tables-p value)) :array-table)
+        ((and (toml-array-p value) (%array-of-tables-p value)) :array-table)
         (t :value)))
 
 (defun %write-key-path (path key stream)
@@ -107,9 +111,6 @@
                (write-char #\Newline stream)))
            table)
   (maphash (lambda (key value)
-             (unless (stringp key)
-               (%signal-encoding-error "Table keys must be strings"
-                                       key (cons key reversed-path)))
              (when (eq :table (%entry-kind value))
                (write-char #\[ stream)
                (%write-key-path reversed-path key stream)
@@ -118,9 +119,6 @@
                (write-table value (cons key reversed-path) stream)))
            table)
   (maphash (lambda (key value)
-             (unless (stringp key)
-               (%signal-encoding-error "Table keys must be strings"
-                                       key (cons key reversed-path)))
              (when (eq :array-table (%entry-kind value))
                (loop for item across value
                      do (write-string "[[" stream)
