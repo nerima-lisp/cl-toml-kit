@@ -9,7 +9,7 @@
                    (asdf:system-source-directory "cl-toml-kit")))
 
 (defun %fixture-files (directory type)
-  (let ((manifest (merge-pathnames "files-toml-1.1.0" (%fixture-root))))
+    (let ((manifest (merge-pathnames "files-toml-1.1.0.txt" (%fixture-root))))
     (with-open-file (stream manifest)
       (sort (loop for relative = (read-line stream nil)
                   while relative
