@@ -17,7 +17,10 @@
                (:version "cl-date-kit" "1.1.0"))
   :components ((:file "package")
                (:file "conditions")
-               (:file "data"))
+               (:file "data")
+               (:file "writer-data")
+               (:file "writer-macros")
+               (:file "writer"))
   :in-order-to ((test-op (test-op "cl-toml-kit/test"))))
 
 (asdf:defsystem "cl-toml-kit/test"
@@ -31,7 +34,8 @@
   :serial t
   :components ((:file "package")
                (:file "conditions-test")
-               (:file "data-test"))
+               (:file "data-test")
+               (:file "writer-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function

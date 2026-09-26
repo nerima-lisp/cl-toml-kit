@@ -2,7 +2,9 @@
 (defpackage #:cl-toml-kit/test
   (:use #:cl #:cl-toml-kit)
   (:shadowing-import-from #:cl-weave #:describe)
-  (:import-from #:cl-weave #:it #:it-each #:expect #:signals #:run-all)
+  (:import-from #:cl-weave #:it #:it-each #:it-property #:expect #:signals
+                #:run-all #:gen-recursive #:gen-one-of #:gen-map #:gen-integer
+                #:gen-string #:gen-member)
   (:export #:run-tests))
 
 (in-package #:cl-toml-kit/test)
