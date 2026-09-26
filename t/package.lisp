@@ -11,6 +11,7 @@
 
 (defun run-tests ()
   "Run the foundation data and condition specifications."
+  (%register-reader-conformance-tests)
   (unless (run-all :reporter :spec :timeout-ms 10000)
     (error "cl-toml-kit test suite failed"))
   t)

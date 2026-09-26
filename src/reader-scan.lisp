@@ -1,0 +1,75 @@
+;;;; src/reader-scan.lisp
+(in-package #:cl-toml-kit)
+
+(defun %source-char (state position)
+  (declare (type toml-reader-state state) (type fixnum position))
+  (when (< position (toml-reader-state-length state))
+    (char (toml-reader-state-source state) position)))
+
+(defun %advance-to (state position)
+  (declare (type toml-reader-state state) (type fixnum position))
+  (loop while (< (toml-reader-state-position state) position)
+        do (let ((char (%source-char state (toml-reader-state-position state))))
+             (incf (toml-reader-state-position state))
+             (cond ((char= char #\Return)
+                    (when (eql (%source-char state (toml-reader-state-position state))
+                               #\Newline)
+                      (incf (toml-reader-state-position state)))
+                    (incf (toml-reader-state-line state))
+                    (setf (toml-reader-state-column state) 1))
+                   ((char= char #\Newline)
+                    (incf (toml-reader-state-line state))
+                    (setf (toml-reader-state-column state) 1))
+                   (t (incf (toml-reader-state-column state)))))))
+
+(defun %error-at (state position expected &optional (path nil))
+  (let* ((source (toml-reader-state-source state))
+         (end (min (length source) (+ position 40)))
+         (span (cl-parser-kit:make-span :source source :start position :end end))
+         (diagnostic (cl-parser-kit:make-diagnostic
+                      :message expected :span span))
+         (text (cl-parser-kit:diagnostic->string diagnostic)))
+    (%advance-to state position)
+    (error (make-toml-parse-error
+            :source-name (toml-reader-state-source-name state)
+            :position position :line (toml-reader-state-line state)
+            :column (toml-reader-state-column state) :path path
+            :expected expected :context "TOML" :text text))))
+
+(defun %skip-space-and-comments (state)
+  (loop
+    (loop while (%space-char-p (%source-char state (toml-reader-state-position state)))
+          do (%advance-to state (1+ (toml-reader-state-position state))))
+    (if (eql (%source-char state (toml-reader-state-position state)) #\#)
+        (loop for char = (%source-char state (toml-reader-state-position state))
+              while (and char (not (member char '(#\Newline #\Return))))
+              do (%advance-to state (1+ (toml-reader-state-position state))))
+        (return))))
+
+(defun %skip-line-ending (state)
+  (let ((char (%source-char state (toml-reader-state-position state))))
+    (when (member char '(#\Newline #\Return))
+      (%advance-to state (1+ (toml-reader-state-position state))))))
+
+(defun %scan-bare-key-end (state position)
+  (loop while (toml-bare-key-character-p (%source-char state position))
+        do (incf position)
+        finally (return position)))
+
+(defun %scan-atom-end (state position)
+  (loop while (let ((char (%source-char state position)))
+                (and char (not (member char '(#\Space #\Tab #\Return #\Newline
+                                               #\, #\] #\} #\#)))))
+        do (incf position)
+        finally (return position)))
+
+(defun %scan-value-end (state position)
+  (let ((end (%scan-atom-end state position)))
+    (if (and (= (- end position) 10)
+             (char= (%source-char state (+ position 4)) #\-)
+             (member (%source-char state end) '(#\Space #\Tab))
+             (%decimal-char-p (%source-char state (1+ end)))
+             (%decimal-char-p (%source-char state (+ end 2)))
+             (char= (%source-char state (+ end 3)) #\:))
+        (%scan-atom-end state (1+ end))
+        end)))

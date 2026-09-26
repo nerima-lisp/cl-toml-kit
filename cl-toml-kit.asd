@@ -18,9 +18,15 @@
   :components ((:file "package")
                (:file "conditions")
                (:file "data")
+               (:file "reader-data")
+               (:file "reader-macros")
+               (:file "reader-scan")
+               (:file "reader-values")
+               (:file "reader-document")
                (:file "writer-data")
                (:file "writer-macros")
-               (:file "writer"))
+               (:file "writer")
+               (:file "reader"))
   :in-order-to ((test-op (test-op "cl-toml-kit/test"))))
 
 (asdf:defsystem "cl-toml-kit/test"
@@ -29,13 +35,15 @@
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
   :version "0.1.0"
-  :depends-on ("cl-toml-kit" "cl-weave")
+  :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
   :components ((:file "package")
                (:file "conditions-test")
                (:file "data-test")
-               (:file "writer-test"))
+               (:file "writer-test")
+               (:file "fixture-toml-test")
+               (:file "reader-conformance-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function
