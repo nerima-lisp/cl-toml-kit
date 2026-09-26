@@ -11,5 +11,12 @@ Run it with:
 timeout 600 sbcl --script run-benchmarks.lisp
 ```
 
-The harness reports wall-clock seconds and is intended for controlled local or
-CI comparisons on the same machine and Nix lockfile.
+The harness reports wall-clock seconds and SBCL `bytes-consed` for generated
+inputs of 256, 512, and 1024 entries. It also reports the ratio for each
+size-doubling pair. A pair passes the linear-order check when both ratios are
+at most 4.0; each case must also remain below its time and allocation upper
+bounds.
+Reader cases are reported as `PENDING` until `cl-toml-kit:parse` is available.
+Pending cases do not fail the diagnostic run. Other failures return a non-zero
+status, which makes the workflow useful without turning the benchmark into a
+correctness gate.
