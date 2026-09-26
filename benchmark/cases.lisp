@@ -2,7 +2,7 @@
 ;;;; Generated inputs are built once, outside the measured thunks.
 (in-package #:cl-toml-kit/benchmark)
 
-(defparameter *benchmark-sizes* '(256 512 1024))
+(defparameter *benchmark-sizes* '(4096 8192 16384))
 
 (defun %reader-input (size)
   (with-output-to-string (stream)
