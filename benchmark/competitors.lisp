@@ -53,7 +53,7 @@
            (%sorted-pairs
             (loop for key being the hash-keys of value using (hash-value item)
                   collect (cons key (%kit-normalize item))))))
-    ((vectorp value)
+    ((and (vectorp value) (not (stringp value)))
      (list :array (map 'list #'%kit-normalize value)))
     (t value)))
 
@@ -152,7 +152,7 @@
         (format t "skip~Cclop~C~A~%" #\Tab #\Tab clop-reason)
         (return-from run-competitor-benchmarks :skipped)))
     (handler-case
-        (let ((gate-source (%reader-input (first *sizes*))))
+        (let ((gate-source (%reader-input 0)))
           (%correctness-gate gate-source)
           (format t "correctness~Cpass~Csame-input-normalized-output~%"
                   #\Tab #\Tab)

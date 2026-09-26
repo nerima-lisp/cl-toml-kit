@@ -48,9 +48,45 @@ All nine cases passed their allocation and order checks.
 | `writer/write-toml` | 8,192 | 0.001741 | 0.001445 / 0.003365 | 5,824 | 1.576 | 0.993 | pass |
 | `writer/write-toml` | 16,384 | 0.004969 | 0.002952 / 0.010353 | 5,798 | 2.854 | 0.996 | pass |
 
-The preceding phase measured `write-toml` at about 108KB per call because the
+The preceding phase measured `write-toml` at about 267KB per call because the
 measurement was too coarse. The repeated-difference measurement above isolates
-the call and shows the allocation at about 5.8KB for these inputs.
+the call and shows the allocation at about 5.8KB for the same 16,384-entry
+input.
+
+## Phase 3 Reader results
+
+The Reader now represents a single-component key as its string directly. Only
+dotted keys use a temporary list. This removes the per-assignment key-path list
+for the generated benchmark while preserving the result and diagnostic
+behavior.
+
+| Measurement | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| `reader/parse`, 4,096 assignments, bytes/call | 1,160,966 | 1,087,392 | -6.3% |
+| `reader/parse`, 8,192 assignments, bytes/call | 2,156,051 | 2,029,248 | -5.9% |
+| `reader/parse`, 16,384 assignments, bytes/call | 4,033,350 | 3,770,272 | -6.5% |
+| 16,384 assignments, bytes/assignment | 246 | 230 | -16 bytes |
+
+The final 16,384-entry run had a median time of 0.040083 seconds. The time
+value is a local wall-clock observation and is noisier than allocation.
+
+### Reader allocation classification
+
+The following classification is based on `sb-sprof` allocation samples for the
+16,384-entry generated Reader input. The profiler reports allocation sites, not
+an exact retained-size census, so the sample percentages are attribution
+signals rather than a byte-for-byte decomposition.
+
+| Class | Objects or site | Allocation evidence | Lifetime |
+| --- | --- | ---: | --- |
+| Result | `PUTHASH/EQUAL`, tables, values | 48.9% samples | retained in result |
+| Temporary | `%READ-KEY-PATH`, dotted lists | 25.5% before | discarded; singleton list removed |
+| Result | strings, arrays, dates, tables | remaining | retained in result |
+| Temporary | continuations, numeric/date work | remaining | live during parse/errors |
+
+The profiler supports removing the single-key path list, but does not support
+removing result hash-table insertion or retained result objects without changing
+the public result model.
 
 ## Profiling summary
 
@@ -63,17 +99,27 @@ led by `PUTHASH/EQUAL` and `%read-key-path`. Writer CPU samples were led by
 
 The Reader source was not changed in phase 2 because the measured hot paths
 are result hash-table insertion and key-path construction, both required by
-the current result model. The Writer changes batch contiguous string output
+the current result model. Phase 3 removed the avoidable single-key path list.
+The Writer changes batch contiguous string output
 and keep the active path in one adjustable vector, avoiding temporary path
 lists and their reversal.
 
 ## Competitor comparison
 
-The optional `clop` comparison is implemented in
-`benchmark/competitors.lisp` and is skipped when its dependencies are absent.
-The shallow clone was available, but ASDF could not load it because the
-`alexandria` system was not installed. Therefore no correctness-gated timing
-comparison was recorded. When dependencies are available, run:
+The `clop` comparison is implemented in `benchmark/competitors.lisp`. The
+comparison used clop commit `c0c3fe7efa5ac95ba1644febfb2c2acab757fcda` and
+passed the normalized-output correctness gate:
+
+| Assignments | kit sec | clop sec | kit bytes | clop bytes | clop / kit |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 | 0.000218 | 0.003951 | 134,848 | 6,244,160 | 46.3x |
+| 512 | 0.000463 | 0.006915 | 230,528 | 12,412,608 | 53.8x |
+| 1,024 | 0.000829 | 0.053528 | 358,528 | 24,374,208 | 68.0x |
+
+The comparison is diagnostic only and does not relax TOML 1.1.0 conformance
+checks. The benchmark gate treats strings as scalar values and compares the
+fixed correctness input without generated timing keys. When dependencies are
+available, run:
 
 ```sh
 CL_TOML_KIT_CLOP_DIR=/tmp/clop sbcl --script benchmark/run-competitors.lisp

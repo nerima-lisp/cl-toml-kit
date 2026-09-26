@@ -350,8 +350,14 @@
         (setf index (toml-reader-state-position state))
         (toml-read-value state index
                          (lambda (value value-end)
-                           (let ((target table))
-                             (loop for key in (butlast keys)
+                           (let ((target table)
+                                 (components (%path-parent keys)))
+                             (loop for key = (cond ((null components) nil)
+                                                   ((stringp components)
+                                                    (prog1 components
+                                                      (setf components nil)))
+                                                   (t (pop components)))
+                                   while key
                                    do (multiple-value-bind (child present) (gethash key target)
                                         (cond
                                           ((not present)
@@ -369,7 +375,7 @@
                                            (unless (member child created :test #'eq)
                                              (%error-at state value-end "inline table"))))
                                         (setf target child)))
-                             (let ((key (car (last keys))))
+                             (let ((key (%path-last keys)))
                                (when (nth-value 1 (gethash key target))
                                  (%error-at state value-end "unique inline key"))
                                (setf (gethash key target) value)))

@@ -19,24 +19,44 @@
       (t (%error-at state position "key")))))
 
 (defun %read-key-path (state position)
-  (let ((keys '()) (index position))
-    (loop
-      (multiple-value-bind (key next) (%read-key-component state index)
-        (push key keys) (setf index next)
-        (setf (toml-reader-state-position state) index))
+  (multiple-value-bind (first-key first-next) (%read-key-component state position)
+    (let ((index first-next))
+      (setf (toml-reader-state-position state) index)
       (%skip-space-and-comments state)
       (setf index (toml-reader-state-position state))
-      (if (eql (%source-char state index) #\.)
-          (progn (incf index)
-                 (setf (toml-reader-state-position state) index)
-                 (%skip-space-and-comments state)
-                 (setf index (toml-reader-state-position state)))
-          (return (values (nreverse keys) index))))))
+      (if (not (eql (%source-char state index) #\.))
+          (values first-key index)
+          (let ((keys (list first-key)))
+            (loop
+              (incf index)
+              (setf (toml-reader-state-position state) index)
+              (%skip-space-and-comments state)
+              (setf index (toml-reader-state-position state))
+              (multiple-value-bind (key next) (%read-key-component state index)
+                (push key keys) (setf index next)
+                (setf (toml-reader-state-position state) index))
+              (%skip-space-and-comments state)
+              (setf index (toml-reader-state-position state))
+              (unless (eql (%source-char state index) #\.)
+                (return (values (nreverse keys) index)))))))))
+
+(defun %path-length (path)
+  (if (stringp path) 1 (length path)))
+
+(defun %path-parent (path)
+  (if (stringp path) nil (butlast path)))
+
+(defun %path-last (path)
+  (if (stringp path) path (car (last path))))
 
 (defun %table-for-path (state path &key (create nil) (dotted nil) base)
-  (let ((table (or base (toml-reader-state-root state))))
-    (loop for key in path
-          for final = (eq key (car (last path)))
+  (let ((table (or base (toml-reader-state-root state)))
+        (components path))
+    (loop for key = (cond ((null components) nil)
+                          ((stringp components)
+                           (prog1 components (setf components nil)))
+                          (t (pop components)))
+          while key
           do (multiple-value-bind (value present) (gethash key table)
                (cond
                  ((not present)
@@ -67,9 +87,9 @@
 (defun %define-assignment (state path value)
   (let* ((base (or (toml-reader-state-current state)
                    (toml-reader-state-root state)))
-         (parent (%table-for-path state (butlast path) :create t
-                                  :dotted (> (length path) 1) :base base))
-         (key (car (last path))))
+         (parent (%table-for-path state (%path-parent path) :create t
+                                  :dotted (> (%path-length path) 1) :base base))
+         (key (%path-last path)))
     (multiple-value-bind (old present) (gethash key parent)
       (declare (ignore old))
       (when present (%error-at state (toml-reader-state-position state) "unique key" path)))
@@ -94,8 +114,8 @@
       (unless (member (%source-char state (toml-reader-state-position state))
                       '(nil #\Newline #\Return))
         (%error-at state (toml-reader-state-position state) "line ending" path))
-      (let ((parent (%table-for-path state (butlast path) :create t))
-            (key (car (last path))))
+      (let ((parent (%table-for-path state (%path-parent path) :create t))
+            (key (%path-last path)))
         (if array-p
             (let ((value (gethash key parent)))
               (when (and value (vectorp value) (zerop (length value)))
@@ -108,7 +128,7 @@
               (let ((table (make-hash-table :test #'equal)))
                 (vector-push-extend table value)
                 (setf (gethash table (toml-reader-state-table-states state)) :explicit
-                      (gethash (car (last path)) (toml-reader-state-array-tables state)) t)
+                      (gethash (%path-last path) (toml-reader-state-array-tables state)) t)
                 (setf (toml-reader-state-current state) table)))
             (let ((table (gethash key parent)))
               (cond
