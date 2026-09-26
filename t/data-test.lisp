@@ -56,10 +56,8 @@
       (expect (toml-table-p equal-table))
       (expect (toml-value-p equal-table))
       (expect (not (toml-table-p eql-table)))))
-  (it "keeps false sentinel identity across source reload"
-    (let ((sentinel +toml-false+))
-      (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
-      (expect (eq sentinel +toml-false+))))
+  (it "expands the declarative value model"
+    (expect (consp (macroexpand-1 '(define-toml-value-model)))))
   (it "dispatches directly by type"
     (expect (eq :string
                 (toml-value-typecase "value"
@@ -70,7 +68,11 @@
                   (t :fallback)))))
   (it "rejects an unknown typecase kind during macro expansion"
     (expect (signals error
-              (macroexpand-1 '(toml-value-typecase value (:unknown t)))))))
+              (macroexpand-1 '(toml-value-typecase value (:unknown t))))))
+  (it "keeps false sentinel identity across source reload"
+    (let ((sentinel +toml-false+))
+      (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
+      (expect (eq sentinel +toml-false+)))))
 
 (describe "unsupported native values"
   (it-each ((nil) ((quote (1 2))) (:symbol))
