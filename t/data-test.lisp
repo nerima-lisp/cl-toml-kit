@@ -46,10 +46,8 @@
   (it "accepts double-float infinity and NaN"
     (expect (toml-value-p sb-ext:double-float-positive-infinity))
     (expect (toml-value-p sb-ext:double-float-negative-infinity))
-    (let ((zero (coerce (random 1) 'double-float)))
-      (let ((nan (sb-int:with-float-traps-masked (:invalid)
-                   (/ zero zero))))
-        (expect (toml-value-p nan)))))
+    (let ((nan (gethash "x" (cl-toml-kit:parse "x = nan"))))
+      (expect (toml-value-p nan))))
   (it "uses O(1) table identity and does not inspect keys"
     (let ((equal-table (make-hash-table :test 'equal))
           (eql-table (make-hash-table :test 'eql)))

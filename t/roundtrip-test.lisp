@@ -50,6 +50,7 @@
 
 (defun %register-roundtrip-tests ()
   (let ((fixtures (getf (load-toml-fixtures) :valid)))
+    ;; cl-weave v1.3.0 requires literal it-each cases, so runtime fixtures use EVAL.
     (eval `(it-each
              ,(mapcar (lambda (fixture)
                         (list (namestring (toml-fixture-toml fixture)))) fixtures)

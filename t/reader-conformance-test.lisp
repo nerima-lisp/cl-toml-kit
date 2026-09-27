@@ -2,6 +2,7 @@
 
 (defun %register-reader-conformance-tests ()
   (let ((fixtures (load-toml-fixtures)))
+    ;; cl-weave v1.3.0 requires literal it-each cases, so runtime fixtures use EVAL.
     (eval `(it-each
              ,(mapcar (lambda (fixture)
                         (list (namestring (toml-fixture-toml fixture))))
@@ -12,6 +13,7 @@
                       (%make-toml-fixture
                        :toml (pathname name)
                        :json (make-pathname :type "json" :defaults (pathname name)))))))
+    ;; cl-weave v1.3.0 requires literal it-each cases, so runtime fixtures use EVAL.
     (eval `(it-each
              ,(mapcar (lambda (pathname) (list (namestring pathname) pathname))
                       (getf fixtures :invalid))
