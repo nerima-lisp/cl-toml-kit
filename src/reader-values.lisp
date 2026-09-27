@@ -51,7 +51,7 @@
                                 (1+ index) t)))
                ((or (and (char= quote #\") (char= char #\\))
                     (member char '(#\Newline #\Return))
-                    (and (%control-char-p char) (not (char= char #\Tab))))
+                    (and (toml-control-character-p char) (not (char= char #\Tab))))
                 (return (values nil nil nil)))
                (t (incf index)))
           finally (return (values nil nil nil)))))
@@ -91,7 +91,7 @@
           ((and (char= quote #\") (char= char #\\))
            (if triple
                (let ((continuation (1+ index)))
-                 (loop while (%space-char-p (%source-char state continuation))
+                 (loop while (toml-space-character-p (%source-char state continuation))
                        do (incf continuation))
                  (if (member (%source-char state continuation) '(#\Newline #\Return))
                      (progn
@@ -99,7 +99,7 @@
                        (%skip-line-ending state)
                        (setf index (toml-reader-state-position state))
                        (loop
-                         (loop while (%space-char-p (%source-char state index)) do (incf index))
+                         (loop while (toml-space-character-p (%source-char state index)) do (incf index))
                          (if (member (%source-char state index) '(#\Newline #\Return))
                              (progn
                                (setf (toml-reader-state-position state) index)
@@ -114,7 +114,7 @@
                  (setf index next))))
           ((and (not triple) (member char '(#\Newline #\Return)))
            (%error-at state index "single-line string"))
-          ((and (%control-char-p char) (not (char= char #\Tab)) (not triple))
+          ((and (toml-control-character-p char) (not (char= char #\Tab)) (not triple))
            (%error-at state index "printable string character"))
           ((and (char= quote #\') (char= char #\Return))
            (%error-at state index "literal string character"))
@@ -173,7 +173,7 @@
       (setf negative (char= (%source-char state index) #\-)) (incf index))
     (when (and (char= (%source-char state index) #\0)
                (< (1+ index) end)
-               (or (%decimal-char-p (%source-char state (1+ index)))
+               (or (toml-decimal-character-p (%source-char state (1+ index)))
                    (char= (%source-char state (1+ index)) #\_)))
       (%error-at state (1+ index) "no leading zero"))
     (loop while (< index end)
@@ -265,11 +265,11 @@
 (defun %date-shaped-p (source start end)
   (or (and (>= (- end start) 10)
            (loop for index below 4
-                 always (%decimal-char-p (char source (+ start index))))
+                 always (toml-decimal-character-p (char source (+ start index))))
            (char= (char source (+ start 4)) #\-))
       (and (>= (- end start) 5)
-           (%decimal-char-p (char source start))
-           (%decimal-char-p (char source (1+ start)))
+           (toml-decimal-character-p (char source start))
+           (toml-decimal-character-p (char source (1+ start)))
            (char= (char source (+ start 2)) #\:))))
 
 (defun %float-token-p (source start end)

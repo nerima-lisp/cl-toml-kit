@@ -20,4 +20,5 @@
 
 (define-char-class toml-bare-key-character-p +toml-bare-key-table+)
 (define-char-class toml-decimal-character-p +toml-decimal-table+)
-(define-char-class toml-hex-character-p +toml-hex-table+)
+(define-char-class toml-space-character-p +toml-space-table+)
+(define-char-class toml-control-character-p +toml-control-table+)

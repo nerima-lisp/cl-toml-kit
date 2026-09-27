@@ -38,7 +38,7 @@
 
 (defun %skip-space-and-comments (state)
   (loop
-    (loop while (%space-char-p (%source-char state (toml-reader-state-position state)))
+    (loop while (toml-space-character-p (%source-char state (toml-reader-state-position state)))
           do (%advance-to state (1+ (toml-reader-state-position state))))
     (if (eql (%source-char state (toml-reader-state-position state)) #\#)
         (loop for char = (%source-char state (toml-reader-state-position state))
@@ -68,8 +68,8 @@
     (if (and (= (- end position) 10)
              (char= (%source-char state (+ position 4)) #\-)
              (member (%source-char state end) '(#\Space #\Tab))
-             (%decimal-char-p (%source-char state (1+ end)))
-             (%decimal-char-p (%source-char state (+ end 2)))
+             (toml-decimal-character-p (%source-char state (1+ end)))
+             (toml-decimal-character-p (%source-char state (+ end 2)))
              (char= (%source-char state (+ end 3)) #\:))
         (%scan-atom-end state (1+ end))
         end)))
