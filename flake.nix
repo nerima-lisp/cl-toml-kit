@@ -15,7 +15,7 @@
     };
 
     cl-date-kit = {
-      url = "github:nerima-lisp/cl-date-kit/v1.1.1";
+      url = "github:nerima-lisp/cl-date-kit/v1.0.0";
       flake = false;
     };
 
