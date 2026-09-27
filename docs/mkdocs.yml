@@ -137,6 +137,7 @@ nav:
       - Architecture: reference/architecture.md
       - Conditions: reference/conditions.md
       - Compatibility: reference/compatibility.md
+      - Benchmarks: reference/benchmarks.md
 
 # docs/notes/ holds measurements worth keeping but not worth publishing.
 # Without this declaration --strict fails the build the moment one is added.
