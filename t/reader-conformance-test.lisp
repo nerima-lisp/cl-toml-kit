@@ -18,4 +18,8 @@
              "rejects invalid TOML fixture ~A"
              (name pathname)
              (declare (ignore name))
-             (expect (signals toml-parse-error (parse-file pathname)))))))
+             (let ((condition (handler-case (parse-file pathname)
+                                (toml-parse-error (error) error))))
+               (expect (typep condition 'toml-parse-error))
+               (expect (plusp (toml-parse-error-line condition)))
+               (expect (plusp (toml-parse-error-column condition))))))))

@@ -20,23 +20,46 @@
                ((and (char= char #\Return)
                      (or (= (1+ index) (length text))
                          (not (char= (char text (1+ index)) #\Newline))))
-                (error (make-toml-parse-error :source-name source-name
-                                               :position index :expected "LF after CR")))
+                (%error-at state index "LF after CR"))
                ((and (or (< (char-code char) #x20) (= (char-code char) #x7F))
                      (not (member char '(#\Tab #\Newline #\Return))))
-                (error (make-toml-parse-error :source-name source-name
-                                               :position index :expected "printable character")))))
+                (%error-at state index "printable character"))))
     (toml-read-document state 0 (lambda (value position)
                                   (declare (ignore position))
                                   (%finalize-value value)))))
+
+(defun %decoding-error-position (condition)
+  (let ((text (princ-to-string condition))
+        (prefix "byte position "))
+    (when (search prefix text)
+      (parse-integer text :start (+ (search prefix text) (length prefix))
+                     :junk-allowed t))))
+
+(defun %byte-position-line-column (bytes position)
+  (let ((line 1)
+        (column 1))
+    (loop for index below position
+          for byte = (aref bytes index)
+          if (= byte #x0A)
+            do (incf line) (setf column 1)
+          else do (incf column))
+    (values line column)))
+
+(defun %decode-utf8 (bytes pathname)
+  (handler-case
+      (sb-ext:octets-to-string bytes :external-format :utf-8)
+    (sb-int:character-decoding-error (condition)
+      (let ((position (%decoding-error-position condition)))
+        (multiple-value-bind (line column)
+            (%byte-position-line-column bytes (or position 0))
+          (error
+           (make-toml-parse-error
+            :source-name (namestring pathname)
+            :position (or position 0) :line line :column column
+            :expected "UTF-8")))))))
 
 (defun parse-file (pathname)
   (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
     (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))
       (read-sequence bytes stream)
-      (let ((text (handler-case
-                      (sb-ext:octets-to-string bytes :external-format :utf-8)
-                    (error ()
-                      (error (make-toml-parse-error :source-name (namestring pathname)
-                                                     :expected "UTF-8"))))))
-        (parse text :source-name (namestring pathname))))))
+      (parse (%decode-utf8 bytes pathname) :source-name (namestring pathname)))))

@@ -21,6 +21,19 @@
     (expect (signals toml-parse-error (parse "value = 1e309"))))
   (it "rejects a fractional minute with a TOML parse error"
     (expect (signals toml-parse-error (parse "value = 07:32.5"))))
+  (it-each ((#.(concatenate 'string "a = 1" (string #\Return)) 1 6)
+            (#.(concatenate 'string "a = " (string (code-char 1))) 1 5)
+            ("t/fixtures/toml-test/invalid/encoding/bad-utf8-at-end.toml" 5 11))
+      "reports a concrete position for malformed input ~S"
+      (input expected-line expected-column)
+    (let ((condition (handler-case
+                         (if (search ".toml" input)
+                             (parse-file input)
+                             (parse input))
+                       (toml-parse-error (error) error))))
+      (expect (typep condition 'toml-parse-error))
+      (expect (= expected-line (toml-parse-error-line condition)))
+      (expect (= expected-column (toml-parse-error-column condition)))))
   (it-each ((#.(format nil "a = 1~%b = 2~%c = 3~%a = 4"))
             (#.(format nil "[a]~%x = 1~%[a]~%y = 2"))
             (#.(format nil "[[items]]~%x = 1~%[[items]]~%x = 2~%[items]~%y = 3"))
