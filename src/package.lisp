@@ -10,7 +10,8 @@
    #:toml-table #:toml-table-p #:toml-array #:toml-array-p
    #:toml-integer #:toml-integer-p #:toml-float #:toml-float-p
    ;; Conditions
-   #:toml-kit-error #:toml-parse-error #:toml-parse-error-source-name
+   #:toml-kit-error #:toml-value-model-error #:toml-value-model-error-message
+   #:toml-parse-error #:toml-parse-error-source-name
    #:toml-parse-error-position
    #:toml-parse-error-line #:toml-parse-error-column
    #:toml-parse-error-path #:toml-parse-error-expected

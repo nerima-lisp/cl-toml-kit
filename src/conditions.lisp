@@ -25,6 +25,11 @@
 
 (define-condition toml-kit-error (error) ())
 
+(define-condition toml-value-model-error (toml-kit-error)
+  ((message :initarg :message :reader toml-value-model-error-message))
+  (:report (lambda (condition stream)
+             (write-string (toml-value-model-error-message condition) stream))))
+
 (define-condition toml-parse-error (toml-kit-error)
   ((source-name :initarg :source-name :initform nil
                 :reader toml-parse-error-source-name)

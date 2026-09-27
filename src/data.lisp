@@ -34,7 +34,8 @@
   (let ((specifications *toml-value-specifications*))
     (labels ((find-specification (kind)
                (or (find kind specifications :key #'first)
-                   (error "Unknown TOML value kind ~S." kind)))
+                   (error 'toml-value-model-error
+                          :message (format nil "Unknown TOML value kind ~S." kind))))
              (predicate-form (kind value)
                (case kind
                  (:table `(and (hash-table-p ,value)
@@ -86,7 +87,8 @@ expansion time."
             (setf otherwise-forms forms)
             (progn
               (unless (member key known-kinds)
-                (error "Unknown TOML value kind ~S." key))
+                (error 'toml-value-model-error
+                       :message (format nil "Unknown TOML value kind ~S." key)))
               (setf (gethash key forms-by-kind) forms)))))
     `(let ((,object ,value))
        (typecase ,object
