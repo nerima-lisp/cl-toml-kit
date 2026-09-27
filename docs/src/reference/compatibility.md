@@ -33,9 +33,8 @@ All checks run against the vendored files; nothing is fetched at build or test
 time. Conformance means two things. The reader must accept every valid fixture
 and produce its matching expectation, and must reject every invalid fixture.
 The writer must emit TOML that matches each valid fixture semantically, since
-TOML allows several spellings of the same value. The reader is still under
-development, so this page describes the corpus and the intent rather than a
-current pass count.
+TOML allows several spellings of the same value. The current test suite accepts
+all 214 valid fixtures and rejects all 467 invalid fixtures.
 
 To refresh the corpus from a chosen upstream tag, run
 `TOML_VERSION=1.1.0 scripts/update-toml-test-fixtures.sh [TAG]` from the
@@ -54,7 +53,7 @@ and `aarch64-darwin` platforms.
 | System | Version | Role |
 |---|---|---|
 | `cl-parser-kit` | 1.1.1 | runtime |
-| `cl-date-kit` | 1.1.0 | runtime |
+| `cl-date-kit` | 1.1.1 | runtime |
 | `cl-weave` | 1.3.0 | test only |
 
 The library depends at runtime on `cl-parser-kit` and `cl-date-kit`, with the

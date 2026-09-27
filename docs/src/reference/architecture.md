@@ -7,8 +7,10 @@ repository's [design document](https://github.com/nerima-lisp/cl-toml-kit/blob/m
 ## Module layout
 
 ASDF loads `src/package.lisp`, `src/conditions.lisp`, and `src/data.lisp`
-first, then the writer files (`src/writer-data.lisp`, `src/writer-macros.lisp`,
-`src/writer.lisp`). The reader adds `src/reader*.lisp`.
+first, then reader and writer files. The reader consists of `reader-data.lisp`,
+`reader-macros.lisp`, `reader-scan.lisp`, `reader-path.lisp`,
+`reader-values.lisp`, `reader-document.lisp`, and `reader.lisp`. The writer
+consists of `writer-data.lisp`, `writer-macros.lisp`, and `writer.lisp`.
 
 The foundation owns the package definition, the conditions, and the value
 model in `src/data.lisp`. Reader and writer share the value and condition
@@ -37,12 +39,13 @@ the exported accessors.
 
 ## Reader
 
-The reader implementation is in progress; this section describes the contract
-it builds against. `parse` accepts a string or a character input stream and
-returns the top-level table, or signals `toml-parse-error`. Internally, the
-grammar and token code may use continuations to propagate success, failure,
-and source location, but `parse` remains an ordinary function. Input is
-normalized to a `simple-string` and scanned by index. See
+`parse` accepts a string or a character input stream and returns the top-level
+table, or signals `toml-parse-error`. `parse-file` decodes UTF-8 bytes and
+reports the byte position, line, and column of decoding failures. Internally,
+the grammar uses `define-toml-rule` to generate CPS reader rules that propagate
+success, failure, and source location, while the public reader remains an
+ordinary function. Input is normalized to a `simple-string` and scanned by
+index. See
 [Reader](../guide/reader.md) for usage.
 
 ## Writer

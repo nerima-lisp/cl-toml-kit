@@ -56,9 +56,8 @@ TOML parse error in <source-name> at line <line>, column <column> (position <pos
 The `in <source-name>` part appears only when a source name was given, `at
 <path>` only when a path applies, and `; expected <expected>` only when the
 parser recorded an expected value. `context` and `text` are available only
-through their readers. Since the reader implementation is still in progress,
-the following is the shape of the report rather than output from a specific
-input:
+through their readers. The following is an example report from the implemented
+reader:
 
 ```text
 TOML parse error in config.toml at line 3, column 9 (position 41) at ("server" "port"); expected value
