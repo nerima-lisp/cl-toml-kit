@@ -1,11 +1,6 @@
 ;;;; src/package.lisp
 (defpackage #:cl-toml-kit
   (:use #:cl)
-  (:import-from #:cl-date-kit
-                #:offset-date-time #:offset-date-time-p
-                #:local-date-time #:local-date-time-p
-                #:local-date #:local-date-p
-                #:local-time #:local-time-p)
   (:export
    ;; Reader / writer protocol
    #:parse #:parse-file #:encode #:write-toml
@@ -21,5 +16,4 @@
    #:toml-parse-error-path #:toml-parse-error-expected
    #:toml-parse-error-context #:toml-parse-error-text
    #:toml-encoding-error #:toml-encoding-error-message
-   #:toml-encoding-error-path
-   ))
+   #:toml-encoding-error-path))
