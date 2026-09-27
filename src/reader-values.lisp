@@ -99,7 +99,8 @@
                        (%skip-line-ending state)
                        (setf index (toml-reader-state-position state))
                        (loop
-                         (loop while (toml-space-character-p (%source-char state index)) do (incf index))
+                         (loop while (toml-space-character-p (%source-char state index))
+                               do (incf index))
                          (if (member (%source-char state index) '(#\Newline #\Return))
                              (progn
                                (setf (toml-reader-state-position state) index)
