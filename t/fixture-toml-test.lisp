@@ -45,7 +45,7 @@
     ((string= expected "-inf") (= actual sb-ext:double-float-negative-infinity))
     (t (= actual (let ((*read-default-float-format* 'double-float))
                    (let ((*read-eval* nil))
-                     (read-from-string expected))))))
+                     (read-from-string expected)))))))
 
 (defun %datetime-text= (expected actual)
   (handler-case
