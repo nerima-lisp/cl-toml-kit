@@ -252,7 +252,7 @@
           ((and (> (length text) 10)
                 (member (char text 10) '(#\T #\t #\ )))
            (cl-date-kit:parse-local-date-time text :profile :rfc3339))
-          ((find #\- text :test #'char=) (cl-date-kit:parse-local-date text))
+          ((%local-date-shaped-p text) (cl-date-kit:parse-local-date text))
           (t (cl-date-kit:parse-local-time text :profile :rfc3339)))
       (cl-date-kit:cl-date-kit-error ()
         (%error-at state start "valid date or time")))))
@@ -261,6 +261,17 @@
   (and (= (- end start) (length token))
        (loop for index below (length token)
              always (char= (char source (+ start index)) (char token index)))))
+
+(defun %local-date-shaped-p (text)
+  (and (= (length text) 10)
+       (loop for index below 4
+             always (toml-decimal-character-p (char text index)))
+       (char= (char text 4) #\-)
+       (loop for index from 5 below 7
+             always (toml-decimal-character-p (char text index)))
+       (char= (char text 7) #\-)
+       (loop for index from 8 below 10
+             always (toml-decimal-character-p (char text index)))))
 
 (defun %date-shaped-p (source start end)
   (or (and (>= (- end start) 10)
