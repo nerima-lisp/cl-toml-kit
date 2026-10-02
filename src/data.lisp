@@ -16,6 +16,31 @@
 (defun toml-false-p (value)
   (eq value +toml-false+))
 
+(defconstant +toml-default-max-depth+ 512
+  "The default maximum nesting depth for TOML aggregates.")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun %toml-ascii-table (predicate)
+    (let ((table (make-array 128 :element-type 'bit :initial-element 0)))
+      (dotimes (code 128 table)
+        (when (funcall predicate (code-char code))
+          (setf (sbit table code) 1))))))
+
+(defparameter +toml-bare-key-table+
+  (%toml-ascii-table (lambda (char) (or (alpha-char-p char) (digit-char-p char)
+                                        (char= char #\_) (char= char #\-)))))
+
+(defparameter +toml-escape-table+
+  #(#\Backspace #\Tab #\Newline #\Page #\Return #\Escape #\" #\\)
+  "Values for b, t, n, f, r, e, quote, and backslash escapes.")
+
+(defparameter +toml-escape-letters+
+  (coerce '(#\b #\t #\n #\f #\r #\e #\" #\\) 'simple-string)
+  "The escape letters corresponding to +TOML-ESCAPE-TABLE+.")
+
+(defvar *toml-encoding-path* nil
+  "The path used by shared value-dispatch errors while encoding.")
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *toml-value-specifications*
     '((:table hash-table toml-table)
@@ -99,9 +124,11 @@ expansion time."
                              ,(if (eq kind :table)
                                   `(if (toml-table-p ,object)
                                        (progn ,@forms)
-                                       (error 'toml-encoding-error
-                                              :message "Invalid TOML table"))
+                                       (error (make-toml-encoding-error
+                                               :message "Invalid TOML table"
+                                               :path *toml-encoding-path*)))
                                   `(progn ,@forms))))
          (otherwise ,@(or otherwise-forms
-                           '((error 'toml-encoding-error
-                                    :message "Not a TOML value"))))))))
+                           '((error (make-toml-encoding-error
+                                     :message "Not a TOML value"
+                                     :path *toml-encoding-path*)))))))))

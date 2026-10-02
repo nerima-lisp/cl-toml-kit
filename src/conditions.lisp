@@ -42,8 +42,7 @@
    (text :initarg :text :initform "" :reader toml-parse-error-text))
   (:report (lambda (condition stream)
              (format stream
-                     "TOML parse error~@[ in ~A~] at line ~D, column ~D "
-                     "(position ~D)~@[ at ~S~]~@[; expected ~A~]"
+                     "TOML parse error~@[ in ~A~] at line ~D, column ~D (position ~D)~@[ at ~S~]~@[; expected ~A~]"
                      (toml-parse-error-source-name condition)
                      (toml-parse-error-line condition)
                      (toml-parse-error-column condition)
