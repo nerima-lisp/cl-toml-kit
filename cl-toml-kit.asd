@@ -14,8 +14,7 @@
   :pathname "src"
   :serial t
   :depends-on ((:version "cl-parser-kit" "1.1.1")
-               (:version "cl-date-kit" "1.1.1")
-               (:version "cl-codec-kit" "0.6.0"))
+               (:version "cl-date-kit" "1.1.1"))
   :components ((:file "package")
                (:file "conditions")
                (:file "data")

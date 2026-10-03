@@ -67,13 +67,12 @@ in [Getting started](../getting-started.md).
 
 ## Stability
 
-The package version is 0.1.0 (see `:version` in `cl-toml-kit.asd`), so the API
-is still pre-1.0. At 0.1.0 the library makes no compatibility promise beyond
-the documented behavior: exported symbols and their behavior may change
-without a deprecation window.
+The package version is 2.0.0 (see `:version` in `cl-toml-kit.asd`). The exported
+API follows Semantic Versioning: breaking changes require a major version bump.
+The 2.0.0 release establishes the documented reader, writer, value-model, and
+condition contracts.
 
-Once 1.0.0 is released, the exported surface is intended to follow
-[Semantic Versioning](https://semver.org/). That surface is the `cl-toml-kit`
+The exported surface is the `cl-toml-kit`
 package symbols documented in [API reference](api.md) and
 [Conditions](conditions.md), and the value mapping documented in
 [Data model](../guide/data-model.md). A breaking change to it then requires a

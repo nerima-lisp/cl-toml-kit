@@ -12,7 +12,7 @@ timeout 600 sbcl --script run-benchmarks.lisp
 ```
 
 The harness reports wall-clock seconds and SBCL `bytes-consed` for generated
-inputs of 256, 512, and 1024 entries. It also reports the ratio for each
+inputs of 4096, 8192, and 16384 entries. It also reports the ratio for each
 size-doubling pair. A pair passes the linear-order check when the allocation
 ratio is at most 4.0; wall-clock time is recorded for manual inspection.
 Each case must also remain below its allocation upper bound.
