@@ -9,11 +9,13 @@
                     while char do (vector-push-extend char text))
               (coerce text 'simple-string)))))
 
-(defun parse (source &key source-name)
+(defun parse (source &key source-name (max-depth +toml-default-max-depth+))
+  (%toml-max-depth max-depth)
   (let* ((text (%source-string source))
          (root (make-hash-table :test #'equal))
          (state (%make-reader-state :source text :source-name source-name
-                                    :length (length text) :root root)))
+                                    :length (length text) :root root
+                                    :max-depth max-depth)))
     (loop for index below (length text)
           for char = (char text index)
           do (cond
@@ -58,8 +60,9 @@
             :position (or position 0) :line line :column column
             :expected "UTF-8")))))))
 
-(defun parse-file (pathname)
+(defun parse-file (pathname &key (max-depth +toml-default-max-depth+))
   (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
     (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))
       (read-sequence bytes stream)
-      (parse (%decode-utf8 bytes pathname) :source-name (namestring pathname)))))
+      (parse (%decode-utf8 bytes pathname) :source-name (namestring pathname)
+             :max-depth max-depth))))

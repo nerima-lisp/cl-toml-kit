@@ -38,7 +38,11 @@
               (%skip-space-and-comments state)
               (setf index (toml-reader-state-position state))
               (unless (eql (%source-char state index) #\.)
-                (return (values (nreverse keys) index)))))))))
+                (let ((path (nreverse keys)))
+                  (when (and (toml-reader-state-max-depth state)
+                             (> (length path) (toml-reader-state-max-depth state)))
+                    (%error-at state index "shallower nesting" path))
+                  (return (values path index))))))))))
 
 (defun %table-for-path (state path &key (create nil) (dotted nil) base)
   (let ((table (or base (toml-reader-state-root state)))

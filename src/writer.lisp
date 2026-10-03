@@ -71,39 +71,41 @@
                (prin1 value stream))))))
 
 (defun %write-inline-table (table stream path)
-  (unless (toml-table-p table)
-    (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table path))
-  (if (zerop (hash-table-count table))
-      (write-string "{}" stream)
-      (progn
-        (write-string "{ " stream)
-        (let ((first t))
-          (maphash (lambda (key value)
-                     (unless (stringp key)
+  (with-toml-writer-depth (*toml-writer-state*)
+    (unless (toml-table-p table)
+      (%signal-encoding-error "Table must use the EQUAL hash-table test"
+                              table path))
+    (if (zerop (hash-table-count table))
+        (write-string "{}" stream)
+        (progn
+          (write-string "{ " stream)
+          (let ((first t))
+            (maphash (lambda (key value)
+                       (unless (stringp key)
+                         (%with-writer-path path key
+                           (%signal-encoding-error "Table keys must be strings"
+                                                   key path)))
+                       (unless first (write-string ", " stream))
+                       (setf first nil)
                        (%with-writer-path path key
-                         (%signal-encoding-error "Table keys must be strings"
-                                                 key path)))
-                     (unless first (write-string ", " stream))
-                     (setf first nil)
-                     (%with-writer-path path key
-                       (%write-key key stream)
-                       (write-string " = " stream)
-                       (%write-value value stream path)))
-                   table))
-        (write-string " }" stream))))
+                         (%write-key key stream)
+                         (write-string " = " stream)
+                         (%write-value value stream path)))
+                     table))
+          (write-string " }" stream)))))
 
 (defun %array-of-tables-p (value)
   (and (plusp (length value))
        (loop for item across value always (hash-table-p item))))
 
 (defun %write-array (value stream path)
-  (write-char #\[ stream)
-  (loop for index from 0 below (length value)
-        do (when (plusp index) (write-string ", " stream))
-           (%with-writer-path path index
-             (%write-value (aref value index) stream path)))
-  (write-char #\] stream))
+  (with-toml-writer-depth (*toml-writer-state*)
+    (write-char #\[ stream)
+    (loop for index from 0 below (length value)
+          do (when (plusp index) (write-string ", " stream))
+             (%with-writer-path path index
+               (%write-value (aref value index) stream path)))
+    (write-char #\] stream)))
 
 (define-toml-emitter %write-value (value stream path))
 
@@ -120,11 +122,12 @@
 
 (defun write-table (table path stream)
   (declare (type (and vector (not simple-array)) path))
-  (unless (toml-table-p table)
-    (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table path))
-  (let ((tables nil)
-        (array-tables nil))
+  (with-toml-writer-depth (*toml-writer-state*)
+    (unless (toml-table-p table)
+      (%signal-encoding-error "Table must use the EQUAL hash-table test"
+                              table path))
+    (let ((tables nil)
+          (array-tables nil))
     (maphash (lambda (key value)
                (unless (stringp key)
                  (%with-writer-path path key
@@ -158,21 +161,25 @@
                  (write-string "]]" stream)
                  (write-char #\Newline stream)
                  (%with-writer-path path key
-                   (write-table item path stream)))))))
+                   (write-table item path stream))))))))
 
-(defun %write-root (value stream)
+(defun %write-root (value stream max-depth)
   (unless (hash-table-p value)
     (%signal-encoding-error "The top-level TOML value must be a hash-table"
                             value nil))
-  (write-table value (make-array 8 :adjustable t :fill-pointer 0) stream))
+  (let ((path (make-array 8 :adjustable t :fill-pointer 0)))
+    (let ((*toml-writer-state* (%make-writer-state :stream stream :path path
+                                                   :max-depth max-depth)))
+      (write-table value path stream))))
 
-(defun write-toml (value stream)
-  "Write VALUE as TOML to STREAM and return VALUE."
+(defun write-toml (value stream &key (max-depth +toml-default-max-depth+))
+  "Write VALUE as TOML to STREAM and return VALUE, bounded by MAX-DEPTH."
+  (%toml-max-depth max-depth)
   (check-type stream stream)
-  (%write-root value stream)
+  (%write-root value stream max-depth)
   value)
 
-(defun encode (value)
-  "Return VALUE encoded as TOML text."
+(defun encode (value &key (max-depth +toml-default-max-depth+))
+  "Return VALUE encoded as TOML text, bounded by MAX-DEPTH."
   (with-output-to-string (stream)
-    (write-toml value stream)))
+    (write-toml value stream :max-depth max-depth)))

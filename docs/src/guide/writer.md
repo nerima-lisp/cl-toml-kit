@@ -159,3 +159,7 @@ A concrete example:
 `write-toml` additionally runs `(check-type stream stream)` before writing
 anything, so passing a non-stream signals `type-error` instead. Neither entry
 point mutates the value you pass in; only the stream receives output.
+
+Both entry points accept `:max-depth`, which defaults to 512 aggregate levels.
+Pass a positive integer to lower the limit or `nil` to disable it. Exceeding
+the limit signals `toml-encoding-error` with the path of the nested value.

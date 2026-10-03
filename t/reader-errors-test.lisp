@@ -5,6 +5,19 @@
     (toml-parse-error (condition) condition)))
 
 (describe "TOML reader errors"
+  (it "rejects nested arrays and inline tables at MAX-DEPTH"
+    (let ((array-error (handler-case
+                           (parse "value = [[[1]]]" :max-depth 2)
+                         (toml-parse-error (condition) condition)))
+          (table-error (handler-case
+                           (parse "value = {a = {b = {c = 1}}}" :max-depth 2)
+                         (toml-parse-error (condition) condition))))
+      (expect (typep array-error 'toml-parse-error))
+      (expect (string= "shallower nesting"
+                       (toml-parse-error-expected array-error)))
+      (expect (typep table-error 'toml-parse-error))
+      (expect (string= "shallower nesting"
+                       (toml-parse-error-expected table-error)))))
   (it-each (("value = 9223372036854775808")
             ("value = -9223372036854775809")
             ("value = 01")

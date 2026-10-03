@@ -55,7 +55,6 @@
     let
       systems = [
         "x86_64-linux"
-        "aarch64-darwin"
       ];
     in
     cl-nix-forge.lib.${builtins.head systems}.mkPackageFlake {
