@@ -37,3 +37,5 @@
   (path (make-array 8 :adjustable t :fill-pointer 0))
   (depth 0 :type fixnum)
   (max-depth +toml-default-max-depth+ :type (or null integer)))
+
+(defvar *toml-writer-state* nil)

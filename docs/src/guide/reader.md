@@ -6,12 +6,15 @@ implemented for SBCL and supports strings, character streams, and UTF-8 files.
 ## Parsing text and files
 
 ```lisp
-(cl-toml-kit:parse source &key source-name)
-(cl-toml-kit:parse-file pathname)
+(cl-toml-kit:parse source &key source-name max-depth)
+(cl-toml-kit:parse-file pathname &key max-depth)
 ```
 
 `parse` accepts a string or a character input stream. `source-name` is optional
-and is included in parse diagnostics.
+and is included in parse diagnostics. `max-depth` defaults to 512 aggregate
+levels; a positive integer bounds nested arrays, inline tables, and dotted key
+paths. `nil` disables the limit. Exceeding the limit signals
+`toml-parse-error` with the expected value `"shallower nesting"`.
 
 ```lisp
 (cl-toml-kit:parse (format nil "title = \"Example\"~%count = 2~%"))

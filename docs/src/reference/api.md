@@ -14,7 +14,7 @@ hierarchy in full.
 ### `parse`
 
 ```lisp
-(cl-toml-kit:parse source &key source-name)
+(cl-toml-kit:parse source &key source-name max-depth)
   => hash-table
 ```
 
@@ -25,6 +25,7 @@ table.
 | --- | --- | --- | --- |
 | `source` | `string` or `stream` | n/a | The TOML document, as a string or a character input stream. |
 | `source-name` | designator | `nil` | Identifies the source in diagnostics; stored in `toml-parse-error-source-name`. |
+| `max-depth` | positive integer or `nil` | `512` | Bounds aggregate nesting; `nil` disables the limit. |
 
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
@@ -43,7 +44,7 @@ See also: [Reader](../guide/reader.md), [Conditions](conditions.md#toml-parse-er
 ### `parse-file`
 
 ```lisp
-(cl-toml-kit:parse-file pathname)
+(cl-toml-kit:parse-file pathname &key max-depth)
   => hash-table
 ```
 
@@ -67,12 +68,15 @@ See also: [Reader](../guide/reader.md).
 ### `encode`
 
 ```lisp
-(cl-toml-kit:encode value)
+(cl-toml-kit:encode value &key max-depth)
   => string
 ```
 
 Serialize `value` to a TOML document and return it as a string. `value` is
 the top-level table, an `equal` hash table whose keys are strings.
+
+`max-depth` defaults to 512 aggregate levels; `nil` disables the limit.
+Exceeding it signals `toml-encoding-error` with the active value path.
 
 **Returns**: the TOML text.
 
@@ -94,7 +98,7 @@ See also: [Writer](../guide/writer.md), [Conditions](conditions.md#toml-encoding
 ### `write-toml`
 
 ```lisp
-(cl-toml-kit:write-toml value stream)
+(cl-toml-kit:write-toml value stream &key max-depth)
   => value
 ```
 

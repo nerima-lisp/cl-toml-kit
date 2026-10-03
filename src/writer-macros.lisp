@@ -10,12 +10,13 @@
                                                      (subst path 'path form))))
                                      body)))))
     `(defun ,name (,value ,stream ,path)
-       (toml-value-typecase ,value
-         ,@forms
-         (t (if (integerp ,value)
-                (%write-integer-value ,value ,stream ,path)
-                (%signal-encoding-error "Unsupported TOML value"
-                                        ,value ,path)))))))
+       (let ((*toml-encoding-path* (%writer-error-path ,path)))
+         (toml-value-typecase ,value
+           ,@forms
+           (t (if (integerp ,value)
+                  (%write-integer-value ,value ,stream ,path)
+                  (%signal-encoding-error "Unsupported TOML value"
+                                          ,value ,path))))))))
 
 (defmacro with-toml-writer-depth ((state) &body body)
   "Run BODY one aggregate level deeper, signaling a path-aware encode error."

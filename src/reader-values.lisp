@@ -330,7 +330,8 @@
          (funcall continuation value end))))))
 
 (define-toml-rule toml-read-array (state position)
-  (let ((index (1+ position)) (values '()))
+  (with-toml-reader-depth (state position)
+    (let ((index (1+ position)) (values '()))
     (loop
       (loop
         (setf (toml-reader-state-position state) index)
@@ -362,10 +363,11 @@
                             (%error-at state index "comma or closing bracket")))
                          (setf (toml-reader-state-position state) index)
                          (when (eql (%source-char state index) #\])
-                           nil))))))
+                           nil)))))))
 
 (define-toml-rule toml-read-inline-table (state position)
-  (let ((table (make-hash-table :test #'equal)) (index (1+ position)) (created '()))
+  (with-toml-reader-depth (state position)
+    (let ((table (make-hash-table :test #'equal)) (index (1+ position)) (created '()))
     (loop
       (setf (toml-reader-state-position state) index)
       (%skip-inline-space state) (setf index (toml-reader-state-position state))
@@ -420,4 +422,4 @@
                            (cond
                              ((eql (%source-char state index) #\,) (incf index))
                              ((not (eql (%source-char state index) #\}))
-                              (%error-at state index "comma or closing brace")))))))))
+                              (%error-at state index "comma or closing brace"))))))))))

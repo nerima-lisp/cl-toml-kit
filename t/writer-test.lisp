@@ -214,6 +214,24 @@
                   (%writer-value-line-count table))))))
 
 (describe "TOML writer errors"
+  (it "rejects nested aggregates at MAX-DEPTH with a bounded path"
+    (let* ((table (%writer-table "outer"
+                                 (%writer-table "inner"
+                                                (%writer-table "leaf" 1))))
+           (condition (handler-case
+                          (encode table :max-depth 2)
+                        (toml-encoding-error (condition) condition))))
+      (expect (typep condition 'toml-encoding-error))
+      (expect (equal '("outer" "inner")
+                     (toml-encoding-error-path condition)))))
+  (it "reports the active path for an invalid nested table"
+    (let* ((invalid (make-hash-table :test 'eql))
+           (condition (handler-case
+                          (encode (%writer-table "outer" invalid))
+                        (toml-encoding-error (condition) condition))))
+      (expect (typep condition 'toml-encoding-error))
+      (expect (equal '("outer")
+                     (toml-encoding-error-path condition)))))
   (it-each ((:nil "Unsupported TOML value" ("outer" "inner"))
             (:list "Unsupported TOML value" ("outer" "inner"))
             (:symbol "Unsupported TOML value" ("outer" "inner"))

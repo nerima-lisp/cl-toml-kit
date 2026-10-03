@@ -45,8 +45,7 @@ repository root.
 SBCL is the only supported implementation. The project is SBCL-only by design:
 it relies on SBCL's insertion-order hash-table traversal to preserve table key
 order, a property the test suite pins down. Other Common Lisp implementations
-are not supported and not verified. The flake builds for the `x86_64-linux`
-and `aarch64-darwin` platforms.
+are not supported and not verified. The CI flake builds only for `x86_64-linux`.
 
 ## Dependencies
 
@@ -67,10 +66,10 @@ in [Getting started](../getting-started.md).
 
 ## Stability
 
-The package version is 2.0.0 (see `:version` in `cl-toml-kit.asd`). The exported
-API follows Semantic Versioning: breaking changes require a major version bump.
-The 2.0.0 release establishes the documented reader, writer, value-model, and
-condition contracts.
+The package version is 0.1.0 (see `:version` in `cl-toml-kit.asd`). Foundation
+work remains unreleased until the release gate is satisfied. The exported API
+will follow Semantic Versioning when the next release is cut; breaking changes
+will require a major version bump.
 
 The exported surface is the `cl-toml-kit`
 package symbols documented in [API reference](api.md) and

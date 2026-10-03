@@ -17,6 +17,21 @@
     (%register-reader-conformance-tests)
     (%register-roundtrip-tests)
     (setf *reader-conformance-tests-registered-p* t))
-  (unless (run-all :reporter :spec :timeout-ms 10000)
-    (error "cl-toml-kit test suite failed"))
-  t)
+  (let* ((record-assertion (find-symbol "RECORD-ASSERTION" "CL-WEAVE"))
+         (original-record-assertion (symbol-function record-assertion))
+         (assertion-count 0)
+         (test-count (length (cl-weave:list-tests
+                              :reporter :sexp
+                              :stream (make-broadcast-stream)))))
+    (setf (symbol-function record-assertion)
+          (lambda (&rest arguments)
+            (incf assertion-count)
+            (apply original-record-assertion arguments)))
+    (unwind-protect
+         (progn
+           (unless (run-all :reporter :spec :timeout-ms 10000)
+             (error "cl-toml-kit test suite failed"))
+           (format t "~&Test cases: ~D~%Assertions: ~D~%"
+                   test-count assertion-count)
+           t)
+      (setf (symbol-function record-assertion) original-record-assertion))))

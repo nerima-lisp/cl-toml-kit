@@ -19,6 +19,13 @@
 (defconstant +toml-default-max-depth+ 512
   "The default maximum nesting depth for TOML aggregates.")
 
+(defun %toml-max-depth (max-depth)
+  (unless (or (null max-depth)
+              (and (integerp max-depth) (plusp max-depth)))
+    (error ":MAX-DEPTH must be NIL or a positive integer, got ~S."
+           max-depth))
+  max-depth)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun %toml-ascii-table (predicate)
     (let ((table (make-array 128 :element-type 'bit :initial-element 0)))

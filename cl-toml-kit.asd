@@ -7,7 +7,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "2.0.0"
+  :version "0.1.0"
   :homepage "https://github.com/nerima-lisp/cl-toml-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-toml-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-toml-kit.git")
@@ -35,7 +35,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "2.0.0"
+  :version "0.1.0"
   :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
@@ -59,7 +59,7 @@
   :description "Diagnostic benchmark definitions for cl-toml-kit"
   :author "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "2.0.0"
+  :version "0.1.0"
   :depends-on ("cl-toml-kit")
   :pathname "benchmark"
   :serial t
