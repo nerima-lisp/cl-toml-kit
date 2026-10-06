@@ -7,7 +7,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.1.0"
+  :version "0.2.0"
   :homepage "https://github.com/nerima-lisp/cl-toml-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-toml-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-toml-kit.git")
@@ -27,7 +27,8 @@
                (:file "writer-data")
                (:file "writer-macros")
                (:file "writer")
-               (:file "reader"))
+               (:file "reader")
+               (:file "edit"))
   :in-order-to ((test-op (test-op "cl-toml-kit/test"))))
 
 (asdf:defsystem "cl-toml-kit/test"
@@ -35,7 +36,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.1.0"
+  :version "0.2.0"
   :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
@@ -48,7 +49,8 @@
                (:file "reader-document-test")
                (:file "reader-errors-test")
                (:file "roundtrip-test")
-               (:file "reader-conformance-test"))
+               (:file "reader-conformance-test")
+               (:file "edit-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function

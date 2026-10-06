@@ -120,6 +120,48 @@ Write `value` as TOML text to the character `stream` and return the original
 
 See also: [Writer](../guide/writer.md).
 
+## Format-preserving editing
+
+### `edit-toml`
+
+```lisp
+(cl-toml-kit:edit-toml source path &optional new-value &key delete)
+  => octet-vector
+```
+
+Edit a UTF-8 TOML document represented by a vector of unsigned-byte 8 values.
+`path` is a string or a sequence of string keys and zero-based non-negative
+array indices. Existing values are replaced when `new-value` is supplied.
+Use `:delete t` with `new-value` set to `nil`, or use `delete-toml`, to remove
+an existing value. The returned
+bytes retain the BOM, comments, key order, whitespace,
+line-ending style, string delimiters, and table kind outside the edited span.
+
+```lisp
+(cl-toml-kit:edit-toml
+ #(110 97 109 101 32 61 32 34 111 108 100 34 32 32 35 32 107 101 101 112 13 10)
+ '("name")
+ "new")
+;; => bytes for "name = \"new\"  # keep\r\n"
+```
+
+Adding a missing leaf uses the containing table's assignment style. Structural
+edits that would require choosing among multiple array-table elements,
+re-homing dotted keys, or assigning comments or delimiters to a deleted span
+signal `toml-format-preservation-error`.
+
+### `edit-toml-bytes` and `delete-toml`
+
+```lisp
+(cl-toml-kit:edit-toml-bytes source path &optional new-value &key delete)
+(cl-toml-kit:delete-toml source path)
+  => octet-vector
+```
+
+`edit-toml-bytes` is the byte-oriented spelling of `edit-toml`; `delete-toml`
+is equivalent to `(edit-toml source path nil :delete t)`. Neither function mutates
+the input vector.
+
 ## Native Values
 
 ### `+toml-false+`
