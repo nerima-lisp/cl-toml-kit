@@ -14,7 +14,7 @@ Newlines, carriage returns, tabs, and backspaces are escaped as `\n`, `\r`,
 `toml-kit-error` is a subtype of `error` and the base of every condition this
 library signals. It carries no slots. Catch it when you want to react to any
 failure from `cl-toml-kit` without distinguishing parse from encoding
-failures; the two concrete types below add the readers you can use once you
+failures; the concrete types below add the readers you can use once you
 catch one.
 
 See also: [`toml-kit-error`](api.md#toml-kit-error).
@@ -104,6 +104,23 @@ TOML encode error at ("n"): Integer is outside TOML's signed 64-bit range (value
 The `at <path>` part appears only when a path applies.
 
 See also: [`toml-encoding-error`](api.md#toml-encoding-error).
+
+## `toml-format-preservation-error`
+
+This condition is signaled when an edit cannot identify one safe source span
+without rewriting unrelated bytes. `toml-format-preservation-error-message`
+returns the explanation and `toml-format-preservation-error-path` returns the
+requested logical path.
+
+Malformed input is rejected by `toml-parse-error` before an edit is applied.
+This condition covers paths that match more than one source value, unindexed
+array-of-tables paths, structural edits inside ambiguous dotted-key
+definitions, and additions or deletions whose comments, delimiters, or table
+ownership cannot be determined. It also covers a parsed-value mismatch after
+an edit, deletion of a span containing `#` or immediately following a comment
+line, and array insertion across a trailing comment. A missing edit value is
+invalid; it is not interpreted as deletion. The input byte vector is not
+modified when either condition is signaled.
 
 ## Reports
 
