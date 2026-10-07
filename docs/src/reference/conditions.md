@@ -116,8 +116,11 @@ Malformed input is rejected by `toml-parse-error` before an edit is applied.
 This condition covers paths that match more than one source value, unindexed
 array-of-tables paths, structural edits inside ambiguous dotted-key
 definitions, and additions or deletions whose comments, delimiters, or table
-ownership cannot be determined. The input byte vector is not modified when
-either condition is signaled.
+ownership cannot be determined. It also covers a parsed-value mismatch after
+an edit, deletion of a span containing `#` or immediately following a comment
+line, and array insertion across a trailing comment. A missing edit value is
+invalid; it is not interpreted as deletion. The input byte vector is not
+modified when either condition is signaled.
 
 ## Reports
 

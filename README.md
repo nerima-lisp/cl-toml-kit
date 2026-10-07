@@ -45,6 +45,26 @@ existing character stream, and `encode` returns the TOML text as a string. See
 [Writer](https://nerima-lisp.github.io/cl-toml-kit/guide/writer/) for the full
 surface.
 
+### Format-preserving editing
+
+The editing API changes one parsed value while retaining unrelated source
+bytes, including comments, whitespace, and line endings:
+
+```lisp
+(cl-toml-kit:edit-toml-bytes source '("server" "port") 8080)
+(cl-toml-kit:delete-toml source '("server" "deprecated"))
+```
+
+`source` and the result are UTF-8 byte vectors. A path string is one key, not a
+dot-separated path: `("a.b")` addresses the key named `a.b`, while
+`("a" "b")` addresses a nested table value. Array elements use zero-based
+integer components. Edits are parsed again and rejected if the result does
+not have the requested document value. Use `delete-toml` or `:delete t` for
+deletion; omitting the edit value is not deletion.
+
+See the [format-preserving editing API reference](https://nerima-lisp.github.io/cl-toml-kit/reference/api/#format-preserving-editing)
+for the supported rejection conditions.
+
 ## Why cl-toml-kit?
 
 **TOML shape is never guessed from Lisp contents.** A table is an `equal`

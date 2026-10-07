@@ -94,9 +94,8 @@
                             (dotimes (ignore digits)
                               (incf index)
                               (setf value (+ (* value 16)
-                                             (or (%edit-hex-value (char text index)) 0))))
-                            (when (code-char value)
-                              (write-char (code-char value) out))))
+                                             (%edit-hex-value (char text index)))))
+                            (write-char (code-char value) out)))
                          (otherwise (write-char escape out))))))
                (incf index)))))
 
@@ -108,22 +107,17 @@
          (index (+ position (if triple 3 1))))
     (loop while (< index limit)
           do (cond
-               ((and (not triple) (char= delimiter #\")
+               ((and (char= delimiter #\")
                      (char= (char text index) #\\))
                 (incf index 2))
-               ((and triple (char= delimiter #\")
-                     (char= (char text index) #\\))
-                (incf index 2))
-               ((and (>= (+ index (if triple 2 0)) limit)
-                     (char= (char text index) delimiter))
-                (setf index limit))
                ((and triple (char= (char text index) delimiter))
                 (let ((end index))
                   (loop while (and (< end limit)
                                    (char= (char text end) delimiter))
                         do (incf end))
                   (when (>= (- end index) 3)
-                    (return-from %edit-scan-string end))))
+                    (return-from %edit-scan-string end))
+                  (setf index end)))
                ((and (not triple) (char= (char text index) delimiter))
                 (return-from %edit-scan-string (1+ index)))
                (t (incf index))))
@@ -239,16 +233,28 @@
         (when index (setf result (append result (list index)))))
       (setf prefix (reverse prefix)))))
 
-(defun %edit-line-ending (text)
-  (if (search (coerce (list #\Return #\Newline) 'string) text)
-      (coerce (list #\Return #\Newline) 'string)
-      (string #\Newline)))
+(defun %edit-line-ending (text &optional position)
+  (let* ((limit (or position (length text)))
+         (previous (position #\Newline text :end limit :from-end t))
+         (next (position #\Newline text :start limit)))
+    (cond
+      ((and previous (> previous 0)
+            (char= (char text (1- previous)) #\Return))
+       (coerce (list #\Return #\Newline) 'string))
+      (previous (string #\Newline))
+      ((and next (> next 0)
+            (char= (char text (1- next)) #\Return))
+       (coerce (list #\Return #\Newline) 'string))
+      (t (string #\Newline)))))
 
 (defun %edit-scan-document (text)
-  (let* ((length (length text)) (index 0) (assignments nil) (sections nil)
-        (latest (make-hash-table :test #'equal))
-        (counts (make-hash-table :test #'equal))
-        (current-section (%make-edit-section :path nil :start 0 :end length)))
+  (let* ((length (length text))
+         (index 0)
+         (assignments nil)
+         (sections nil)
+         (latest (make-hash-table :test #'equal))
+         (counts (make-hash-table :test #'equal))
+         (current-section (%make-edit-section :path nil :start 0 :end length)))
     (labels ((close-section (end)
                (setf (edit-section-end current-section) end)
                (push current-section sections))
@@ -268,43 +274,58 @@
                            (key-start (+ first (if array-p 2 1))))
                       (multiple-value-bind (header next)
                           (%edit-scan-key-path text key-start length)
-                        (let ((close (if array-p "]]]" "]")))
-                          (declare (ignore close))
-                          (setf next (%edit-horizontal-space text next length))
-                          (when (and (char= (char text next) #\]) array-p)
-                            (incf next))
-                          (unless (and (< next length) (char= (char text next) #\]))
-                            (%edit-fail header "Invalid table header"))
-                          (incf next)
-                          (close-section line-start)
-                          (let ((context (if array-p
-                                             (let ((number (gethash header counts 0)))
-                                               (setf (gethash header counts) (1+ number)
-                                                     (gethash header latest) number)
-                                               (%edit-header-context header latest))
-                                             (%edit-header-context header latest))))
-                            (start-section context (%edit-line-end text line-start)))
-                          (setf index (%edit-line-end text line-start))))))
+                        (setf next (%edit-horizontal-space text next length))
+                        (when (and (< next length)
+                                   (char= (char text next) #\])
+                                   array-p)
+                          (incf next))
+                        (unless (and (< next length)
+                                     (char= (char text next) #\]))
+                          (%edit-fail header "Invalid table header"))
+                        (incf next)
+                        (close-section line-start)
+                        (let ((context
+                                (if array-p
+                                    (let ((number (gethash header counts 0)))
+                                      (setf (gethash header counts) (1+ number)
+                                            (gethash header latest) number)
+                                      (let ((descendants nil))
+                                        (maphash
+                                         (lambda (key value)
+                                           (declare (ignore value))
+                                           (when (and (> (length key) (length header))
+                                                      (%edit-path-prefix-p header key))
+                                             (push key descendants)))
+                                         counts)
+                                        (dolist (key descendants)
+                                          (remhash key counts)))
+                                      (%edit-header-context header latest))
+                                    (%edit-header-context header latest))))
+                          (start-section context (%edit-line-end text line-start)))
+                        (setf index (%edit-line-end text line-start)))))
                    (t
                     (multiple-value-bind (keys next)
                         (%edit-scan-key-path text first length)
                       (setf next (%edit-horizontal-space text next length))
-                      (unless (and (< next length) (char= (char text next) #\=))
+                      (unless (and (< next length)
+                                   (char= (char text next) #\=))
                         (%edit-fail keys "Assignment has no equals sign"))
                       (incf next)
                       (setf next (%edit-horizontal-space text next length))
                       (let* ((path (append (edit-section-path current-section) keys))
-                             (assignment (%make-edit-assignment
-                                          :path path :line-start line-start
-                                          :line-end nil :section current-section))
-                             (node (%edit-scan-value-node text next length path assignment)))
+                             (assignment
+                               (%make-edit-assignment
+                                :path path :line-start line-start
+                                :line-end nil :section current-section))
+                             (node
+                               (%edit-scan-value-node text next length path assignment)))
                         (setf (edit-assignment-node assignment) node)
                         (setf (edit-assignment-line-end assignment)
                               (%edit-line-end text (edit-node-end node)))
                         (push assignment assignments)
                         (setf index (edit-assignment-line-end assignment))))))))
-      (close-section length))
-    (values (nreverse assignments) (nreverse sections))))
+      (close-section length)
+      (values (nreverse assignments) (nreverse sections)))))
 
 (defun %edit-collect-nodes (assignments path)
   (let ((matches nil))
@@ -376,6 +397,99 @@
                          (subseq encoded 1 (1- length)))
                  encoded)))))))
 
+(defun %edit-copy-value (value)
+  (cond
+    ((hash-table-p value)
+     (let ((copy (make-hash-table :test (hash-table-test value))))
+       (maphash (lambda (key item)
+                  (setf (gethash key copy) (%edit-copy-value item)))
+                value)
+       copy))
+    ((vectorp value)
+     (make-array (length value)
+                 :initial-contents (loop for item across value
+                                         collect (%edit-copy-value item))))
+    (t value)))
+
+(defun %edit-value-equal-p (left right)
+  (cond
+    ((and (hash-table-p left) (hash-table-p right))
+     (and (= (hash-table-count left) (hash-table-count right))
+          (block equal-table
+            (maphash
+             (lambda (key value)
+               (multiple-value-bind (other present) (gethash key right)
+                 (unless (and present (%edit-value-equal-p value other))
+                   (return-from equal-table nil))))
+             left)
+            t)))
+    ((and (vectorp left) (vectorp right))
+     (and (= (length left) (length right))
+          (loop for index below (length left)
+                always (%edit-value-equal-p (aref left index)
+                                             (aref right index)))))
+    ((or (hash-table-p left) (hash-table-p right)
+         (vectorp left) (vectorp right))
+     nil)
+    (t (equalp left right))))
+
+(defun %edit-semantic-change (root path new-value delete-p)
+  (labels ((change (container components)
+             (let ((component (car components))
+                   (rest (cdr components)))
+               (cond
+                 ((hash-table-p container)
+                  (if rest
+                      (multiple-value-bind (child present)
+                          (gethash component container)
+                        (unless present
+                          (%edit-fail path "Edited path is absent from parsed TOML"))
+                        (setf (gethash component container)
+                              (change child rest))
+                        container)
+                      (progn
+                        (unless (stringp component)
+                          (%edit-fail path "A TOML table requires a string key"))
+                        (if delete-p
+                            (multiple-value-bind (value present)
+                                (gethash component container)
+                              (declare (ignore value))
+                              (unless present
+                                (%edit-fail path "Deleted path is absent from parsed TOML"))
+                              (remhash component container))
+                            (setf (gethash component container) new-value))
+                        container)))
+                 ((vectorp container)
+                  (unless (and (integerp component)
+                               (<= 0 component)
+                               (if (or delete-p rest)
+                                   (< component (length container))
+                                   (<= component (length container))))
+                    (%edit-fail path "An array index is outside the parsed TOML value"))
+                  (if rest
+                      (progn
+                        (setf (aref container component)
+                              (change (aref container component) rest))
+                        container)
+                      (if delete-p
+                          (make-array (1- (length container))
+                                      :initial-contents
+                                      (loop for index below (length container)
+                                            unless (= index component)
+                                              collect (aref container index)))
+                          (progn
+                            (when (= component (length container))
+                              (return-from change
+                                (make-array (1+ (length container))
+                                            :initial-contents
+                                            (append (loop for item across container
+                                                          collect item)
+                                                    (list new-value)))))
+                            (setf (aref container component) new-value)
+                            container))))
+                 (t (%edit-fail path "Edited path does not traverse a TOML table or array"))))))
+    (change root path)))
+
 (defun %edit-key-text (key)
   (with-output-to-string (stream) (%write-key key stream)))
 
@@ -424,6 +538,47 @@
                    (list (edit-node-start node) end
                          (make-array 0 :element-type '(unsigned-byte 8))))))))))
 
+(defun %edit-trivia-line-p (text start end)
+  (let ((first (%edit-horizontal-space text start end)))
+    (or (= first end)
+        (char= (char text first) #\#))))
+
+(defun %edit-section-insert-position (text section)
+  (let ((position (edit-section-end section))
+        (section-start (edit-section-start section)))
+    (loop
+      (when (<= position section-start)
+        (return position))
+      (let* ((newline (position #\Newline text :end position :from-end t))
+             (line-start (if newline (1+ newline) 0)))
+        (cond
+          ((= line-start position)
+           (if (and newline
+                    (%edit-trivia-line-p
+                     text
+                     (1+ (or (position #\Newline text :end newline :from-end t)
+                             (1- section-start)))
+                     newline))
+               (setf position newline)
+               (return position)))
+          ((and (>= line-start section-start)
+                (%edit-trivia-line-p text line-start position))
+           (setf position line-start))
+          (t (return position)))))))
+
+(defun %edit-deletion-has-comment-p (text start end)
+  (or (position #\# text :start start :end end)
+      (let* ((current-newline (position #\Newline text :end start :from-end t))
+             (previous-newline (and current-newline
+                                    (position #\Newline text :end current-newline
+                                              :from-end t)))
+             (previous-start (if previous-newline (1+ previous-newline) 0))
+             (previous-end current-newline))
+        (and previous-end
+             (< previous-start previous-end)
+             (char= (char text (%edit-horizontal-space text previous-start
+                                                        previous-end)) #\#)))))
+
 (defun %edit-section-for-path (sections path)
   (find path sections :key #'edit-section-path :test #'equal))
 
@@ -433,8 +588,9 @@
              for right in path
              always (equal left right))))
 
-(defun %edit-insert-line (text section key-path value line-ending)
-  (let* ((position (edit-section-end section))
+(defun %edit-insert-line (text section key-path value)
+  (let* ((position (%edit-section-insert-position text section))
+         (line-ending (%edit-line-ending text position))
          (prefix (if (and (plusp position)
                           (not (member (char text (1- position))
                                        '(#\Newline #\Return))))
@@ -457,6 +613,13 @@
 (defun %edit-insert-array (text node value)
   (let* ((children (edit-node-children node))
          (position (1- (edit-node-end node))))
+    (when (position #\# text
+                   :start (if children
+                              (edit-node-end (car (last children)))
+                              (1+ (edit-node-start node)))
+                   :end (edit-node-end node))
+      (%edit-fail (edit-node-path node)
+                  "Array insertion cannot preserve a trailing comment"))
     (loop while (and (> position (edit-node-start node))
                      (member (char text (1- position))
                              '(#\Space #\Tab #\Newline #\Return)))
@@ -467,7 +630,7 @@
            (insertion-position (if trailing-comma (1- position) position))
            (multiline (find #\Newline text :start (edit-node-start node)
                             :end (edit-node-end node)))
-           (line-ending (%edit-line-ending text))
+           (line-ending (%edit-line-ending text insertion-position))
            (line-start (or (position #\Newline text :end insertion-position :from-end t)
                            -1))
            (indent-start (1+ line-start))
@@ -504,16 +667,87 @@
       (replace result source :start1 output :start2 cursor :end2 size)
       result)))
 
-(defun %edit-validate-result (source path)
-  (handler-case
-      (progn
-        (multiple-value-bind (text ignored-bom-offset)
-            (%edit-octets-to-string source)
-          (declare (ignore ignored-bom-offset))
-          (parse text))
-        source)
-    (error (condition)
-      (%edit-fail path "The edited bytes are not valid TOML: ~A" condition))))
+(defun %edit-validate-result (original path new-value delete-p result)
+  (let ((expected (%edit-copy-value original)))
+    (%edit-semantic-change expected path new-value delete-p)
+    (handler-case
+        (multiple-value-bind (text offset) (%edit-octets-to-string result)
+          (declare (ignore offset))
+          (let ((actual (parse text)))
+            (unless (%edit-value-equal-p expected actual)
+              (%edit-fail path
+                          "The edited TOML parses to a different value than requested"))
+            result))
+      (error (condition)
+        (%edit-fail path "The edited bytes are not valid TOML: ~A" condition)))))
+
+(defun %edit-build-result (source text positions assignments sections path new-value delete-p)
+  (let ((matches (%edit-collect-nodes assignments path)))
+    (when (> (length matches) 1)
+      (%edit-fail path "The path identifies more than one source value"))
+    (if (plusp (length matches))
+        (let* ((match (first matches))
+               (node (car match))
+               (parent (cdr match))
+               (range (if delete-p
+                          (%edit-delete-range text node parent)
+                          (list (edit-node-start node) (edit-node-end node)
+                                (%edit-value-bytes-for-node text node new-value)))))
+          (when (and delete-p
+                     (%edit-deletion-has-comment-p text
+                                                   (first range)
+                                                   (second range)))
+            (%edit-fail path "Deletion would remove or strand a comment"))
+          (%edit-apply-bytes
+           source
+           (list (%edit-replacement positions (first range) (second range)
+                                     (third range)))))
+        (if delete-p
+            (%edit-fail path "The path does not identify an existing value")
+            (let* ((last (car (last path)))
+                   (parent-path (butlast path))
+                   (value (%edit-value-bytes new-value))
+                   (parent-match
+                     (first (%edit-collect-nodes assignments parent-path)))
+                   (section (%edit-section-for-path sections parent-path))
+                   (range
+                     (cond
+                       ((and (integerp last) parent-match
+                             (eq (edit-node-kind (car parent-match)) :array)
+                             (= last
+                                (length
+                                 (edit-node-children (car parent-match)))))
+                        (%edit-insert-array text (car parent-match) value))
+                       ((and (stringp last) parent-match
+                             (eq (edit-node-kind (car parent-match)) :inline))
+                        (%edit-insert-inline text (car parent-match) last value))
+                       ((and (stringp last) section)
+                        (%edit-insert-line text section (list last) value))
+                       ((and (stringp last)
+                             (not (some #'integerp parent-path))
+                             (not (some (lambda (assignment)
+                                          (and (< (length parent-path)
+                                                  (length (edit-assignment-path assignment)))
+                                               (%edit-path-prefix-p
+                                                parent-path
+                                                (edit-assignment-path assignment))))
+                                        assignments))
+                             (not (some (lambda (item)
+                                          (and (edit-section-path item)
+                                               (%edit-path-prefix-p
+                                                parent-path
+                                                (edit-section-path item))))
+                                        sections)))
+                        (%edit-insert-line
+                         text (or (%edit-section-for-path sections nil)
+                                  (first sections))
+                         path value))
+                       (t (%edit-fail path
+                                      "Adding this path would require an ambiguous table or array structure")))))
+              (%edit-apply-bytes
+               source
+               (list (%edit-replacement positions (first range) (second range)
+                                         (third range)))))))))
 
 (defun edit-toml (source path &optional (new-value nil new-value-p) &key delete)
   "Edit a UTF-8 TOML byte vector while retaining all unrelated source bytes.
@@ -526,76 +760,19 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
     (when (and (not new-value-p) (not delete))
       (%edit-fail normalized-path "An edit value or delete request is required"))
     (multiple-value-bind (text bom-offset) (%edit-octets-to-string source)
-      (parse text)
-      (multiple-value-bind (assignments sections) (%edit-scan-document text)
-        (let* ((positions (%edit-byte-positions text bom-offset))
-               (delete-p (or delete (and new-value-p (eq new-value :delete))))
-               (matches (%edit-collect-nodes assignments normalized-path)))
-          (when (> (length matches) 1)
-            (%edit-fail normalized-path "The path identifies more than one source value"))
-          (%edit-validate-result
-           (if (plusp (length matches))
-              (let* ((match (first matches))
-                     (node (car match))
-                     (parent (cdr match)))
-                (let ((range (if delete-p
-                                 (%edit-delete-range text node parent)
-                                 (list (edit-node-start node) (edit-node-end node)
-                                       (%edit-value-bytes-for-node text node new-value)))))
-                  (%edit-apply-bytes source
-                                     (list (%edit-replacement positions
-                                                               (first range) (second range)
-                                                               (third range))))))
-              (if delete-p
-                  (%edit-fail normalized-path "The path does not identify an existing value")
-                  (let* ((last (car (last normalized-path)))
-                         (parent-path (butlast normalized-path))
-                         (value (%edit-value-bytes new-value))
-                         (line-ending (%edit-line-ending text))
-                         (parent-match (first (%edit-collect-nodes assignments parent-path)))
-                         (section (%edit-section-for-path sections parent-path))
-                         (range
-                           (cond
-                             ((and (integerp last) parent-match
-                                   (eq (edit-node-kind (car parent-match)) :array)
-                                   (= last (length (edit-node-children (car parent-match)))))
-                              (%edit-insert-array text (car parent-match) value))
-                             ((and (stringp last) parent-match
-                                   (eq (edit-node-kind (car parent-match)) :inline))
-                              (%edit-insert-inline text (car parent-match) last value))
-                             ((and (stringp last) section)
-                              (%edit-insert-line text section (list last) value line-ending))
-                             ((and (stringp last)
-                                   (not (some #'integerp parent-path))
-                                   (not (some (lambda (assignment)
-                                                (and (< (length parent-path)
-                                                        (length (edit-assignment-path assignment)))
-                                                     (%edit-path-prefix-p
-                                                      parent-path
-                                                      (edit-assignment-path assignment))))
-                                              assignments))
-                                   (not (some (lambda (item)
-                                                (and (edit-section-path item)
-                                                     (%edit-path-prefix-p
-                                                      parent-path
-                                                      (edit-section-path item))))
-                                              sections)))
-                              (%edit-insert-line text (or (%edit-section-for-path sections nil)
-                                                          (first sections))
-                                                  normalized-path value line-ending))
-                             (t (%edit-fail normalized-path
-                                            "Adding this path would require an ambiguous table or array structure")))))
-                    (%edit-apply-bytes
-                     source
-                     (list (%edit-replacement positions (first range) (second range)
-                                                (third range)))))))
-           normalized-path))))))
+      (let ((original (parse text)))
+        (multiple-value-bind (assignments sections) (%edit-scan-document text)
+          (let* ((positions (%edit-byte-positions text bom-offset))
+                 (delete-p delete)
+                 (result (%edit-build-result source text positions assignments sections
+                                             normalized-path new-value delete-p)))
+            (%edit-validate-result original normalized-path new-value delete-p result)))))))
 
 (defun edit-toml-bytes (source path &optional (new-value nil new-value-p) &key delete)
-  "Alias for EDIT-TOML, emphasizing that SOURCE and the result are bytes."
-  (if new-value-p
-      (edit-toml source path new-value :delete delete)
-      (edit-toml source path nil :delete t)))
+  (cond
+    (new-value-p (edit-toml source path new-value :delete delete))
+    (delete (edit-toml source path nil :delete t))
+    (t (edit-toml source path))))
 
 (defun delete-toml (source path)
   "Delete the value at PATH from a UTF-8 TOML byte vector."

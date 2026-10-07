@@ -1,7 +1,17 @@
 (in-package #:cl-toml-kit/test)
 
 (defun %edit-test-format (text)
-  (if (search "~%" text) (format nil text) text))
+  (with-output-to-string (stream)
+    (loop with start = 0
+          for marker = (search "~%" text :start2 start)
+          do (if marker
+                 (progn
+                   (write-string text stream :start start :end marker)
+                   (write-char #\Newline stream)
+                   (setf start (+ marker 2)))
+                 (progn
+                   (write-string text stream :start start)
+                   (return))))))
 
 (defun %edit-test-bytes (text)
   (sb-ext:string-to-octets (%edit-test-format text) :external-format :utf-8))
@@ -62,6 +72,19 @@
            (result (edit-toml (%edit-test-bytes source) path "new")))
       (expect (string= (%edit-test-format expected) (%edit-test-text result)))
       (expect (string= "new" (%edit-test-value result path)))))
+  (it-each (("text = \"\"\"a \" b\"\"\"~%"
+             "text = \"\"\"new\"\"\"~%")
+            ("text = \"\"\"a \"\" b\"\"\"~%"
+             "text = \"\"\"new\"\"\"~%")
+            ("text = '''a ' b'''~%"
+             "text = '''new'''~%")
+            ("text = '''a '' b'''~%"
+             "text = '''new'''~%"))
+      "edits multiline strings containing one or two embedded quotes"
+      (source expected)
+    (let ((result (edit-toml (%edit-test-bytes source) '("text") "new")))
+      (expect (string= (%edit-test-format expected) (%edit-test-text result)))
+      (expect (string= "new" (%edit-test-value result '("text"))))))
   (it "edits an inline table leaf and keeps the inline form"
     (let* ((source (%edit-test-bytes "config = { enabled = true, count = 2 } # keep~%"))
            (result (edit-toml source '("config" "count") 3)))
@@ -178,4 +201,82 @@
       (expect (signals toml-format-preservation-error
                 (edit-toml source '("products" "name") "B")))
       (expect (string= (%edit-test-format "[[products]]~%name = \"A\"~%")
+                       (%edit-test-text source)))))
+  (it "rejects a multiline replacement that changes the parsed value"
+    (let ((source (%edit-test-bytes "text = '''old'''~%")))
+      (expect (signals toml-format-preservation-error
+                (edit-toml source '("text") (format nil "~%new"))))
+      (expect (string= (%edit-test-format "text = '''old'''~%")
+                       (%edit-test-text source)))))
+  (it "resets nested array-table indices for each parent element"
+    (let* ((source (%edit-test-bytes
+                    "[[a]]~%[[a.b]]~%name = \"a0b0\"~%[[a]]~%[[a.b]]~%name = \"a1b0\"~%[[a.b]]~%name = \"a1b1\"~%"))
+           (result (edit-toml source '("a" 1 "b" 1 "name") "changed"))
+           (a (%edit-test-value result '("a"))))
+      (expect (string= "a0b0" (gethash "name" (aref (gethash "b" (aref a 0)) 0))))
+      (expect (string= "a1b0" (gethash "name" (aref (gethash "b" (aref a 1)) 0))))
+      (expect (string= "changed" (gethash "name" (aref (gethash "b" (aref a 1)) 1))))))
+  (it-each (("# keep~%name = \"old\"~%" "name")
+            ("name = \"old\" # keep~%" "name"))
+      "rejects scalar deletion that would lose a comment"
+      (source key)
+    (let ((bytes (%edit-test-bytes source)))
+      (expect (signals toml-format-preservation-error
+                (delete-toml bytes (list key))))
+      (expect (string= (%edit-test-format source) (%edit-test-text bytes)))))
+  (it "rejects array deletion that would remove an element comment"
+    (let ((source (%edit-test-bytes "values = [1, # first~%  2]~%")))
+      (expect (signals toml-format-preservation-error
+                (delete-toml source '("values" 0))))
+      (expect (string= (%edit-test-format "values = [1, # first~%  2]~%")
+                       (%edit-test-text source)))))
+  (it "inserts section keys before trailing trivia"
+    (let* ((source (%edit-test-bytes
+                    "[server]~%name = \"x\"~%~%# section note~%[other]~%value = 1~%"))
+           (result (edit-toml source '("server" "port") 8080)))
+      (expect (string= (%edit-test-format
+                        "[server]~%name = \"x\"~%port = 8080~%~%# section note~%[other]~%value = 1~%")
+                       (%edit-test-text result)))
+      (expect (= 8080 (%edit-test-value result '("server" "port"))))))
+  (it "rejects array insertion after a trailing comment"
+    (let ((source (%edit-test-bytes "values = [1, 2 # keep~%]~%")))
+      (expect (signals toml-format-preservation-error
+                (edit-toml source '("values" 2) 3)))
+      (expect (string= (%edit-test-format "values = [1, 2 # keep~%]~%")
+                       (%edit-test-text source)))))
+  (it "uses the preceding line ending for a root insertion"
+    (let* ((crlf (coerce (list #\Return #\Newline) 'string))
+           (source (sb-ext:string-to-octets
+                    (concatenate 'string "first = 1" (string #\Newline)
+                                 "second = 2" (string #\Newline)
+                                 "[server]" crlf
+                                 "name = \"x\"" crlf)
+                    :external-format :utf-8))
+           (result (edit-toml source '("third") 3)))
+      (expect (string= (concatenate 'string "first = 1" (string #\Newline)
+                                    "second = 2" (string #\Newline)
+                                    "third = 3" (string #\Newline)
+                                    "[server]" crlf
+                                    "name = \"x\"" crlf)
+                       (%edit-test-text result)))))
+  (it "quotes a dotted string key when inserting it"
+    (let* ((source (%edit-test-bytes "other = 1~%"))
+           (result (edit-toml source '("a.b") "value")))
+      (expect (string= (%edit-test-format "other = 1~%\"a.b\" = \"value\"~%")
+                       (%edit-test-text result)))
+      (expect (string= "value" (%edit-test-value result '("a.b"))))))
+  (it "escapes replacement strings and preserves their parsed value"
+    (let* ((source (%edit-test-bytes "text = \"old\"~%"))
+           (value (format nil "line~%quote\""))
+           (result (edit-toml source '("text") value)))
+      (expect (string= value (%edit-test-value result '("text"))))))
+  (it "does not treat a tilde in test data as a format directive"
+    (let* ((source (%edit-test-bytes "text = \"old\" # a ~ b~%"))
+           (result (edit-toml source '("text") "new ~ value")))
+      (expect (string= (%edit-test-format "text = \"new ~ value\" # a ~ b~%")
+                       (%edit-test-text result)))))
+  (it "does not turn an omitted byte-editor value into deletion"
+    (let ((source (%edit-test-bytes "name = \"old\"~%")))
+      (expect (signals error (edit-toml-bytes source '("name"))))
+      (expect (string= (%edit-test-format "name = \"old\"~%")
                        (%edit-test-text source))))))

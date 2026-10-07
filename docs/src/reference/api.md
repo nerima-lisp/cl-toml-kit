@@ -130,8 +130,9 @@ See also: [Writer](../guide/writer.md).
 ```
 
 Edit a UTF-8 TOML document represented by a vector of unsigned-byte 8 values.
-`path` is a string or a sequence of string keys and zero-based non-negative
-array indices. Existing values are replaced when `new-value` is supplied.
+`path` is a string key or a sequence of string keys and zero-based non-negative
+array indices. A string component is one key, so dots in a string key are not
+path separators; use multiple components for a nested path. Existing values are replaced when `new-value` is supplied.
 Use `:delete t` with `new-value` set to `nil`, or use `delete-toml`, to remove
 an existing value. The returned
 bytes retain the BOM, comments, key order, whitespace,
@@ -145,10 +146,19 @@ line-ending style, string delimiters, and table kind outside the edited span.
 ;; => bytes for "name = \"new\"  # keep\r\n"
 ```
 
-Adding a missing leaf uses the containing table's assignment style. Structural
-edits that would require choosing among multiple array-table elements,
-re-homing dotted keys, or assigning comments or delimiters to a deleted span
-signal `toml-format-preservation-error`.
+Adding a missing leaf uses the containing table's assignment style. After an
+edit, the result is parsed and compared with the original parsed document
+after the same path change; a mismatch signals
+`toml-format-preservation-error`. Structural edits that would require
+choosing among multiple array-table elements or re-homing dotted keys also
+signal that condition.
+
+Deletion is rejected when the removed span contains `#` or the immediately
+preceding line is a comment, because the comment ownership cannot be retained.
+Array insertion is rejected when a trailing element comment would be crossed.
+When adding to a table, trailing blank and comment lines remain after the new
+assignment. Unsupported structural edits are rejected rather than returning
+parseable bytes with a changed meaning.
 
 ### `edit-toml-bytes` and `delete-toml`
 
@@ -158,9 +168,10 @@ signal `toml-format-preservation-error`.
   => octet-vector
 ```
 
-`edit-toml-bytes` is the byte-oriented spelling of `edit-toml`; `delete-toml`
-is equivalent to `(edit-toml source path nil :delete t)`. Neither function mutates
-the input vector.
+`edit-toml-bytes` is the byte-oriented spelling of `edit-toml`; it requires an
+explicit `new-value` unless `:delete t` is supplied. `delete-toml` is equivalent
+to `(edit-toml source path nil :delete t)`. Neither function mutates the input
+vector.
 
 ## Native Values
 
