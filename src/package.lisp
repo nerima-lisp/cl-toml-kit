@@ -4,6 +4,8 @@
   (:export
    ;; Reader / writer protocol
    #:parse #:parse-file #:encode #:write-toml
+   ;; Format-preserving byte editor
+   #:edit-toml #:edit-toml-bytes #:delete-toml
    ;; Native values. Table keys are validated by the writer, not predicates.
    #:+toml-false+ #:toml-false-p #:toml-value #:toml-value-p
    #:toml-value-kind #:toml-value-typecase
@@ -17,4 +19,7 @@
    #:toml-parse-error-path #:toml-parse-error-expected
    #:toml-parse-error-context #:toml-parse-error-text
    #:toml-encoding-error #:toml-encoding-error-message
-   #:toml-encoding-error-path))
+   #:toml-encoding-error-path
+   #:toml-format-preservation-error
+   #:toml-format-preservation-error-message
+   #:toml-format-preservation-error-path))

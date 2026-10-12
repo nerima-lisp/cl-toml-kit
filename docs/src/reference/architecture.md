@@ -7,9 +7,10 @@ repository's [design document](https://github.com/nerima-lisp/cl-toml-kit/blob/m
 ## Module layout
 
 ASDF loads `src/package.lisp`, `src/conditions.lisp`, and `src/data.lisp`
-first, then reader and writer files. The reader consists of `reader-data.lisp`,
+first, then reader, editor, and writer files. The reader consists of `reader-data.lisp`,
 `reader-macros.lisp`, `reader-scan.lisp`, `reader-path.lisp`,
-`reader-values.lisp`, `reader-document.lisp`, and `reader.lisp`. The writer
+`reader-values.lisp`, `reader-document.lisp`, and `reader.lisp`. The editor is
+`src/edit.lisp`. The writer
 consists of `writer-data.lisp`, `writer-macros.lisp`, and `writer.lisp`.
 
 The foundation owns the package definition, the conditions, and the value
@@ -33,9 +34,10 @@ the key, not when the value is constructed.
 
 `toml-kit-error` is the root condition. `toml-parse-error` reports malformed
 input with position, line, column, and path information; `toml-encoding-error`
-reports values that cannot be represented in TOML. Both derive from the root
-and both define `:report`. See [Conditions](../reference/conditions.md) for
-the exported accessors.
+reports values that cannot be represented in TOML; and
+`toml-format-preservation-error` reports edits that cannot identify one safe
+source span. All derive from the root and define `:report`. See
+[Conditions](../reference/conditions.md) for the exported accessors.
 
 ## Reader
 
@@ -61,6 +63,16 @@ streaming entry point and `encode` is its string-output wrapper.
 Value dispatch and the output shape both derive from the declarative tables in
 `src/data.lisp` and `src/writer-data.lisp`: the emitter macro walks the table
 and expands to one `typecase`. See [Writer](../guide/writer.md) for usage.
+
+## Format-preserving editor
+
+`edit-toml` scans a UTF-8 byte vector into source spans, replaces or removes a
+selected value span, and validates the resulting bytes with `parse`. It keeps
+unselected bytes unchanged. The editor supports scalar assignments, inline
+tables, arrays, table sections, and indexed array-of-tables values. It rejects
+structural edits whose source ownership is ambiguous with
+`toml-format-preservation-error`; see [API](../reference/api.md) and
+[Conditions](../reference/conditions.md).
 
 ## Performance policy
 

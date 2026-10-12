@@ -67,8 +67,8 @@ in [Getting started](../getting-started.md).
 
 ## Stability
 
-The package version is 0.1.0 (see `:version` in `cl-toml-kit.asd`), so the API
-is still pre-1.0. At 0.1.0 the library makes no compatibility promise beyond
+The package version is 0.2.0 (see `:version` in `cl-toml-kit.asd`), so the API
+is still pre-1.0. At 0.2.0 the library makes no compatibility promise beyond
 the documented behavior: exported symbols and their behavior may change
 without a deprecation window.
 

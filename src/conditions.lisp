@@ -72,3 +72,18 @@
   (make-condition 'toml-encoding-error
                   :message (%diagnostic-string (or message "TOML encoding failed"))
                   :path (%diagnostic-path path)))
+
+(define-condition toml-format-preservation-error (toml-kit-error)
+  ((message :initarg :message :initform "TOML format-preserving edit was rejected"
+            :reader toml-format-preservation-error-message)
+   (path :initarg :path :initform nil :reader toml-format-preservation-error-path))
+  (:report (lambda (condition stream)
+             (format stream "TOML format-preserving edit error~@[ at ~S~]: ~A"
+                     (toml-format-preservation-error-path condition)
+                     (toml-format-preservation-error-message condition)))))
+
+(defun make-toml-format-preservation-error (&key message path)
+  (make-condition 'toml-format-preservation-error
+                  :message (%diagnostic-string
+                            (or message "TOML format-preserving edit was rejected"))
+                  :path (%diagnostic-path path)))
