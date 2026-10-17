@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     cl-nix-forge = {
-      url = "github:nerima-lisp/cl-nix-forge/v0.6.0";
+      url = "github:nerima-lisp/cl-nix-forge/v0.6.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -20,8 +20,8 @@
     };
 
     cl-weave = {
-      url = "github:nerima-lisp/cl-weave/v1.3.0";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nerima-lisp/cl-weave/v1.4.0";
+      flake = false;
     };
 
     cl-json-kit = {
@@ -30,7 +30,7 @@
     };
 
     paredit-cli = {
-      url = "github:nerima-lisp/paredit-cli/v1.6.3";
+      url = "github:nerima-lisp/paredit-cli/v1.7.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -86,7 +86,12 @@
         })
       ];
       lispCheckDependencies = ctx: [
-        cl-weave.packages.${ctx.system}.cl-weave
+        (ctx.cl.lispDerivation {
+          pname = "cl-weave";
+          version = ctx.cl.fromAsdSystem "${cl-weave}/cl-weave.asd";
+          src = cl-weave;
+          lispSystem = "cl-weave";
+        })
         (ctx.cl.lispDerivation {
           pname = "cl-json-kit";
           version = ctx.cl.fromAsdSystem "${cl-json-kit}/cl-json-kit.asd";
