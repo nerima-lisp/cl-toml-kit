@@ -33,6 +33,12 @@
                (:file "writer-macros")
                (:file "writer")
                (:file "reader")
+               (:file "edit-model")
+               (:file "edit-scan")
+               (:file "edit-document")
+               (:file "edit-bytes")
+               (:file "edit-semantic")
+               (:file "edit-splice")
                (:file "edit"))
   :in-order-to ((test-op (test-op "cl-toml-kit/test"))))
 
@@ -55,7 +61,8 @@
                (:file "reader-errors-test")
                (:file "roundtrip-test")
                (:file "reader-conformance-test")
-               (:file "edit-test"))
+               (:file "edit-test")
+               (:file "edit-phase2b-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function
