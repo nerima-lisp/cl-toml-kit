@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        timeout-minutes: 5
       - uses: DeterminateSystems/nix-installer-action@main
+        timeout-minutes: 10
       - name: Run diagnostic benchmarks
+        timeout-minutes: 12
         run: timeout 600 nix develop -c sbcl --script run-benchmarks.lisp
