@@ -18,6 +18,8 @@ git -C "$REPOS/cl-parser-kit.git" archive --prefix=cl-parser-kit/ v1.1.1 \
   | tar -x -C "$DEPS"
 git -C "$REPOS/cl-date-kit.git" archive --prefix=cl-date-kit/ v1.1.1 \
   | tar -x -C "$DEPS"
+git -C "$REPOS/cl-codec-kit.git" archive --prefix=cl-codec-kit/ v0.6.0 \
+  | tar -x -C "$DEPS"
 git -C "$REPOS/cl-weave.git" archive --prefix=cl-weave/ v1.3.0 \
   | tar -x -C "$DEPS"
 git -C "$REPOS/cl-json-kit.git" archive --prefix=cl-json-kit/ v1.2.0 \

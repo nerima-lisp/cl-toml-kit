@@ -18,8 +18,8 @@ or put the repository where ASDF can find it:
 (asdf:load-system "cl-toml-kit")
 ```
 
-The runtime depends on `cl-parser-kit` and `cl-date-kit`; only the test system
-additionally uses `cl-weave`. SBCL is the supported implementation. See
+The runtime depends on `cl-parser-kit`, `cl-date-kit`, and `cl-codec-kit`; only
+the test system additionally uses `cl-weave`. SBCL is the supported implementation. See
 [Getting Started](https://nerima-lisp.github.io/cl-toml-kit/getting-started/).
 
 ## Use

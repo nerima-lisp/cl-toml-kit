@@ -1,8 +1,9 @@
 # Getting Started
 
 `cl-toml-kit` is a TOML v1.1.0 reader and writer for SBCL. The runtime depends
-on [`cl-parser-kit`](https://github.com/nerima-lisp/cl-parser-kit) and
-[`cl-date-kit`](https://github.com/nerima-lisp/cl-date-kit); only the test
+on [`cl-parser-kit`](https://github.com/nerima-lisp/cl-parser-kit),
+[`cl-date-kit`](https://github.com/nerima-lisp/cl-date-kit), and
+[`cl-codec-kit`](https://github.com/nerima-lisp/cl-codec-kit); only the test
 system additionally uses [`cl-weave`](https://github.com/nerima-lisp/cl-weave).
 
 ## With Nix
@@ -39,8 +40,8 @@ Every example on this site references symbols with the `cl-toml-kit:` prefix.
 ## Supported runtime
 
 `cl-toml-kit` targets **SBCL** only and reads and writes TOML v1.1.0. The
-runtime dependencies are `cl-parser-kit` (1.1.1 or newer) and `cl-date-kit`
-(1.1.0 or newer).
+runtime dependencies are `cl-parser-kit` (1.1.1 or newer), `cl-date-kit`
+(1.1.0 or newer), and `cl-codec-kit` (0.6.0 or newer).
 
 ## Verifying the install
 

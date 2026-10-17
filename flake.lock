@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "cl-codec-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790500690,
+        "narHash": "sha256-vr00pg1SeZ0BJKeSiM2bmxwC2YK5VwDiSYq5bNVRj14=",
+        "owner": "nerima-lisp",
+        "repo": "cl-codec-kit",
+        "rev": "5885db990560b1aa3992a88daceea010b9adc1d2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nerima-lisp",
+        "ref": "v0.6.0",
+        "repo": "cl-codec-kit",
+        "type": "github"
+      }
+    },
     "cl-date-kit": {
       "flake": false,
       "locked": {
@@ -147,6 +164,7 @@
     },
     "root": {
       "inputs": {
+        "cl-codec-kit": "cl-codec-kit",
         "cl-date-kit": "cl-date-kit",
         "cl-json-kit": "cl-json-kit",
         "cl-nix-forge": "cl-nix-forge",

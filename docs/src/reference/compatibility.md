@@ -54,11 +54,12 @@ and `aarch64-darwin` platforms.
 |---|---|---|
 | `cl-parser-kit` | 1.1.1 | runtime |
 | `cl-date-kit` | 1.1.1 | runtime |
-| `cl-weave` | 1.3.0 | test only |
+| `cl-codec-kit` | 0.6.0 | runtime |
+| `cl-weave` | 1.4.0 | test only |
 
-The library depends at runtime on `cl-parser-kit` and `cl-date-kit`, with the
-versions pinned in `cl-toml-kit.asd` and in the flake inputs. `cl-date-kit`
-provides the date and time types in the
+The library depends at runtime on `cl-parser-kit`, `cl-date-kit`, and
+`cl-codec-kit`, with the versions pinned in `cl-toml-kit.asd` and in the flake
+inputs. `cl-date-kit` provides the date and time types in the
 [value mapping](../guide/data-model.md). The test system additionally uses
 `cl-weave`, which is not a dependency of the library itself. The flake also
 pins build tooling (`cl-nix-forge`, `paredit-cli`, `treefmt-nix`); none of

@@ -19,6 +19,11 @@
       flake = false;
     };
 
+    cl-codec-kit = {
+      url = "github:nerima-lisp/cl-codec-kit/v0.6.0";
+      flake = false;
+    };
+
     cl-weave = {
       url = "github:nerima-lisp/cl-weave/v1.4.0";
       flake = false;
@@ -47,6 +52,7 @@
       cl-nix-forge,
       cl-parser-kit,
       cl-date-kit,
+      cl-codec-kit,
       cl-weave,
       cl-json-kit,
       paredit-cli,
@@ -83,6 +89,12 @@
           version = ctx.cl.fromAsdSystem "${cl-date-kit}/cl-date-kit.asd";
           src = cl-date-kit;
           lispSystem = "cl-date-kit";
+        })
+        (ctx.cl.lispDerivation {
+          pname = "cl-codec-kit";
+          version = ctx.cl.fromAsdSystem "${cl-codec-kit}/cl-codec-kit.asd";
+          src = cl-codec-kit;
+          lispSystem = "cl-codec-kit";
         })
       ];
       lispCheckDependencies = ctx: [

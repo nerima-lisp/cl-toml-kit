@@ -13,8 +13,12 @@
   :source-control (:git "https://github.com/nerima-lisp/cl-toml-kit.git")
   :pathname "src"
   :serial t
-  :depends-on ((:version "cl-parser-kit" "1.1.1")
-               (:version "cl-date-kit" "1.1.1"))
+  :depends-on (;; Source spans and diagnostics for parse errors.
+               (:version "cl-parser-kit" "1.1.1")
+               ;; RFC 3339 date and time values.
+               (:version "cl-date-kit" "1.1.1")
+               ;; UTF-8 decoding with byte positions, without SB-EXT.
+               (:version "cl-codec-kit" "0.6.0"))
   :components ((:file "package")
                (:file "syntax-data")
                (:file "conditions")
