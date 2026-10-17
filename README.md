@@ -114,7 +114,7 @@ the [Data Model](https://nerima-lisp.github.io/cl-toml-kit/guide/data-model/).
 ## Development
 
 ```sh
-timeout 1800 nix flake check   # tests, docs build, formatting, paredit lint
+timeout 1800 nix flake check   # tests, coverage, docs, formatting, paredit lint
 sbcl --script run-tests.lisp   # tests only
 ```
 

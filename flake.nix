@@ -147,6 +147,13 @@
               ${timeLimit "paredit-lint ${./.}"}
               touch "$out"
             '';
+        checks.coverage = ctx.cl.mkCoverageReport {
+          drv = ctx.package;
+          systems = [ "cl-toml-kit" ];
+          entryPoint = "scripts/run-coverage.lisp";
+          timeoutSeconds = 900;
+          killAfterSeconds = 30;
+        };
       };
 
       # mkPackageFlake generates the docs site and the formatting check without

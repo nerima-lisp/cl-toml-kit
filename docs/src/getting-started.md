@@ -17,8 +17,8 @@ nix build github:nerima-lisp/cl-toml-kit
 The flake also exposes per-system attributes:
 
 ```sh
-# Run the test suite, docs build, formatting, and paredit lint
-# as reproducible derivations.
+# Run the test suite, coverage gate, docs build, formatting, and paredit
+# lint as reproducible derivations.
 nix flake check
 
 # Enter a devShell with SBCL and paredit-cli.
