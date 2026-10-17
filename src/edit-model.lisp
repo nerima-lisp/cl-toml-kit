@@ -2,9 +2,7 @@
 
 (defstruct (edit-assignment (:constructor %make-edit-assignment))
   path node line-start line-end section)
-(defmacro define-edit-node-kinds (&rest kinds) `(deftype edit-node-kind () '(member ,@kinds)))
-(define-edit-node-kinds :value :array :inline)
-
+(deftype edit-node-kind () '(member :value :array :inline))
 (defstruct (edit-section (:constructor %make-edit-section))
   path start end)
 

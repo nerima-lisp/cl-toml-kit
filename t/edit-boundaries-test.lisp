@@ -223,10 +223,12 @@
                "[[products]]~%name = 1~%[[products]]~%name = 2~%"))
            (original (copy-seq source)))
       (expect
-       (signals error
+       (signals toml-format-preservation-error
          (edit-toml source (list "products" "extra") 3)))
       (expect (equalp original source))
-      (expect (signals error (delete-toml source (list "missing"))))
+      (expect
+       (signals toml-format-preservation-error
+         (delete-toml source (list "missing"))))
       (expect (equalp original source))))
   (it "checks scanner and line-ending boundaries"
     (let* ((char-at-limit
