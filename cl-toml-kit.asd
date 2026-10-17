@@ -62,7 +62,7 @@
                (:file "roundtrip-test")
                (:file "reader-conformance-test")
                (:file "edit-test")
-               (:file "edit-phase2b-test"))
+               (:file "edit-boundaries-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
              (unless (funcall (symbol-function

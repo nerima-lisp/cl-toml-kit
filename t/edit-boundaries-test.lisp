@@ -1,6 +1,6 @@
 (in-package #:cl-toml-kit/test)
 
-(describe "phase 2B editor regression boundaries"
+(describe "editor regression boundaries"
   (it "keeps mixed array-table scans linear in header count"
     (let* ((groups 128)
            (header-count (* 2 groups))
