@@ -45,14 +45,15 @@ runtime dependencies are `cl-parser-kit` (1.1.1 or newer), `cl-date-kit`
 
 ## Verifying the install
 
-The canonical gate is `nix flake check`, wrapped by the contract as:
+Run the canonical gate:
 
 ```console
 timeout 1800 nix flake check
 ```
 
-It runs the test suite, builds the documentation, checks formatting, and lints
-the sources with paredit-cli. To run only the test suite:
+It runs the test suite, checks source coverage, builds the documentation,
+checks formatting, and lints the sources with paredit-cli. To run only the test
+suite:
 
 ```sh
 sbcl --script run-tests.lisp

@@ -26,7 +26,9 @@
 (defparameter *source-directory* (merge-pathnames #P"src/" *default-pathname-defaults*))
 
 (defun percent (covered total)
-  (if (zerop total) 100 (* 100 (/ covered total))))
+  (when (zerop total)
+    (error "Coverage total must be nonzero"))
+  (* 100 (/ covered total)))
 
 (defun print-file-statistics (files)
   (format t "~&~32A ~15@A ~15@A~%" "file" "expression" "branch")
@@ -53,9 +55,11 @@
 (handler-case
     (progn
       (asdf:test-system "cl-toml-kit")
-      (let ((include (list *source-directory*)))
-        (print-file-statistics
-         (cl-weave:coverage-file-statistics :include-pathnames include))
+      (let* ((include (list *source-directory*))
+             (files (cl-weave:coverage-file-statistics :include-pathnames include)))
+        (unless files
+          (error "No src/ coverage file statistics were produced"))
+        (print-file-statistics files)
         (enforce-minimum
          (cl-weave:coverage-statistics :include-pathnames include)))
       (uiop:quit 0))
