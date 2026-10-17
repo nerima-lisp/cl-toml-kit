@@ -35,7 +35,7 @@
 
 (defun %edit-horizontal-space (text position limit)
   (loop while (and (< position limit)
-                   (member (char text position) '(#\Space #\Tab)))
+                   (toml-space-character-p (char text position)))
         do (incf position)
         finally (return position)))
 
@@ -62,14 +62,6 @@
        (setf position (%edit-line-end text position)))
       (t (return position)))))
 
-(defun %edit-hex-value (character)
-  (cond ((and (char>= character #\0) (char<= character #\9))
-         (- (char-code character) (char-code #\0)))
-        ((and (char>= (char-downcase character) #\a)
-              (char<= (char-downcase character) #\f))
-         (+ 10 (- (char-code (char-downcase character)) (char-code #\a))))
-        (t nil)))
-
 (defun %edit-decode-basic-string (text start end)
   (with-output-to-string (out)
     (loop with index = (1+ start)
@@ -79,24 +71,22 @@
                    (write-char character out)
                    (progn
                      (incf index)
-                     (let ((escape (char text index)))
-                       (case escape
-                         (#\b (write-char #\Backspace out))
-                         (#\t (write-char #\Tab out))
-                         (#\n (write-char #\Newline out))
-                         (#\f (write-char #\Page out))
-                         (#\r (write-char #\Return out))
-                         (#\e (write-char #\Escape out))
-                         ((#\" #\\) (write-char escape out))
-                         ((#\u #\U)
-                          (let ((digits (if (char= escape #\u) 4 8))
+                     (let* ((escape (char text index))
+                            (escape-position
+                              (position escape +toml-escape-letters+ :test #'char=)))
+                       (cond
+                         ((and escape-position
+                               (not (member escape '(#\x #\u #\U))))
+                          (write-char (aref +toml-escape-table+ escape-position) out))
+                         ((member escape '(#\x #\u #\U))
+                          (let ((digits (case escape (#\x 2) (#\u 4) (otherwise 8)))
                                 (value 0))
                             (dotimes (ignore digits)
                               (incf index)
                               (setf value (+ (* value 16)
-                                             (%edit-hex-value (char text index)))))
+                                             (%toml-hex-digit-value (char text index)))))
                             (write-char (code-char value) out)))
-                         (otherwise (write-char escape out))))))
+                         (t (write-char escape out))))))
                (incf index)))))
 
 (defun %edit-scan-string (text position limit)
@@ -132,14 +122,10 @@
                      (%edit-decode-basic-string text position end)
                      (subseq text (1+ position) (1- end)))
                  end)))
-      ((and character
-            (or (alpha-char-p character) (digit-char-p character)
-                (member character '(#\_ #\-))))
+      ((and character (toml-bare-key-character-p character))
        (let ((end position))
          (loop while (and (< end limit)
-                          (let ((item (char text end)))
-                            (or (alpha-char-p item) (digit-char-p item)
-                                (member item '(#\_ #\-)))))
+                          (toml-bare-key-character-p (char text end)))
                do (incf end))
          (values (subseq text position end) end)))
       (t (%edit-fail nil "Invalid key while editing TOML")))))
@@ -338,11 +324,10 @@
     (nreverse matches)))
 
 (defun %edit-octets-to-string (bytes)
-  (let ((offset (if (and (>= (length bytes) 3)
-                         (= (aref bytes 0) #xEF)
-                         (= (aref bytes 1) #xBB)
-                         (= (aref bytes 2) #xBF))
-                    3 0)))
+  (let ((offset (if (and (>= (length bytes) (length +toml-utf8-bom+))
+                         (equalp (subseq bytes 0 (length +toml-utf8-bom+))
+                                 +toml-utf8-bom+))
+                    (length +toml-utf8-bom+) 0)))
     (handler-case
         (values (sb-ext:octets-to-string (subseq bytes offset)) offset)
       (error (condition)

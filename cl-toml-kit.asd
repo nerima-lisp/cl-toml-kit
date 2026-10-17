@@ -16,6 +16,7 @@
   :depends-on ((:version "cl-parser-kit" "1.1.1")
                (:version "cl-date-kit" "1.1.1"))
   :components ((:file "package")
+               (:file "syntax-data")
                (:file "conditions")
                (:file "data")
                (:file "reader-data")

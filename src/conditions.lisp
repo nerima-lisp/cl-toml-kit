@@ -8,10 +8,9 @@
     (with-output-to-string (out)
       (loop with n = 0
             for c across text
-            for escaped = (case c
-                            (#\Newline "\\n") (#\Return "\\r")
-                            (#\Tab "\\t") (#\Backspace "\\b")
-                            (otherwise (string c)))
+            for escaped = (if (member c '(#\Newline #\Return #\Tab #\Backspace))
+                              (aref *toml-basic-string-escape* (char-code c))
+                              (string c))
             while (<= (+ n (length escaped)) limit)
             do (write-string escaped out)
                (incf n (length escaped))))))

@@ -18,9 +18,6 @@
         (%skip-line-ending state)
         (return))))
 
-(defun %hex-digit (char)
-  (digit-char-p char 16))
-
 (defun %read-escape (state position)
   (let* ((char (%source-char state (1+ position)))
          (index (position char +toml-escape-letters+ :test #'char=)))
@@ -29,7 +26,7 @@
       ((member char '(#\x #\u #\U))
        (let ((count (case char (#\x 2) (#\u 4) (otherwise 8))) (value 0))
          (loop for i below count
-               for digit = (%hex-digit (%source-char state (+ position 2 i)))
+               for digit = (%toml-hex-digit-value (%source-char state (+ position 2 i)))
                do (unless digit (%error-at state (+ position 2 i) "hex digit"))
                   (setf value (+ (* value 16) digit)))
          (unless (and (<= value #x10FFFF)
@@ -121,8 +118,7 @@
            (%error-at state index "literal string character"))
           (t (%buffer-char state char) (incf index)))))))
 
-(defun %integer-range-ok-p (number)
-  (<= -9223372036854775808 number 9223372036854775807))
+(defun %integer-range-ok-p (number) (<= +toml-min-integer+ number +toml-max-integer+))
 
 (defun %digit-value (char base)
   (digit-char-p char base))
@@ -295,13 +291,9 @@
              (loop for index from start below end
                    thereis (member (char source index) '(#\e #\E)))))))
 
-(defparameter +toml-nan+
-  (let ((zero 0.0d0))
-    (sb-int:with-float-traps-masked (:invalid)
-      (/ zero zero))))
-
 (define-toml-rule toml-read-value (state position)
-  (let* ((source (toml-reader-state-source state)) (char (%source-char state position)))
+  (let* ((source (toml-reader-state-source state))
+         (char (%source-char state position)))
     (cond
       ((member char '(#\" #\'))
        (multiple-value-bind (value next) (%read-string-at state position char)
@@ -316,15 +308,14 @@
                             (%parse-date-value state position end))
                            ((%float-token-p source position end)
                             (%parse-float-range state position end))
-                           ((%token-equal-p source position end "inf")
+                           ((loop for token in +toml-positive-infinity-tokens+
+                                  thereis (%token-equal-p source position end token))
                             sb-ext:double-float-positive-infinity)
-                           ((%token-equal-p source position end "+inf")
-                            sb-ext:double-float-positive-infinity)
-                           ((%token-equal-p source position end "-inf")
+                           ((%token-equal-p source position end
+                                            +toml-negative-infinity-token+)
                             sb-ext:double-float-negative-infinity)
-                           ((or (%token-equal-p source position end "nan")
-                                (%token-equal-p source position end "+nan")
-                                (%token-equal-p source position end "-nan"))
+                           ((loop for token in +toml-nan-tokens+
+                                  thereis (%token-equal-p source position end token))
                             +toml-nan+)
                            (t (%parse-integer-range state position end)))))
          (funcall continuation value end))))))

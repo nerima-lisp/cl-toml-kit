@@ -1,8 +1,5 @@
 (in-package #:cl-toml-kit)
 
-(defconstant +toml-min-integer+ -9223372036854775808)
-(defconstant +toml-max-integer+ 9223372036854775807)
-
 (defun %writer-error-path (path)
   (when path
     (loop for index downfrom (1- (fill-pointer path)) to 0
@@ -27,9 +24,7 @@
 (defun %write-key (key stream)
   (if (and (plusp (length key))
            (loop for character across key
-                 always (and (< (char-code character) 128)
-                             (= 1 (aref *toml-bare-key-character-p*
-                                        (char-code character))))))
+                 always (toml-bare-key-character-p character)))
       (write-string key stream)
       (%write-string-value key stream)))
 
@@ -64,9 +59,13 @@
 
 (defun %write-float-value (value stream)
   (sb-int:with-float-traps-masked (:invalid)
-    (cond ((sb-ext:float-nan-p value) (write-string "nan" stream))
+    (cond ((sb-ext:float-nan-p value)
+           (write-string (first +toml-nan-tokens+) stream))
           ((sb-ext:float-infinity-p value)
-           (write-string (if (minusp value) "-inf" "inf") stream))
+           (write-string (if (minusp value)
+                             +toml-negative-infinity-token+
+                             (first +toml-positive-infinity-tokens+))
+                         stream))
           (t (let ((*read-default-float-format* 'double-float))
                (prin1 value stream))))))
 

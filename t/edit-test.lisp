@@ -270,6 +270,14 @@
            (value (format nil "line~%quote\""))
            (result (edit-toml source '("text") value)))
       (expect (string= value (%edit-test-value result '("text"))))))
+  (it "decodes hexadecimal escapes in quoted key paths"
+    (let* ((source (%edit-test-bytes "\"a\\x41b\" = 1~%"))
+           (result (edit-toml source '("aAb") 2)))
+      (expect
+       (string=
+        (%edit-test-format "\"a\\x41b\" = 2~%")
+        (%edit-test-text result)))
+      (expect (= 2 (%edit-test-value result '("aAb"))))))
   (it "does not treat a tilde in test data as a format directive"
     (let* ((source (%edit-test-bytes "text = \"old\" # a ~ b~%"))
            (result (edit-toml source '("text") "new ~ value")))
