@@ -20,16 +20,16 @@
     "cl-date-kit": {
       "flake": false,
       "locked": {
-        "lastModified": 1790450959,
-        "narHash": "sha256-tB9CMfpnp0suzaXLRey5EKTbXvJ+3M64Uf0lhYD0c84=",
+        "lastModified": 1792242465,
+        "narHash": "sha256-d4KVhCjUZW3Oe2guxMZAEJkZGy+UCvrmlsXhQaEsX7E=",
         "owner": "nerima-lisp",
         "repo": "cl-date-kit",
-        "rev": "021c00df3f4dd18cad7206221125d1596db2fae5",
+        "rev": "c4bad809f913677fe5787bdfd604c2ac42252241",
         "type": "github"
       },
       "original": {
         "owner": "nerima-lisp",
-        "ref": "v1.1.1",
+        "ref": "v1.2.0",
         "repo": "cl-date-kit",
         "type": "github"
       }

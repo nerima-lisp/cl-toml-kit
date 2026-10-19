@@ -7,17 +7,17 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.2.0"
+  :version "0.3.0"
   :homepage "https://github.com/nerima-lisp/cl-toml-kit"
   :bug-tracker "https://github.com/nerima-lisp/cl-toml-kit/issues"
   :source-control (:git "https://github.com/nerima-lisp/cl-toml-kit.git")
   :pathname "src"
   :serial t
-  :depends-on (;; Source spans and diagnostics for parse errors.
+  :depends-on (;; Source spans and formatted diagnostics for TOML parse errors.
                (:version "cl-parser-kit" "1.1.1")
-               ;; RFC 3339 date and time values.
+               ;; TOML date and time values, parsing, and formatting.
                (:version "cl-date-kit" "1.1.1")
-               ;; UTF-8 decoding with byte positions, without SB-EXT.
+               ;; UTF-8 decoding and encoding.
                (:version "cl-codec-kit" "0.6.0"))
   :components ((:file "package")
                (:file "comment-scan")
@@ -48,7 +48,7 @@
   :author "takeokunn <bararararatty@gmail.com>"
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.2.0"
+  :version "0.3.0"
   :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
   :pathname "t"
   :serial t
@@ -75,7 +75,7 @@
   :description "Diagnostic benchmark definitions for cl-toml-kit"
   :author "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
-  :version "0.2.0"
+  :version "0.3.0"
   :depends-on ("cl-toml-kit")
   :pathname "benchmark"
   :serial t

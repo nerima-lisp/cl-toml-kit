@@ -13,6 +13,9 @@
    (:tree ,*default-pathname-defaults*)
    :inherit-configuration))
 
+(asdf:load-system "cl-weave")
+(setf cl-weave:*default-timeout-ms* 10000)
+
 (handler-case
     (progn
       (asdf:test-system "cl-toml-kit")
