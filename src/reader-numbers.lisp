@@ -140,6 +140,8 @@
   (handler-case
       (let ((value (coerce (* mantissa (expt 10 (- exponent fraction)))
                            'double-float)))
+        (when (and negative (zerop mantissa))
+          (setf value (float-sign -1.0d0 value)))
         (when (and (not (zerop mantissa)) (zerop value))
           (funcall failure start :representable-finite-float nil)
           (return-from %finish-float-range nil))

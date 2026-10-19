@@ -41,9 +41,10 @@
     (expect (toml-test-value=
              expected
              (gethash "value" (parse (format nil "value = ~A" text))))))
-  (it-each (("0.1" 0.1d0)
-            ("1e308" 1.0d308)
-            ("-0.0" -0.0d0))
+  (it-each (("0.0" 0.0d0)
+            ("-0.0" -0.0d0)
+            ("0.1" 0.1d0)
+            ("1e308" 1.0d308))
       "reads float ~S as the expected double float"
       (text expected)
     (expect (toml-test-value=
