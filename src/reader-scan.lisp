@@ -23,7 +23,10 @@
                    (t (incf (toml-reader-state-column state)))))))
 
 (defun %error-at (state position expected &optional (path nil))
-  (let* ((source (toml-reader-state-source state))
+  (let* ((expected (if (keywordp expected)
+                       (%toml-reader-error-message expected)
+                       expected))
+         (source (toml-reader-state-source state))
          (end (min (length source) (+ position 40)))
          (span (cl-parser-kit:make-span :source source :start position :end end))
          (diagnostic (cl-parser-kit:make-diagnostic
@@ -58,18 +61,19 @@
 
 (defun %scan-atom-end (state position)
   (loop while (let ((char (%source-char state position)))
-                (and char (not (member char '(#\Space #\Tab #\Return #\Newline
-                                               #\, #\] #\} #\#)))))
+                (and char
+                     (not (or (toml-space-character-p char)
+                              (%toml-value-terminator-p char)))))
         do (incf position)
         finally (return position)))
 
 (defun %scan-value-end (state position)
   (let ((end (%scan-atom-end state position)))
     (if (and (= (- end position) 10)
-             (char= (%source-char state (+ position 4)) #\-)
-             (member (%source-char state end) '(#\Space #\Tab))
+             (eq (%toml-date-separator-kind (%source-char state (+ position 4))) :date)
+             (toml-space-character-p (%source-char state end))
              (toml-decimal-character-p (%source-char state (1+ end)))
              (toml-decimal-character-p (%source-char state (+ end 2)))
-             (char= (%source-char state (+ end 3)) #\:))
+             (eq (%toml-date-separator-kind (%source-char state (+ end 3))) :time))
         (%scan-atom-end state (1+ end))
         end)))

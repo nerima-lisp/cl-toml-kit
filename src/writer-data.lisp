@@ -20,3 +20,6 @@
     (:local-time
      (write-string (cl-date-kit:format-local-time
                     value :profile :rfc3339) stream)))))
+(define-toml-error-messages %toml-writer-error-message
+  ((:table-equal-hash "Table must use the EQUAL hash-table test")
+   (:key "Table keys must be strings")))

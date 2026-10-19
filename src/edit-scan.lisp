@@ -46,10 +46,10 @@
                               (position escape +toml-escape-letters+ :test #'char=)))
                        (cond
                          ((and escape-position
-                               (not (member escape '(#\x #\u #\U))))
+                               (not (%toml-hex-escape-width escape)))
                           (write-char (aref +toml-escape-table+ escape-position) out))
-                         ((member escape '(#\x #\u #\U))
-                          (let ((digits (case escape (#\x 2) (#\u 4) (otherwise 8)))
+                         ((%toml-hex-escape-width escape)
+                          (let ((digits (%toml-hex-escape-width escape))
                                 (value 0))
                             (dotimes (ignore digits)
                               (incf index)
@@ -158,11 +158,10 @@
 (defun %edit-scan-scalar-node (text position limit path assignment)
   (let ((end position))
     (loop while (and (< end limit)
-                     (not (member (char text end)
-                                  '(#\Newline #\Return #\, #\] #\} #\#))))
+                     (not (%toml-value-terminator-p (char text end))))
           do (incf end))
     (loop while (and (> end position)
-                     (member (char text (1- end)) '(#\Space #\Tab)))
+                     (toml-space-character-p (char text (1- end))))
           do (decf end))
     (%edit-make-node path position end :value nil assignment)))
 

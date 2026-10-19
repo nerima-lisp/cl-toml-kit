@@ -20,7 +20,7 @@
          (dotimes (code 128 ,table)
            (setf (aref ,table code) (digit-char-p (code-char code) 16)))))))
 
-(defmacro define-toml-escape-data (entries)
+(defmacro define-toml-escape-data (entries hex-widths)
   (let ((letters nil)
         (decoded nil)
         (table (gensym "TABLE"))
@@ -44,31 +44,47 @@
                  unless (char= character #\Escape)
                    do (setf (aref ,table (char-code character))
                             (concatenate 'string "\\" (string letter))))
-           ,table)))))
+           ,table))
+       (define-toml-character-map %toml-hex-escape-width ,hex-widths))))
 
 (defmacro define-toml-integer-range (minimum-name minimum
-                                        maximum-name maximum)
-  `(progn
-     (defconstant ,minimum-name ,minimum)
-     (defconstant ,maximum-name ,maximum)))
-
-(defmacro define-toml-float-data (&key positive-infinity-tokens
-                                       negative-infinity-token
-                                       nan-tokens
-                                       nan-value)
-  `(progn
-     (defparameter +toml-positive-infinity-tokens+
-       ',positive-infinity-tokens)
-     (defparameter +toml-negative-infinity-token+
-       ,negative-infinity-token)
-     (defparameter +toml-nan-tokens+
-       ',nan-tokens)
-     (defparameter +toml-nan+
-       ,nan-value)))
+                                        maximum-name maximum predicate-name)
+  (let ((integer (gensym "INTEGER")))
+    `(progn
+       (defconstant ,minimum-name ,minimum)
+       (defconstant ,maximum-name ,maximum)
+       (defun ,predicate-name (,integer)
+         (<= ,minimum-name ,integer ,maximum-name)))))
 
 (defmacro define-toml-byte-sequence (name octets)
   `(defparameter ,name
      (vector ,@octets)))
+(defmacro define-toml-character-class (name characters)
+  (let ((character (gensym "CHARACTER")))
+    `(defun ,name (,character)
+       (and (characterp ,character)
+            (member ,character ',characters :test #'char=)))))
+(defmacro define-toml-character-map (name entries)
+  (let ((character (gensym "CHARACTER")))
+    `(defun ,name (,character)
+       (case ,character
+         ,@(loop for (key value) in entries
+                 collect `(,key ,value))
+         (otherwise nil)))))
+(defmacro define-toml-integer-radices (name entries)
+  (let ((prefix (gensym "PREFIX")))
+    `(defun ,name (,prefix)
+       (case ,prefix
+         ,@(loop for (letter radix) in entries
+                 collect `(,letter ,radix))
+         (otherwise nil)))))
+(defmacro define-toml-error-messages (name entries)
+  (let ((key (gensym "KEY")))
+    `(defun ,name (,key)
+       (case ,key
+         ,@(loop for (kind message) in entries
+                 collect `(,kind ,message))
+         (otherwise nil)))))
 
 (define-toml-ascii-table +toml-bare-key-table+ char
                          (or (alpha-char-p char)
@@ -93,19 +109,20 @@
 
 (define-toml-escape-data
  ((#\b #\Backspace) (#\t #\Tab) (#\n #\Newline) (#\f #\Page)
-  (#\r #\Return) (#\e #\Escape) (#\" #\") (#\\ #\\)))
+  (#\r #\Return) (#\e #\Escape) (#\" #\") (#\\ #\\))
+ ((#\x 2) (#\u 4) (#\U 8)))
 
-(define-toml-integer-range +toml-min-integer+ -9223372036854775808 +toml-max-integer+ 9223372036854775807)
+(define-toml-integer-range +toml-min-integer+ -9223372036854775808
+                            +toml-max-integer+ 9223372036854775807
+                            %toml-integer-in-range-p)
 
-(define-toml-float-data :positive-infinity-tokens
-                        ("inf" "+inf")
-                        :negative-infinity-token
-                        "-inf"
-                        :nan-tokens
-                        ("nan" "+nan" "-nan")
-                        :nan-value
-                        (let ((zero 0.0d0))
-                          (sb-int:with-float-traps-masked (:invalid)
-                                                          (/ zero zero))))
+(progn
+  (defparameter +toml-positive-infinity-tokens+ '("inf" "+inf"))
+  (defparameter +toml-negative-infinity-token+ "-inf")
+  (defparameter +toml-nan-tokens+ '("nan" "+nan" "-nan"))
+  (defparameter +toml-nan+
+    (let ((zero 0.0d0))
+      (sb-int:with-float-traps-masked (:invalid)
+        (/ zero zero)))))
 
 (define-toml-byte-sequence +toml-utf8-bom+ (239 187 191))

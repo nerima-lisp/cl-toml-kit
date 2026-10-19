@@ -50,7 +50,7 @@
                (cond
                  ((not present)
                   (unless create
-                    (%error-at state (toml-reader-state-position state) "defined table" path))
+                    (%error-at state (toml-reader-state-position state) :defined-table path))
                   (setf value (make-hash-table :test #'equal)
                         (gethash key table) value
                         (gethash value (toml-reader-state-table-states state))
@@ -60,16 +60,16 @@
                             (and dotted
                                  (eq (gethash value (toml-reader-state-table-states state))
                                      :explicit)))
-                    (%error-at state (toml-reader-state-position state) "defined table" path)))
+                    (%error-at state (toml-reader-state-position state) :defined-table path)))
                  ((and (vectorp value) (> (length value) 0)
                        (hash-table-p (aref value (1- (length value)))))
                   (if dotted
-                      (%error-at state (toml-reader-state-position state) "table" path)
+                      (%error-at state (toml-reader-state-position state) :table path)
                       (setf value (aref value (1- (length value))))
                   )
                   (when (eq (gethash value (toml-reader-state-table-states state)) :inline)
-                    (%error-at state (toml-reader-state-position state) "inline table" path)))
-                 (t (%error-at state (toml-reader-state-position state) "table" path)))
+                    (%error-at state (toml-reader-state-position state) :inline-table path)))
+                 (t (%error-at state (toml-reader-state-position state) :table path)))
                  (setf table value))))
     table))
 
@@ -102,22 +102,21 @@
       (%skip-space-and-comments state)
       (unless (member (%source-char state (toml-reader-state-position state))
                       '(nil #\Newline #\Return))
-        (%error-at state (toml-reader-state-position state) "line ending" path))
+        (%error-at state (toml-reader-state-position state) :line-end path))
       (let ((parent (%table-for-path state (%path-parent path) :create t))
             (key (%path-last path)))
         (if array-p
             (let ((value (gethash key parent)))
               (when (and value (vectorp value) (zerop (length value)))
-                (%error-at state position "array table" path))
+                (%error-at state position :array-table path))
               (when (and value (not (vectorp value)))
-                (%error-at state position "array table" path))
+                (%error-at state position :array-table path))
               (unless value
                 (setf value (make-array 0 :adjustable t :fill-pointer 0)
                       (gethash key parent) value))
               (let ((table (make-hash-table :test #'equal)))
                 (vector-push-extend table value)
-                (setf (gethash table (toml-reader-state-table-states state)) :explicit
-                      (gethash (%path-last path) (toml-reader-state-array-tables state)) t)
+                (setf (gethash table (toml-reader-state-table-states state)) :explicit)
                 (setf (toml-reader-state-current state) table)))
             (let ((table (gethash key parent)))
               (cond
@@ -125,7 +124,7 @@
                  (setf table (make-hash-table :test #'equal)
                        (gethash key parent) table
                        (gethash table (toml-reader-state-table-states state)) :explicit))
-                ((not (hash-table-p table)) (%error-at state position "table" path))
+                ((not (hash-table-p table)) (%error-at state position :table path))
                 ((member (gethash table (toml-reader-state-table-states state))
                          '(:explicit :dotted))
                  (%error-at state position "unique table" path))
@@ -171,8 +170,7 @@
                                   (member (%source-char state
                                                          (toml-reader-state-position state))
                                          '(nil #\Newline #\Return))
-                                (%error-at state (toml-reader-state-position state)
-                                           "line ending" path))
+                                (%error-at state (toml-reader-state-position state) :line-end path))
                               (%skip-line-ending state)
                               (setf index (toml-reader-state-position state))))))))))
 

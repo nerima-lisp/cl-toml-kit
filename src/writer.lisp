@@ -2,7 +2,7 @@
 
 (defun %writer-error-path (path)
   (when path
-    (loop for index downfrom (1- (fill-pointer path)) to 0
+    (loop for index from 0 below (fill-pointer path)
           collect (aref path index))))
 
 (defun %signal-encoding-error (message value path)
@@ -10,7 +10,7 @@
         (*print-level* 3))
     (error (make-toml-encoding-error
             :message (format nil "~A (value ~S)" message value)
-            :path (reverse (%writer-error-path path))))))
+            :path (%writer-error-path path)))))
 
 (declaim (ftype function %write-string-value %write-value))
 
@@ -52,7 +52,7 @@
   (write-char #\" stream))
 
 (defun %write-integer-value (value stream path)
-  (if (<= +toml-min-integer+ value +toml-max-integer+)
+  (if (%toml-integer-in-range-p value)
       (princ value stream)
       (%signal-encoding-error "Integer is outside TOML's signed 64-bit range"
                               value path)))
@@ -71,8 +71,7 @@
 
 (defun %write-inline-table (table stream path)
   (unless (toml-table-p table)
-    (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table path))
+    (%signal-encoding-error (%toml-writer-error-message :table-equal-hash) table path))
   (if (zerop (hash-table-count table))
       (write-string "{}" stream)
       (progn
@@ -81,8 +80,7 @@
           (maphash (lambda (key value)
                      (unless (stringp key)
                        (%with-writer-path path key
-                         (%signal-encoding-error "Table keys must be strings"
-                                                 key path)))
+                         (%signal-encoding-error (%toml-writer-error-message :key) key path)))
                      (unless first (write-string ", " stream))
                      (setf first nil)
                      (%with-writer-path path key
@@ -120,15 +118,13 @@
 (defun write-table (table path stream)
   (declare (type (and vector (not simple-array)) path))
   (unless (toml-table-p table)
-    (%signal-encoding-error "Table must use the EQUAL hash-table test"
-                            table path))
+    (%signal-encoding-error (%toml-writer-error-message :table-equal-hash) table path))
   (let ((tables nil)
         (array-tables nil))
     (maphash (lambda (key value)
                (unless (stringp key)
                  (%with-writer-path path key
-                   (%signal-encoding-error "Table keys must be strings"
-                                           key path)))
+                   (%signal-encoding-error (%toml-writer-error-message :key) key path)))
                (case (%entry-kind value)
                  (:value
                   (%write-key key stream)

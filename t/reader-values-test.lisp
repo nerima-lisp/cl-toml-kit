@@ -20,6 +20,19 @@
     ((cl-date-kit:local-time-p value)
      (cl-date-kit:format-local-time value :profile :rfc3339))))
 
+(defun %macroexpanded-defun (form name)
+  (cond
+    ((and (consp form)
+          (symbolp (first form))
+          (string= (symbol-name (first form)) "DEFUN")
+          (eq (second form) name))
+     form)
+    ((consp form)
+     (loop for part in form
+           for definition = (%macroexpanded-defun part name)
+           when definition
+             return definition))))
+
 (describe "TOML reader scalar values"
   (it-each (("0" 0)
             ("9223372036854775807" 9223372036854775807)
@@ -110,3 +123,126 @@
       (expect (string= "Tom" (gethash "name" (gethash "owner" table))))
       (expect (= 2 (length (gethash "products" table))))
       (expect (eql t (gethash "enabled" (gethash "config" (aref (gethash "products" table) 1))))))))
+
+(describe "TOML definition macro expansions"
+  (it "keeps define-char-class predicate arguments hygienic"
+    (let* ((name (gensym "CHAR-CLASS-"))
+           (expansion
+             (macroexpand-1
+              `(cl-toml-kit::define-char-class
+                ,name cl-toml-kit::+toml-bare-key-table+)))
+           (definition (%macroexpanded-defun expansion name))
+           (argument (first (third definition)))
+           (evaluations 0))
+      (expect (and (symbolp argument) (null (symbol-package argument))))
+      (eval definition)
+      (expect (funcall name (progn (incf evaluations) #\a)))
+      (expect (= evaluations 1))))
+  (it "defines character classes with hygienic predicate arguments"
+    (let* ((name (gensym "TOML-CHARACTER-CLASS-"))
+           (expansion
+             (macroexpand-1
+              `(cl-toml-kit::define-toml-character-class
+                ,name (#\a #\b))))
+           (definition (%macroexpanded-defun expansion name))
+           (argument (first (third definition)))
+           (evaluations 0))
+      (expect (and (symbolp argument) (null (symbol-package argument))))
+      (eval definition)
+      (expect (funcall name (progn (incf evaluations) #\a)))
+      (expect (= evaluations 1))))
+  (it "defines character maps with hygienic predicate arguments"
+    (let* ((name (gensym "TOML-CHARACTER-MAP-"))
+           (expansion
+             (macroexpand-1
+              `(cl-toml-kit::define-toml-character-map
+                ,name ((#\x :two) (#\u :four) (#\U :eight)))))
+           (definition (%macroexpanded-defun expansion name))
+           (argument (first (third definition)))
+           (evaluations 0))
+      (expect (and (symbolp argument) (null (symbol-package argument))))
+      (eval definition)
+      (expect (eq :four (funcall name
+                                 (progn (incf evaluations) #\u))))
+      (expect (= evaluations 1))))
+  (it "generates an integer-range predicate with one argument evaluation"
+    (let* ((macro-name (find-symbol "DEFINE-TOML-INTEGER-RANGE" "CL-TOML-KIT"))
+           (minimum-name (find-symbol "+TOML-MIN-INTEGER+" "CL-TOML-KIT"))
+           (maximum-name (find-symbol "+TOML-MAX-INTEGER+" "CL-TOML-KIT"))
+           (predicate-name (find-symbol "%TOML-INTEGER-IN-RANGE-P" "CL-TOML-KIT"))
+           (expansion
+             (macroexpand-1
+              (list macro-name
+                    minimum-name -9223372036854775808
+                    maximum-name 9223372036854775807
+                    predicate-name)))
+           (definition (%macroexpanded-defun expansion predicate-name))
+           (argument (first (third definition)))
+           (evaluations 0))
+      (expect (and (symbolp argument) (null (symbol-package argument))))
+      (progn
+        (eval definition)
+        (expect (funcall predicate-name (progn (incf evaluations) 0))))
+      (expect (= evaluations 1))))
+  (it "generates integer-radix lookups with one argument evaluation"
+      (let* ((name (gensym "INTEGER-RADIXES-"))
+             (macro-name (find-symbol "DEFINE-TOML-INTEGER-RADICES" "CL-TOML-KIT"))
+             (expansion
+              (macroexpand-1
+               (list macro-name name
+                     (list (list #\x 16) (list #\o 8) (list #\b 2)))))
+             (definition (%macroexpanded-defun expansion name))
+             (argument (first (third definition)))
+             (evaluations 0))
+        (expect (and (symbolp argument) (null (symbol-package argument))))
+        (eval definition)
+        (expect (= 16 (funcall name (progn (incf evaluations) #\x))))
+        (expect (= evaluations 1))))
+  (it "generates error-message lookups with one argument evaluation"
+  (let* ((name (gensym "ERROR-MESSAGES-"))
+         (macro-name (find-symbol "DEFINE-TOML-ERROR-MESSAGES" "CL-TOML-KIT"))
+         (entries (list (list :defined-table "defined table")
+                        (list :array-table "array table")))
+         (expansion (macroexpand-1 (list macro-name name entries)))
+         (definition (%macroexpanded-defun expansion name))
+         (argument (first (third definition)))
+         (evaluations 0))
+    (expect (and (symbolp argument) (null (symbol-package argument))))
+    (progn
+      (eval definition)
+      (expect
+        (and (string= "defined table" (funcall name
+                                   (progn (incf evaluations) :defined-table)))
+             (string= "array table" (funcall name :array-table)))))
+    (expect (= evaluations 1))))
+  (it "keeps escape data and hex widths in the expansion"
+  (let* ((macro-name (find-symbol "DEFINE-TOML-ESCAPE-DATA" "CL-TOML-KIT"))
+         (character-map-name
+           (find-symbol "DEFINE-TOML-CHARACTER-MAP" "CL-TOML-KIT"))
+         (letters-name (find-symbol "+TOML-ESCAPE-LETTERS+" "CL-TOML-KIT"))
+         (table-name (find-symbol "+TOML-ESCAPE-TABLE+" "CL-TOML-KIT"))
+         (width-name (find-symbol "%TOML-HEX-ESCAPE-WIDTH" "CL-TOML-KIT"))
+         (entries '((#\b #\Backspace) (#\t #\Tab)))
+         (widths '((#\x 2) (#\u 4) (#\U 8)))
+         (expansion (macroexpand-1 (list macro-name entries widths)))
+         (forms (rest expansion))
+         (letters-definition
+           (find-if (lambda (form)
+                      (and (consp form)
+                           (eq (first form) 'defparameter)
+                           (eq (second form) letters-name)))
+                    forms))
+         (table-definition
+           (find-if (lambda (form)
+                      (and (consp form)
+                           (eq (first form) 'defparameter)
+                           (eq (second form) table-name)))
+                    forms))
+         (width-map
+           (find-if (lambda (form)
+                      (and (consp form)
+                           (eq (first form) character-map-name)
+                           (eq (second form) width-name)))
+                    forms)))
+    (expect (and letters-definition table-definition))
+    (expect (and width-map (equal (third width-map) widths))))))

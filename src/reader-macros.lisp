@@ -2,12 +2,13 @@
 (in-package #:cl-toml-kit)
 
 (defmacro define-char-class (name table)
-  `(progn
-     (declaim (inline ,name))
-     (defun ,name (char)
-       (declare (type (or null character) char))
-       (and char (< (char-code char) 128)
-            (= 1 (sbit ,table (char-code char)))))))
+  (let ((character (gensym "CHARACTER")))
+    `(progn
+       (declaim (inline ,name))
+       (defun ,name (,character)
+         (declare (type (or null character) ,character))
+         (and ,character (< (char-code ,character) 128)
+              (= 1 (sbit ,table (char-code ,character))))))))
 
 (defmacro define-toml-rule (name (state position) &body body)
   `(defun ,name (,state ,position continuation)
