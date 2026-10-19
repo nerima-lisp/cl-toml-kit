@@ -12,6 +12,11 @@
             :message (format nil "~A (value ~S)" message value)
             :path (%writer-error-path path)))))
 
+(defun %validate-writer-table (table path)
+  (unless (toml-table-p table)
+    (%signal-encoding-error (%toml-writer-error-message :table-equal-hash)
+                            table path)))
+
 (declaim (ftype function %write-string-value %write-value))
 
 (defmacro %with-writer-path (path key &body body)
@@ -20,6 +25,13 @@
     (unwind-protect
          (progn ,@body)
       (decf (fill-pointer ,path)))))
+
+(declaim (inline %validate-writer-key))
+
+(defun %validate-writer-key (key path)
+  (unless (stringp key)
+    (%with-writer-path path key
+      (%signal-encoding-error (%toml-writer-error-message :key) key path))))
 
 (defun %write-key (key stream)
   (if (and (plusp (length key))
@@ -70,17 +82,14 @@
                (prin1 value stream))))))
 
 (defun %write-inline-table (table stream path)
-  (unless (toml-table-p table)
-    (%signal-encoding-error (%toml-writer-error-message :table-equal-hash) table path))
+  (%validate-writer-table table path)
   (if (zerop (hash-table-count table))
       (write-string "{}" stream)
       (progn
         (write-string "{ " stream)
         (let ((first t))
           (maphash (lambda (key value)
-                     (unless (stringp key)
-                       (%with-writer-path path key
-                         (%signal-encoding-error (%toml-writer-error-message :key) key path)))
+                     (%validate-writer-key key path)
                      (unless first (write-string ", " stream))
                      (setf first nil)
                      (%with-writer-path path key
@@ -115,45 +124,49 @@
            (write-char #\. stream))
   (%write-key key stream))
 
+(defun %write-table-section (key value path stream)
+  (write-char #\[ stream)
+  (%write-key-path path key stream)
+  (write-string "]" stream)
+  (write-char #\Newline stream)
+  (%with-writer-path path key
+    (write-table value path stream)))
+
+(defun %write-table-sections (entries path stream)
+  (dolist (entry entries)
+    (%write-table-section (car entry) (cdr entry) path stream)))
+
+(defun %write-array-table-sections (entries path stream)
+  (dolist (entry entries)
+    (let ((key (car entry))
+          (value (cdr entry)))
+      (loop for item across value
+            do (write-string "[[" stream)
+               (%write-key-path path key stream)
+               (write-string "]]" stream)
+               (write-char #\Newline stream)
+               (%with-writer-path path key
+                 (write-table item path stream))))))
+
 (defun write-table (table path stream)
   (declare (type (and vector (not simple-array)) path))
-  (unless (toml-table-p table)
-    (%signal-encoding-error (%toml-writer-error-message :table-equal-hash) table path))
+  (%validate-writer-table table path)
   (let ((tables nil)
         (array-tables nil))
     (maphash (lambda (key value)
-               (unless (stringp key)
-                 (%with-writer-path path key
-                   (%signal-encoding-error (%toml-writer-error-message :key) key path)))
+               (%validate-writer-key key path)
                (case (%entry-kind value)
                  (:value
-                  (%write-key key stream)
-                  (write-string " = " stream)
-                  (%with-writer-path path key
-                    (%write-value value stream path))
-                  (write-char #\Newline stream))
+                   (%write-key key stream)
+                   (write-string " = " stream)
+                   (%with-writer-path path key
+                     (%write-value value stream path))
+                   (write-char #\Newline stream))
                  (:table (push (cons key value) tables))
                  (:array-table (push (cons key value) array-tables))))
              table)
-    (dolist (entry (nreverse tables))
-      (let ((key (car entry))
-            (value (cdr entry)))
-        (write-char #\[ stream)
-        (%write-key-path path key stream)
-        (write-string "]" stream)
-        (write-char #\Newline stream)
-        (%with-writer-path path key
-          (write-table value path stream))))
-    (dolist (entry (nreverse array-tables))
-      (let ((key (car entry))
-            (value (cdr entry)))
-        (loop for item across value
-              do (write-string "[[" stream)
-                 (%write-key-path path key stream)
-                 (write-string "]]" stream)
-                 (write-char #\Newline stream)
-                 (%with-writer-path path key
-                   (write-table item path stream)))))))
+    (%write-table-sections (nreverse tables) path stream)
+    (%write-array-table-sections (nreverse array-tables) path stream)))
 
 (defun %write-root (value stream)
   (unless (hash-table-p value)

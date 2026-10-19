@@ -84,6 +84,7 @@
 
 (describe "TOML writer scalar data"
   (it-each (("hello" "message = \"hello\"~%")
+            ("café 🧪" "message = \"café 🧪\"~%")
             (42 "message = 42~%")
             (1.5d0 "message = 1.5~%")
             (1.0d0 "message = 1.0~%")
@@ -107,16 +108,20 @@
     (let* ((encoded (encode (%writer-table "value" value)))
            (read-back (%writer-float-value (%writer-float-text encoded))))
       (expect (%writer-float= value read-back))))
-  (it "writes all four cl-date-kit value kinds with RFC3339 formats"
-    (destructuring-bind (offset date-time date time) (%writer-date-values)
-    (expect (string= (format nil "offset = 2026-01-02T03:04:05Z~%")
-                       (encode (%writer-table "offset" offset))))
-      (expect (string= (format nil "date-time = 2026-01-02T03:04:05~%")
-                       (encode (%writer-table "date-time" date-time))))
-      (expect (string= (format nil "date = 2026-01-02~%")
-                       (encode (%writer-table "date" date))))
-      (expect (string= (format nil "time = 03:04:05~%")
-                       (encode (%writer-table "time" time))))))
+  (it-each ((:offset "offset" "offset = 2026-01-02T03:04:05Z~%")
+            (:date-time "date-time" "date-time = 2026-01-02T03:04:05~%")
+            (:date "date" "date = 2026-01-02~%")
+            (:time "time" "time = 03:04:05~%"))
+      "writes ~A values with RFC3339 formatting"
+      (kind key expected)
+    (let ((value
+            (ecase kind
+              (:offset (cl-date-kit:offset-date-time-of 2026 1 2 3 4 5))
+              (:date-time (cl-date-kit:local-date-time-of 2026 1 2 3 4 5))
+              (:date (cl-date-kit:local-date-of 2026 1 2))
+              (:time (cl-date-kit:local-time-of 3 4 5)))))
+      (expect (string= (format nil expected)
+                       (encode (%writer-table key value))))))
   (it "writes infinities, NaN, and the smallest subnormal"
     (expect (string= (format nil "a = inf~%b = -inf~%c = nan~%d = 4.9406564584124654e-324~%")
                      (encode (%writer-table
@@ -134,7 +139,8 @@
                                                      (code-char 127)))))))
   (it-each (("plain-key" "plain-key = 1~%")
             ("has space" "\"has space\" = 1~%")
-            ("" "\"\" = 1~%"))
+            ("" "\"\" = 1~%")
+            ("こんにちは" "\"こんにちは\" = 1~%"))
       "writes key ~S using the correct key syntax"
       (key expected)
     (expect (string= (format nil expected) (encode (%writer-table key 1))))))
@@ -158,8 +164,14 @@
              "[empty]~%")
             ("array of scalars" :scalar-array
              "values = [1, 2]~%")
+            ("empty array" :empty-array
+             "values = []~%")
             ("inline table in an array" :inline-array
              "values = [1, { b = 2 }]~%")
+            ("empty inline table in an array" :empty-inline-array
+             "values = [{}]~%")
+            ("multi-entry inline table in an array" :multi-inline-array
+             "values = [{ a = 1, b = 2 }]~%")
             ("insertion order" :order
              "first = 1~%second = 2~%third = 3~%"))
       "encodes ~A exactly and deterministically"
@@ -184,14 +196,27 @@
                                            "other" (%writer-table "value" 2)))
                     (:empty (%writer-table "empty" (make-hash-table :test 'equal)))
                     (:scalar-array (%writer-table "values" (vector 1 2)))
+                    (:empty-array (%writer-table "values" #()))
                     (:inline-array (%writer-table "values"
                                                   (vector 1 (%writer-table "b" 2))))
+                    (:empty-inline-array (%writer-table "values"
+                                                       (vector (%writer-table))))
+                    (:multi-inline-array
+                     (%writer-table "values"
+                                    (vector (%writer-table "a" 1 "b" 2))))
                     (:order (%writer-table "first" 1 "second" 2 "third" 3))))
            (first (encode value))
            (second (encode value)))
       (declare (ignore name))
       (expect (and (string= first (format nil expected))
                    (string= first second)))))
+  (it "writes directly to the supplied stream and returns the input table"
+    (let* ((value (%writer-table "value" 1))
+           (stream (make-string-output-stream))
+           (result (write-toml value stream))
+           (text (get-output-stream-string stream)))
+      (expect (eq result value))
+      (expect (string= text (format nil "value = 1~%")))))
   (it "writes values before nested tables and preserves paths"
     (let ((child (%writer-table "value" 1))
           (grandchild (%writer-table "leaf" 2)))
@@ -221,6 +246,8 @@
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
             (:non-string-key "Table keys must be strings" ("BAD"))
+            (:inline-non-string-key "Table keys must be strings" ("items" 0 :bad))
+            (:non-table-root "The top-level TOML value must be a hash-table" nil)
             (:adjustable-vector "Unsupported TOML value" ("outer" "inner")))
       "signals a bounded encoding error for ~S"
       (kind expected-message expected-path)
@@ -234,10 +261,15 @@
                    (:non-string-key (let ((table (make-hash-table :test 'equal)))
                                       (setf (gethash :bad table) 1)
                                       table))
+                   (:inline-non-string-key
+                    (let ((table (%writer-table)))
+                      (setf (gethash :bad table) 1)
+                      (%writer-table "items" (vector table))))
                    (:adjustable-vector
                     (let ((value (make-array 1 :adjustable t :fill-pointer 1
                                              :initial-contents '(1))))
                       (%writer-table "outer" (%writer-table "inner" value))))
+                   (:non-table-root :not-a-table)
                    (otherwise
                     (%writer-table
                      "outer"
@@ -252,4 +284,13 @@
       (expect (typep condition 'toml-encoding-error))
       (expect (search expected-message
                       (toml-encoding-error-message condition)))
-      (expect (equal expected-path (toml-encoding-error-path condition))))))
+      (expect (equal expected-path (toml-encoding-error-path condition)))))
+  (it "rejects an output target that is not a stream"
+    (let ((condition
+            (handler-case
+                (progn (write-toml (%writer-table "value" 1) :not-a-stream)
+                       nil)
+              (type-error (error) error))))
+      (expect (typep condition 'type-error))
+      (expect (eq (type-error-datum condition) :not-a-stream))
+      (expect (eq (type-error-expected-type condition) 'stream)))))
