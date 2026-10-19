@@ -77,23 +77,23 @@
                (setf components rest)
                (multiple-value-bind (child present) (gethash key target)
                  (cond
-                  ((not present)
-                   (setf child (make-hash-table :test #'equal)
-                         (gethash key target) child
-                         (gethash child
-                                  (toml-reader-state-table-states state))
-                         :inline)
-                   (push child created))
-                  ((not (hash-table-p child))
-                   (funcall failure error-position :inline-table nil)
-                   (return-from %inline-table-target nil))
-                  ((and (eq (gethash
-                             child
-                             (toml-reader-state-table-states state))
-                            :inline)
-                        (not (member child created :test #'eq)))
-                   (funcall failure error-position :inline-table nil)
-                   (return-from %inline-table-target nil)))
+                   ((not present)
+                    (setf child (make-hash-table :test #'equal)
+                          (gethash key target) child
+                          (gethash child
+                                   (toml-reader-state-table-states state))
+                          :inline
+                          (gethash child created) t))
+                   ((not (hash-table-p child))
+                    (funcall failure error-position :inline-table nil)
+                    (return-from %inline-table-target nil))
+                   ((and (eq (gethash
+                              child
+                              (toml-reader-state-table-states state))
+                             :inline)
+                         (not (gethash child created)))
+                    (funcall failure error-position :inline-table nil)
+                    (return-from %inline-table-target nil)))
                  (setf target child))))
     target))
 
@@ -137,7 +137,7 @@
 (define-toml-rule toml-read-inline-table (state position success failure)
   (let ((table (make-hash-table :test #'equal))
         (index (1+ position))
-        (created '()))
+        (created (make-hash-table :test #'eq)))
     (loop
       (setf index (%skip-inline-space state index))
       (when (eql (%source-char state index) #\})

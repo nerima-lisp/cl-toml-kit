@@ -12,7 +12,7 @@
             ("value = 0x")
             ("value = 0b102")
             ("value = [1 2]")
-            ("value = { answer = 1, }"))
+            ("value = { answer = 1 other = 2 }"))
       "reports invalid TOML input ~S with source coordinates"
       (text)
     (let ((condition (%reader-error text)))

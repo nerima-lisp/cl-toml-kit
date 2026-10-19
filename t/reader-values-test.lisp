@@ -151,9 +151,8 @@
                                        (aref (gethash "products" table) 1))))))))
 
 (describe "TOML reader data macros"
-  (it-each (('cl-toml-kit::define-char-class
-             'cl-toml-kit::+toml-bare-key-table+ #\a)
-            ('cl-toml-kit::define-toml-character-class '(#\a #\b) #\a))
+  (it-each ((cl-toml-kit::define-char-class cl-toml-kit::+toml-bare-key-table+ #\a)
+            (cl-toml-kit::define-toml-character-class (#\a #\b) #\a))
       "defines a hygienic character predicate"
       (macro entries character)
     (let* ((name (gensym "CHARACTER-PREDICATE-"))
