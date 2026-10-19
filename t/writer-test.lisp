@@ -95,7 +95,11 @@
                                   (%writer-nan)))))
     (let* ((encoded (encode (%writer-table "value" value)))
            (read-back (%writer-float-value (%writer-float-text encoded))))
-      (expect (toml-test-value= value read-back))))
+      (expect
+       (sb-int:with-float-traps-masked (:invalid)
+         (if (zerop value)
+             (eql value read-back)
+             (toml-test-value= value read-back))))))
   (it-each ((:offset "offset" "offset = 2026-01-02T03:04:05Z~%")
             (:date-time "date-time" "date-time = 2026-01-02T03:04:05~%")
             (:date "date" "date = 2026-01-02~%")
@@ -236,7 +240,7 @@
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
             (:non-string-key "Table keys must be strings" ("BAD"))
-            (:inline-non-string-key "Table keys must be strings" ("items" 1 :bad))
+            (:inline-non-string-key "Table keys must be strings" ("items" 1 "BAD"))
             (:non-table-root "The top-level TOML value must be a hash-table" nil)
             (:adjustable-vector "Unsupported TOML value" ("outer" "inner")))
       "signals a bounded encoding error for ~S"
