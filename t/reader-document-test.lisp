@@ -20,7 +20,7 @@
     (let* ((pathname (merge-pathnames "cl-toml-kit-reader-bom.toml"
                                       (uiop:temporary-directory)))
            (source (concatenate (quote (vector (unsigned-byte 8)))
-                                +toml-utf8-bom+
+                                #(239 187 191)
                                 #(110 97 109 101 32 61 32 34 111 108 100 34 10)))
            (edited (edit-toml source (list "name") "old")))
       (unwind-protect
@@ -32,8 +32,7 @@
                         (gethash "name"
                                  (parse
                                   (cl-codec-kit:octets-to-string
-                                   edited :encoding :utf-8
-                                   :start (length +toml-utf8-bom+)))))))
+                                   edited :encoding :utf-8 :start 3))))))
         (when (probe-file pathname) (delete-file pathname)))))
   (it "reports invalid UTF-8 as a TOML parse error"
     (let ((pathname (merge-pathnames "cl-toml-kit-reader-invalid.toml"
