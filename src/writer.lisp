@@ -68,6 +68,13 @@
       (princ value stream)
       (%signal-encoding-error "Integer is outside TOML's signed 64-bit range"
                               value path)))
+(defun %write-fallback-value (value stream path)
+  (cond ((hash-table-p value)
+         (%validate-writer-table value path))
+        ((integerp value)
+         (%write-integer-value value stream path))
+        (t
+         (%signal-encoding-error "Unsupported TOML value" value path))))
 
 (defun %write-float-value (value stream)
   (sb-int:with-float-traps-masked (:invalid)

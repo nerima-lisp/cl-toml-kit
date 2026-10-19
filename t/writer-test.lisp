@@ -67,7 +67,7 @@
     (let* ((package (find-package "CL-TOML-KIT/TEST"))
            (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
            (cl-toml-kit::*toml-writer-emitter-specifications*
-             '((:single (:string (write-string value stream))))))
+             '((:string (write-string value stream)))))
       (unwind-protect
            (progn
              (eval (list 'cl-toml-kit::define-toml-emitter
@@ -83,13 +83,14 @@
     (let* ((package (find-package "CL-TOML-KIT/TEST"))
            (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
            (cl-toml-kit::*toml-writer-emitter-specifications*
-             '((:single (:unknown (write-string value stream))))))
+             '((:unknown (write-string value stream)))))
       (unwind-protect
-           (expect (signals toml-value-model-error
-                     (eval (list 'cl-toml-kit::define-toml-emitter
-                                 name '(value stream path)))))
-        (when (fboundp name)
-          (fmakunbound name))
+           (let ((expansion
+                   (macroexpand-1
+                    (list 'cl-toml-kit::define-toml-emitter
+                          name '(value stream path)))))
+             (expect (signals toml-value-model-error
+                       (macroexpand-1 (cadddr expansion)))))
         (unintern name package)))))
 
 (describe "TOML writer scalar data"
@@ -314,7 +315,10 @@
       (expect (typep condition 'toml-encoding-error))
       (expect (search expected-message
                       (toml-encoding-error-message condition)))
-      (expect (equal expected-path (toml-encoding-error-path condition)))))
+      (progn
+  (expect (search "(value "
+                  (toml-encoding-error-message condition)))
+  (expect (equal expected-path (toml-encoding-error-path condition))))))
   (it "rejects an output target that is not a stream"
     (let ((condition
             (handler-case

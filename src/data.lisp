@@ -90,18 +90,21 @@ expansion time."
                 (error 'toml-value-model-error
                        :message (format nil "Unknown TOML value kind ~S." key)))
               (setf (gethash key forms-by-kind) forms)))))
-    `(let ((,object ,value))
-       (typecase ,object
-         ,@(loop for (kind type alias) in *toml-value-specifications*
-                 for forms = (gethash kind forms-by-kind)
-                 when forms
-                   collect `(,type
-                             ,(if (eq kind :table)
-                                  `(if (toml-table-p ,object)
-                                       (progn ,@forms)
-                                       (error 'toml-encoding-error
-                                              :message "Invalid TOML table"))
-                                  `(progn ,@forms))))
-         (otherwise ,@(or otherwise-forms
-                           '((error 'toml-encoding-error
-                                    :message "Not a TOML value"))))))))
+    (let ((table-fallback-forms
+            (or otherwise-forms
+                '((error 'toml-encoding-error
+                         :message "Invalid TOML table")))))
+      `(let ((,object ,value))
+         (typecase ,object
+           ,@(loop for (kind type alias) in *toml-value-specifications*
+                   for forms = (gethash kind forms-by-kind)
+                   when forms
+                     collect `(,type
+                               ,(if (eq kind :table)
+                                    `(if (toml-table-p ,object)
+                                         (progn ,@forms)
+                                         (progn ,@table-fallback-forms))
+                                    `(progn ,@forms))))
+           (otherwise ,@(or otherwise-forms
+                             '((error 'toml-encoding-error
+                                      :message "Not a TOML value")))))))))
