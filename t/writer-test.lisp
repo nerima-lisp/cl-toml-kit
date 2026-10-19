@@ -20,12 +20,6 @@
 (defun %writer-float-text (encoded)
   (subseq encoded (length "value = ") (1- (length encoded))))
 
-(defun %writer-float= (expected actual)
-  (sb-int:with-float-traps-masked (:invalid)
-    (if (sb-ext:float-nan-p expected)
-        (sb-ext:float-nan-p actual)
-        (= expected actual))))
-
 (defun %writer-valid-line-p (line)
   (or (and (> (length line) 2)
            (char= #\[ (char line 0))
@@ -43,12 +37,6 @@
           while line
           always (%writer-valid-line-p line))))
 
-(defun %writer-date-values ()
-  (list (cl-date-kit:offset-date-time-of 2026 1 2 3 4 5)
-        (cl-date-kit:local-date-time-of 2026 1 2 3 4 5)
-        (cl-date-kit:local-date-of 2026 1 2)
-        (cl-date-kit:local-time-of 3 4 5)))
-
 (defun %writer-generated-values (self)
   (gen-one-of
    (gen-one-of (gen-integer :min -1000 :max 1000)
@@ -57,7 +45,7 @@
                                   sb-ext:double-float-positive-infinity
                                   sb-ext:double-float-negative-infinity
                                   (%writer-nan)))
-   (gen-member (%writer-date-values)))
+   (gen-member (toml-test-date-values)))
    (gen-map (lambda (item) (%writer-table "child" item)) self)
    (cl-weave:gen-vector self :min-length 0 :max-length 3)
    (gen-map (lambda (items) (coerce items 'vector))
@@ -107,7 +95,7 @@
                                   (%writer-nan)))))
     (let* ((encoded (encode (%writer-table "value" value)))
            (read-back (%writer-float-value (%writer-float-text encoded))))
-      (expect (%writer-float= value read-back))))
+      (expect (toml-test-value= value read-back))))
   (it-each ((:offset "offset" "offset = 2026-01-02T03:04:05Z~%")
             (:date-time "date-time" "date-time = 2026-01-02T03:04:05~%")
             (:date "date" "date = 2026-01-02~%")
@@ -115,11 +103,12 @@
       "writes ~A values with RFC3339 formatting"
       (kind key expected)
     (let ((value
-            (ecase kind
-              (:offset (cl-date-kit:offset-date-time-of 2026 1 2 3 4 5))
-              (:date-time (cl-date-kit:local-date-time-of 2026 1 2 3 4 5))
-              (:date (cl-date-kit:local-date-of 2026 1 2))
-              (:time (cl-date-kit:local-time-of 3 4 5)))))
+            (nth (ecase kind
+                   (:offset 0)
+                   (:date-time 1)
+                   (:date 2)
+                   (:time 3))
+                 (toml-test-date-values))))
       (expect (string= (format nil expected)
                        (encode (%writer-table key value))))))
   (it "writes infinities, NaN, and the smallest subnormal"
