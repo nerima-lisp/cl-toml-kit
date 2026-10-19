@@ -38,20 +38,12 @@
           always (%writer-valid-line-p line))))
 
 (defun %writer-generated-values (self)
-  (gen-one-of
-   (gen-one-of (gen-integer :min -1000 :max 1000)
-               (gen-string :max-length 8)
-               (gen-member (list t +toml-false+ 1.5d0 -0.0d0
-                                  sb-ext:double-float-positive-infinity
-                                  sb-ext:double-float-negative-infinity
-                                  (%writer-nan)))
-   (gen-member (toml-test-date-values)))
-   (gen-map (lambda (item) (%writer-table "child" item)) self)
-   (cl-weave:gen-vector self :min-length 0 :max-length 3)
-   (gen-map (lambda (items) (coerce items 'vector))
-            (cl-weave:gen-vector
-             (gen-map (lambda (item) (%writer-table "item" item)) self)
-             :min-length 1 :max-length 3))))
+  (toml-test-value-generator
+   self
+   :additional-scalars
+   (list sb-ext:double-float-positive-infinity
+         sb-ext:double-float-negative-infinity
+         (%writer-nan))))
 
 (defun %writer-value-line-count (table)
   "Count the value lines that encoding TABLE must emit, excluding headers."
