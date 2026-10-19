@@ -53,6 +53,9 @@
   :pathname "t"
   :serial t
   :components ((:file "package")
+               (:file "helpers-values")
+               (:file "helpers-edit")
+               (:file "helpers-edit-test")
                (:file "conditions-test")
                (:file "data-test")
                (:file "writer-test")
