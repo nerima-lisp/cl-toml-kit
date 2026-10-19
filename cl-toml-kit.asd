@@ -54,6 +54,7 @@
   :serial t
   :components ((:file "package")
                (:file "helpers-values")
+               (:file "helpers-values-test")
                (:file "helpers-edit")
                (:file "helpers-edit-test")
                (:file "conditions-test")
