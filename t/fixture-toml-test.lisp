@@ -1,6 +1,10 @@
 (in-package #:cl-toml-kit/test)
 
-(defstruct (toml-fixture (:constructor %make-toml-fixture))
+(defstruct
+  (toml-fixture
+   (:constructor %make-toml-fixture)
+   (:copier nil)
+   (:predicate nil))
   toml
   json)
 
@@ -99,10 +103,3 @@
 (defun toml-fixture-valid-p (fixture)
   (%expected-value= (%read-json-file (toml-fixture-json fixture))
                     (parse-file (toml-fixture-toml fixture))))
-
-(defun toml-fixture-invalid-p (pathname)
-  (handler-case
-      (progn (parse-file pathname) nil)
-    (toml-parse-error (condition)
-      (and (plusp (toml-parse-error-line condition))
-           (plusp (toml-parse-error-column condition))))))

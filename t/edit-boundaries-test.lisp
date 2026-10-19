@@ -202,8 +202,8 @@
     (expect (= 2 (%edit-test-value result (list "server" "port"))))))
   (it "routes byte-editor replacement and deletion options"
   (let* ((source (%edit-test-bytes "name = 1~%"))
-         (replaced (edit-toml-bytes source (list "name") 2))
-         (deleted (edit-toml-bytes replaced (list "name") nil :delete t)))
+         (replaced (edit-toml source (list "name") 2))
+         (deleted (edit-toml replaced (list "name") nil :delete t)))
     (expect (= 2 (%edit-test-value replaced (list "name"))))
     (expect (string= "" (%edit-test-text deleted)))
     (expect (= 0 (hash-table-count (%edit-test-parse deleted))))))

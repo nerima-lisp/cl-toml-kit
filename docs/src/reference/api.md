@@ -24,7 +24,7 @@ table.
 | Argument | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `source` | `string` or `stream` | n/a | The TOML document, as a string or a character input stream. |
-| `source-name` | designator | `nil` | Identifies the source in diagnostics; stored in `toml-parse-error-source-name`. |
+| `source-name` | any value | `nil` | Diagnostic label passed through to the parse-error reader. |
 
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
@@ -132,11 +132,11 @@ See also: [Writer](../guide/writer.md).
 Edit a UTF-8 TOML document represented by a vector of unsigned-byte 8 values.
 `path` is a string key or a sequence of string keys and zero-based non-negative
 array indices. A string component is one key, so dots in a string key are not
-path separators; use multiple components for a nested path. Existing values are replaced when `new-value` is supplied.
-Use `:delete t` with `new-value` set to `nil`, or use `delete-toml`, to remove
-an existing value. The returned
-bytes retain the BOM, comments, key order, whitespace,
-line-ending style, string delimiters, and table kind outside the edited span.
+path separators; use multiple components for a nested path. Existing values
+are replaced when `new-value` is supplied. Use `:delete t` with `new-value`
+set to `nil`, or use `delete-toml`, to remove an existing value. Bytes outside
+the edited span, including the BOM, comments, key order, whitespace, line
+endings, and string delimiters, are retained.
 
 ```lisp
 (cl-toml-kit:edit-toml
@@ -146,12 +146,17 @@ line-ending style, string delimiters, and table kind outside the edited span.
 ;; => bytes for "name = \"new\"  # keep\r\n"
 ```
 
-Adding a missing leaf uses the containing table's assignment style. After an
-edit, the result is parsed and compared with the original parsed document
-after the same path change; a mismatch signals
-`toml-format-preservation-error`. Structural edits that would require
-choosing among multiple array-table elements or re-homing dotted keys also
-signal that condition.
+Adding a missing table entry writes a TOML-formatted key path with ` = ` and
+uses the surrounding line ending. Array-of-tables elements must be selected
+with an integer path component, such as `("products" 1 "name")`; an edit
+that leaves the element ambiguous signals `toml-format-preservation-error`.
+Adding `("server" "port")` when the source already has
+`server.host = "example"` is also rejected because it would extend a parent
+created by a dotted-key assignment.
+
+After an edit, the result is parsed and compared with the original parsed
+document after the same path change; a mismatch signals
+`toml-format-preservation-error`.
 
 Deletion is rejected when the removed span contains `#` or the immediately
 preceding line is a comment, because the comment ownership cannot be retained.
@@ -160,18 +165,16 @@ When adding to a table, trailing blank and comment lines remain after the new
 assignment. Unsupported structural edits are rejected rather than returning
 parseable bytes with a changed meaning.
 
-### `edit-toml-bytes` and `delete-toml`
+### `delete-toml`
 
 ```lisp
-(cl-toml-kit:edit-toml-bytes source path &optional new-value &key delete)
 (cl-toml-kit:delete-toml source path)
   => octet-vector
 ```
 
-`edit-toml-bytes` is the byte-oriented spelling of `edit-toml`; it requires an
-explicit `new-value` unless `:delete t` is supplied. `delete-toml` is equivalent
-to `(edit-toml source path nil :delete t)`. Neither function mutates the input
-vector.
+Delete the value at `path` from the UTF-8 byte vector `source`. This is
+equivalent to `(edit-toml source path nil :delete t)`. The input vector is not
+modified.
 
 ## Native Values
 
@@ -266,13 +269,14 @@ Dispatch `value` by its TOML kind. Clause keys are the kind keywords of
 `toml-value-kind`; `t` supplies the otherwise clause. The macro expands to a
 single Common Lisp `typecase`.
 
-Unknown kind keywords are rejected at macro expansion time. In a `:table`
-clause whose value is a hash table without the `equal` test, the expansion
-signals `toml-encoding-error` with the message `Invalid TOML table`. When no
-clause matches and there is no `t` clause, it signals `toml-encoding-error`
-with the message `Not a TOML value`.
+Unknown kind keywords signal `toml-value-model-error` during macro expansion.
+In a `:table` clause whose value is a hash table without the `equal` test, the
+expansion signals `toml-encoding-error` with the message `Invalid TOML table`.
+When no clause matches and there is no `t` clause, it signals
+`toml-encoding-error` with the message `Not a TOML value`.
 
-**Signals**: `toml-encoding-error` in the two cases above.
+**Signals**: `toml-value-model-error` for unknown kind keywords during macro
+expansion; `toml-encoding-error` in the two runtime cases above.
 
 **Example**:
 
@@ -375,6 +379,19 @@ library signals and carries no slots.
 
 See also: [The shared base condition](conditions.md#the-shared-base-condition).
 
+### `toml-value-model-error`
+
+A condition, subtype of `toml-kit-error`, signalled during macro expansion
+when `toml-value-typecase` contains an unknown kind keyword. Its reader is
+`toml-value-model-error-message`.
+
+See also: [TOML value model error](conditions.md#toml-value-model-error).
+
+### `toml-value-model-error-message`
+
+Return the message describing the invalid TOML value kind.
+See also: [TOML value model error](conditions.md#toml-value-model-error).
+
 ### `toml-parse-error`
 
 A condition, subtype of `toml-kit-error`, signalled for malformed TOML input.
@@ -388,67 +405,42 @@ See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-source-name`
 
-Return the `source-name` designator supplied to `parse`, or `nil` if none was
-given.
-
-**Signals**: `none`.
-
+Return the value passed as `source-name` to `parse`, unchanged, or `nil`.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-position`
 
 Return the zero-based character offset in the input where parsing failed.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-line`
 
 Return the one-based line number where parsing failed.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-column`
 
 Return the one-based column number where parsing failed.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-path`
 
 Return the path of table keys and vector indices to the failure, or `nil`.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-expected`
 
 Return a short description of what the parser expected, or `nil`.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-context`
 
 Return the context label of the failure; defaults to `"TOML"`.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-text`
 
 Return a bounded, sanitized snippet of the input near the failure.
-
-**Signals**: `none`.
-
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-encoding-error`
@@ -462,17 +454,45 @@ See also: [TOML encoding error](conditions.md#toml-encoding-error).
 
 ### `toml-encoding-error-message`
 
-Return a bounded description of the failure; defaults to
-`"TOML encoding failed"`.
-
-**Signals**: `none`.
-
+Return a bounded failure description; defaults to `"TOML encoding failed"`.
 See also: [TOML encoding error](conditions.md#toml-encoding-error).
 
 ### `toml-encoding-error-path`
 
 Return the path from the root table to the offending value, or `nil`.
-
-**Signals**: `none`.
-
 See also: [TOML encoding error](conditions.md#toml-encoding-error).
+
+### `toml-format-preservation-error`
+
+A condition, subtype of `toml-kit-error`, signalled when an edit cannot
+preserve unrelated source bytes safely. Its readers are
+`toml-format-preservation-error-message` and
+`toml-format-preservation-error-path`.
+
+See also: [`toml-format-preservation-error`](conditions.md#toml-format-preservation-error).
+
+### `toml-format-preservation-error-message`
+
+Return the reason the format-preserving edit was rejected.
+See also: [`toml-format-preservation-error`](conditions.md#toml-format-preservation-error).
+
+### `toml-format-preservation-error-path`
+
+Return the requested logical path, or `nil` when no path applies.
+See also: [`toml-format-preservation-error`](conditions.md#toml-format-preservation-error).
+
+## Source scanning
+
+### `toml-comment-spans`
+
+```lisp
+(cl-toml-kit:toml-comment-spans source)
+  => list of conses
+```
+
+Return source-ordered `(start . end)` character-offset pairs for comments.
+Each span includes the leading `#`, uses an inclusive start and exclusive end,
+and excludes the line ending. Comment marks inside quoted strings are not
+included.
+
+**Signals**: `type-error` when `source` is not a string.

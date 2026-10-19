@@ -19,6 +19,15 @@ catch one.
 
 See also: [`toml-kit-error`](api.md#toml-kit-error).
 
+## TOML value model error
+
+`toml-value-model-error` is a subtype of `toml-kit-error`. The
+`toml-value-typecase` macro signals it during macro expansion when a clause
+uses an unknown TOML kind keyword. Read `toml-value-model-error-message` for
+the explanation.
+
+See also: [`toml-value-model-error`](api.md#toml-value-model-error).
+
 ## TOML parse error
 
 Malformed TOML input signals `toml-parse-error`, a subtype of
@@ -26,7 +35,7 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 
 | Reader | Meaning |
 | --- | --- |
-| `toml-parse-error-source-name` | The `source-name` designator supplied to `parse`; `nil` if none was given. |
+| `toml-parse-error-source-name` | Unchanged `source-name` value; `nil` if omitted. |
 | `toml-parse-error-position` | Zero-based character offset in the input where parsing failed. Default `0`. |
 | `toml-parse-error-line` | One-based line number where parsing failed. Default `1`. |
 | `toml-parse-error-column` | One-based column number where parsing failed. Default `1`. |
@@ -34,6 +43,9 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 | `toml-parse-error-expected` | Short description of what the parser expected; `nil` when the parser did not record one. |
 | `toml-parse-error-context` | The context label of the failure; defaults to `"TOML"`. |
 | `toml-parse-error-text` | A bounded, sanitized snippet of the input near the failure. Default `""`. |
+
+The `source-name` value is passed through unchanged; non-`nil` values are
+printed with `~A` in the report.
 
 ```lisp
 (handler-case
@@ -124,16 +136,15 @@ modified when either condition is signaled.
 
 ## Reports
 
-Both concrete conditions define a `:report` method that renders the condition
-as a single human-readable line. The wording is not a stable contract:
+Each concrete condition defines a `:report` method that renders it as a single
+human-readable line. The wording is not a stable contract:
 programs should read the accessors in the tables above instead of parsing
 report text.
 
 ## Catching all failures
 
-Both conditions are subtypes of `error`, so the ordinary `handler-case` and
-`handler-bind` machinery applies. To react to any failure from `cl-toml-kit`
-without distinguishing parse from encoding failures, catch `toml-kit-error`:
+To handle any library failure through the ordinary `handler-case` machinery,
+catch `toml-kit-error`:
 
 ```lisp
 (handler-case

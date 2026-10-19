@@ -285,6 +285,6 @@
                        (%edit-test-text result)))))
   (it "does not turn an omitted byte-editor value into deletion"
     (let ((source (%edit-test-bytes "name = \"old\"~%")))
-      (expect (signals error (edit-toml-bytes source '("name"))))
+      (expect (signals error (edit-toml source '("name"))))
       (expect (string= (%edit-test-format "name = \"old\"~%")
                        (%edit-test-text source))))))

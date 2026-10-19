@@ -51,8 +51,12 @@ The editing API changes one parsed value while retaining unrelated source
 bytes, including comments, whitespace, and line endings:
 
 ```lisp
-(cl-toml-kit:edit-toml-bytes source '("server" "port") 8080)
-(cl-toml-kit:delete-toml source '("server" "deprecated"))
+(let* ((source
+         (sb-ext:string-to-octets
+          (format nil "[server]~%port = 8000~%deprecated = true~%")
+          :external-format :utf-8))
+       (updated (cl-toml-kit:edit-toml source '("server" "port") 8080)))
+  (cl-toml-kit:delete-toml updated '("server" "deprecated")))
 ```
 
 `source` and the result are UTF-8 byte vectors. A path string is one key, not a
@@ -62,8 +66,8 @@ integer components. Edits are parsed again and rejected if the result does
 not have the requested document value. Use `delete-toml` or `:delete t` for
 deletion; omitting the edit value is not deletion.
 
-See the [format-preserving editing API reference](https://nerima-lisp.github.io/cl-toml-kit/reference/api/#format-preserving-editing)
-for the supported rejection conditions.
+See the [editing API reference](docs/src/reference/api.md#format-preserving-editing) for
+the supported rejection conditions.
 
 ## Why cl-toml-kit?
 
@@ -95,9 +99,6 @@ the document.
 | local date-time | `cl-date-kit:local-date-time` | `cl-date-kit:local-date-time` |
 | local date | `cl-date-kit:local-date` | `cl-date-kit:local-date` |
 | local time | `cl-date-kit:local-time` | `cl-date-kit:local-time` |
-
-`nil` and lists are not TOML values; there is no TOML null. Full rules are in
-the [Data Model](https://nerima-lisp.github.io/cl-toml-kit/guide/data-model/).
 
 ## Documentation
 

@@ -54,12 +54,6 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
                                              normalized-path new-value delete-p)))
             (%edit-validate-result original normalized-path new-value delete-p result)))))))
 
-(defun edit-toml-bytes (source path &optional (new-value nil new-value-p) &key delete)
-  (cond
-    (new-value-p (edit-toml source path new-value :delete delete))
-    (delete (edit-toml source path nil :delete t))
-    (t (edit-toml source path))))
-
 (defun delete-toml (source path)
   "Delete the value at PATH from a UTF-8 TOML byte vector."
   (edit-toml source path nil :delete t))

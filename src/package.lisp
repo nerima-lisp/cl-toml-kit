@@ -5,7 +5,7 @@
    ;; Reader / writer protocol
    #:parse #:parse-file #:encode #:write-toml
    ;; Format-preserving byte editor
-   #:edit-toml #:edit-toml-bytes #:delete-toml
+   #:edit-toml #:delete-toml
    ;; Native values. Table keys are validated by the writer, not predicates.
    #:+toml-false+ #:toml-false-p #:toml-value #:toml-value-p
    #:toml-value-kind #:toml-value-typecase
