@@ -66,9 +66,22 @@
                          sum (%writer-value-line-count item)))
                   (t 1))))
 
-(defun %writer-line-count (text)
-  "Count newline-terminated lines in encoded TEXT."
-  (count #\Newline text))
+(progn
+  (defun %writer-line-count (text)
+    "Count newline-terminated lines in encoded TEXT."
+    (count #\Newline text))
+  (describe "TOML writer emitter macro"
+    (it "uses the direct type in a single-kind emitter group"
+      (let ((cl-toml-kit::*toml-writer-emitter-specifications*
+              '((:single (:string (write-string value stream))))))
+        (let* ((expansion
+                 (macroexpand-1
+                  '(cl-toml-kit::define-toml-emitter
+                    %single-kind-emitter
+                    (value stream path))))
+               (dispatcher (fourth (third expansion))))
+          (expect (equal '(string otherwise)
+                         (mapcar #'first (cddr dispatcher)))))))))
 
 (describe "TOML writer scalar data"
   (it-each (("hello" "message = \"hello\"~%")
