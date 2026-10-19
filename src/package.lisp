@@ -22,4 +22,5 @@
    #:toml-encoding-error-path
    #:toml-format-preservation-error
    #:toml-format-preservation-error-message
-   #:toml-format-preservation-error-path))
+   #:toml-format-preservation-error-path
+   #:toml-comment-spans))

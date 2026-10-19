@@ -20,6 +20,7 @@
                ;; UTF-8 decoding with byte positions, without SB-EXT.
                (:version "cl-codec-kit" "0.6.0"))
   :components ((:file "package")
+               (:file "comment-scan")
                (:file "syntax-data")
                (:file "conditions")
                (:file "data")
@@ -57,6 +58,7 @@
                (:file "writer-test")
                (:file "fixture-toml-test")
                (:file "reader-values-test")
+               (:file "comment-scan-test")
                (:file "reader-document-test")
                (:file "reader-errors-test")
                (:file "roundtrip-test")
