@@ -158,9 +158,9 @@
             ("inline table in an array" :inline-array
              "values = [1, { b = 2 }]~%")
             ("empty inline table in an array" :empty-inline-array
-             "values = [{}]~%")
+             "values = [1, {}]~%")
             ("multi-entry inline table in an array" :multi-inline-array
-             "values = [{ a = 1, b = 2 }]~%")
+             "values = [1, { a = 1, b = 2 }]~%")
             ("insertion order" :order
              "first = 1~%second = 2~%third = 3~%"))
       "encodes ~A exactly and deterministically"
@@ -188,11 +188,12 @@
                     (:empty-array (%writer-table "values" #()))
                     (:inline-array (%writer-table "values"
                                                   (vector 1 (%writer-table "b" 2))))
-                    (:empty-inline-array (%writer-table "values"
-                                                       (vector (%writer-table))))
+                    (:empty-inline-array
+                     (%writer-table "values"
+                                    (vector 1 (%writer-table))))
                     (:multi-inline-array
                      (%writer-table "values"
-                                    (vector (%writer-table "a" 1 "b" 2))))
+                                    (vector 1 (%writer-table "a" 1 "b" 2))))
                     (:order (%writer-table "first" 1 "second" 2 "third" 3))))
            (first (encode value))
            (second (encode value)))
@@ -235,7 +236,7 @@
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
             (:non-string-key "Table keys must be strings" ("BAD"))
-            (:inline-non-string-key "Table keys must be strings" ("items" 0 :bad))
+            (:inline-non-string-key "Table keys must be strings" ("items" 1 :bad))
             (:non-table-root "The top-level TOML value must be a hash-table" nil)
             (:adjustable-vector "Unsupported TOML value" ("outer" "inner")))
       "signals a bounded encoding error for ~S"
@@ -253,7 +254,7 @@
                    (:inline-non-string-key
                     (let ((table (%writer-table)))
                       (setf (gethash :bad table) 1)
-                      (%writer-table "items" (vector table))))
+                      (%writer-table "items" (vector 0 table))))
                    (:adjustable-vector
                     (let ((value (make-array 1 :adjustable t :fill-pointer 1
                                              :initial-contents '(1))))
