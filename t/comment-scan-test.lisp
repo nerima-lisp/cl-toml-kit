@@ -25,7 +25,7 @@
             ("literal quoted key" "'key#name' = 1 # actual" ((15 . 23)))
             ("Unicode before comment" "name = \"é\" # note" ((11 . 17)))
             ("CRLF line endings"
-             (format nil "a = 1 # note~C~Cb = 2 # end" #\Return #\Newline)
+             #.(format nil "a = 1 # note~C~Cb = 2 # end" #\Return #\Newline)
              ((6 . 12) (20 . 25))))
       "finds comment spans for ~A"
       (case-name source expected)
