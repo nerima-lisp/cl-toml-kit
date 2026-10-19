@@ -21,8 +21,7 @@
      (when (>= index (toml-reader-state-length state))
        (funcall failure
                 index
-                (if triple :multiline-string-delimiter
-                  :closing-string-delimiter)
+                :closing-string-delimiter
                 nil)
        (return-from %read-string-at nil))
      (when (%read-string-closer state index quote triple success failure)
