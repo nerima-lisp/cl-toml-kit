@@ -312,13 +312,12 @@
                         (:symbol :symbol)
                         (:large-integer 9223372036854775808)))))))
               (toml-encoding-error (error) error))))
-      (expect (typep condition 'toml-encoding-error))
-      (expect (search expected-message
-                      (toml-encoding-error-message condition)))
-      (progn
-  (expect (search "(value "
-                  (toml-encoding-error-message condition)))
-  (expect (equal expected-path (toml-encoding-error-path condition))))))
+      (expect (and (typep condition 'toml-encoding-error)
+                   (search expected-message
+                           (toml-encoding-error-message condition))
+                   (search "(value "
+                           (toml-encoding-error-message condition))))
+      (expect (equal expected-path (toml-encoding-error-path condition)))))
   (it "rejects an output target that is not a stream"
     (let ((condition
             (handler-case
