@@ -51,20 +51,26 @@
                   (setf column 1))
                  (t (incf column)))))
     (values line column)))
+(defun %utf8-bom-length (bytes)
+  (let ((bom-length (length +toml-utf8-bom+)))
+    (if (and (>= (length bytes) bom-length)
+             (equalp (subseq bytes 0 bom-length) +toml-utf8-bom+))
+        bom-length
+        0)))
 
 (defun %decode-utf8 (bytes pathname)
-  (handler-case
-      (cl-codec-kit:octets-to-string bytes :encoding :utf-8)
-    (cl-codec-kit:decode-error (condition)
-      (let ((position (cl-codec-kit:decode-error-position condition)))
-        (multiple-value-bind (line column)
-            (%byte-position-line-column bytes position)
-          (error
-           (make-toml-parse-error
-            :source-name (namestring pathname)
-            :position position :line line :column column
-            :expected "UTF-8")))))))
-
+  (let ((start (%utf8-bom-length bytes)))
+    (handler-case
+        (cl-codec-kit:octets-to-string bytes :encoding :utf-8 :start start)
+      (cl-codec-kit:decode-error (condition)
+        (let ((position (cl-codec-kit:decode-error-position condition)))
+          (multiple-value-bind (line column)
+              (%byte-position-line-column bytes position start)
+            (error
+             (make-toml-parse-error
+              :source-name (namestring pathname)
+              :position position :line line :column column
+              :expected "UTF-8"))))))))
 (defun parse-file (pathname)
   (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
     (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))

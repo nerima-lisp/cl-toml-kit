@@ -16,6 +16,25 @@
                                     34 240 159 140 159 34 10))
              (expect (string= "🌟" (gethash "message" (parse-file pathname)))))
         (when (probe-file pathname) (delete-file pathname)))))
+  (it "reads a UTF-8 BOM through parse-file and edit-toml"
+    (let* ((pathname (merge-pathnames "cl-toml-kit-reader-bom.toml"
+                                      (uiop:temporary-directory)))
+           (source (concatenate (quote (vector (unsigned-byte 8)))
+                                +toml-utf8-bom+
+                                #(110 97 109 101 32 61 32 34 111 108 100 34 10)))
+           (edited (edit-toml source (list "name") "old")))
+      (unwind-protect
+           (progn
+             (%reader-write-bytes pathname source)
+             (expect (string= "old" (gethash "name" (parse-file pathname))))
+             (expect
+               (string= "old"
+                        (gethash "name"
+                                 (parse
+                                  (cl-codec-kit:octets-to-string
+                                   edited :encoding :utf-8
+                                   :start (length +toml-utf8-bom+)))))))
+        (when (probe-file pathname) (delete-file pathname)))))
   (it "reports invalid UTF-8 as a TOML parse error"
     (let ((pathname (merge-pathnames "cl-toml-kit-reader-invalid.toml"
                                      (uiop:temporary-directory))))

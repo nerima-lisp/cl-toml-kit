@@ -53,19 +53,39 @@
                        (toml-parse-error-source-name condition)))
       (expect (plusp (length (toml-parse-error-text condition))))
       (expect (search "line" (princ-to-string condition)))))
-  (it "reports decoded character coordinates before a decode error"
-    (let ((pathname (merge-pathnames "cl-toml-kit-reader-invalid-coordinate.toml"
-                                     (uiop:temporary-directory))))
+  (it-each ((#(195 169 32 255) 3 1 3)
+            (#(239 187 191 195 169 32 255) 6 1 3)
+            (#(35 32 195 169 13 10 118 97 108 117 101 32 61 32 255)
+             14 2 9))
+      "reports matching coordinates for parse-file and edit-toml errors"
+      (bytes expected-position expected-line expected-column)
+    (let* ((pathname (merge-pathnames "cl-toml-kit-reader-invalid-coordinate.toml"
+                                      (uiop:temporary-directory)))
+           (octets (make-array (length bytes)
+                               :element-type (quote (unsigned-byte 8))
+                               :initial-contents bytes)))
       (unwind-protect
            (progn
-             (%reader-write-bytes pathname
-                                  #(35 32 195 169 13 10 118 97 108 117 101 32 61 32 255))
-             (let ((condition (handler-case
-                                  (parse-file pathname)
-                                (toml-parse-error (error) error))))
-               (expect (and (typep condition 'toml-parse-error)
-                            (= 14 (toml-parse-error-position condition))))
-               (expect (= 2 (toml-parse-error-line condition)))
-               (expect (= 9 (toml-parse-error-column condition)))))
-        (when (probe-file pathname)
-          (delete-file pathname))))))
+             (%reader-write-bytes pathname octets)
+             (let* ((file-condition
+                      (handler-case (progn (parse-file pathname) nil)
+                        (toml-parse-error (condition) condition)))
+                    (edit-condition
+                      (handler-case
+                          (progn (edit-toml octets (list "value") "new") nil)
+                        (toml-parse-error (condition) condition)))
+                    (file-coordinates
+                      (when (typep file-condition (quote toml-parse-error))
+                        (list (toml-parse-error-position file-condition)
+                              (toml-parse-error-line file-condition)
+                              (toml-parse-error-column file-condition))))
+                    (edit-coordinates
+                      (when (typep edit-condition (quote toml-parse-error))
+                        (list (toml-parse-error-position edit-condition)
+                              (toml-parse-error-line edit-condition)
+                              (toml-parse-error-column edit-condition)))))
+               (expect (and file-coordinates edit-coordinates))
+               (expect (equal (list expected-position expected-line expected-column)
+                              file-coordinates))
+               (expect (equal file-coordinates edit-coordinates))))
+        (when (probe-file pathname) (delete-file pathname))))))
