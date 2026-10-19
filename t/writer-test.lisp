@@ -66,22 +66,39 @@
                          sum (%writer-value-line-count item)))
                   (t 1))))
 
-(progn
-  (defun %writer-line-count (text)
-    "Count newline-terminated lines in encoded TEXT."
-    (count #\Newline text))
-  (describe "TOML writer emitter macro"
-    (it "uses the direct type in a single-kind emitter group"
-      (let ((cl-toml-kit::*toml-writer-emitter-specifications*
-              '((:single (:string (write-string value stream))))))
-        (let* ((expansion
-                 (macroexpand-1
-                  '(cl-toml-kit::define-toml-emitter
-                    %single-kind-emitter
-                    (value stream path))))
-               (dispatcher (fourth (third expansion))))
-          (expect (equal '(string otherwise)
-                         (mapcar #'first (cddr dispatcher)))))))))
+(defun %writer-line-count (text)
+  "Count newline-terminated lines in encoded TEXT."
+  (count #\Newline text))
+
+(describe "TOML writer emitter macro"
+  (it "writes values with an emitter generated for one kind"
+    (let* ((package (find-package "CL-TOML-KIT/TEST"))
+           (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
+           (cl-toml-kit::*toml-writer-emitter-specifications*
+             '((:single (:string (write-string value stream))))))
+      (unwind-protect
+           (progn
+             (eval (list 'cl-toml-kit::define-toml-emitter
+                         name '(value stream path)))
+             (let ((stream (make-string-output-stream)))
+               (funcall (symbol-function name) "generated value" stream nil)
+               (expect (string= "generated value"
+                                (get-output-stream-string stream)))))
+        (when (fboundp name)
+          (fmakunbound name))
+        (unintern name package))))
+  (it "signals a value model error for an unknown emitter kind"
+    (let* ((package (find-package "CL-TOML-KIT/TEST"))
+           (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
+           (cl-toml-kit::*toml-writer-emitter-specifications*
+             '((:single (:unknown (write-string value stream))))))
+      (unwind-protect
+           (expect (signals toml-value-model-error
+                     (eval (list 'cl-toml-kit::define-toml-emitter
+                                 name '(value stream path)))))
+        (when (fboundp name)
+          (fmakunbound name))
+        (unintern name package)))))
 
 (describe "TOML writer scalar data"
   (it-each (("hello" "message = \"hello\"~%")
@@ -252,6 +269,12 @@
             (:large-integer "Integer is outside TOML's signed 64-bit range"
                             ("outer" "inner"))
             (:eql-table "Table must use the EQUAL hash-table test" nil)
+            (:eql-inline-array "Table must use the EQUAL hash-table test"
+                               ("values" 1))
+            (:eql-nested-table "Table must use the EQUAL hash-table test"
+                               ("section"))
+            (:eql-array-table-element "Table must use the EQUAL hash-table test"
+                                      ("items"))
             (:non-string-key "Table keys must be strings" ("BAD"))
             (:inline-non-string-key "Table keys must be strings" ("items" 1 "BAD"))
             (:non-table-root "The top-level TOML value must be a hash-table" nil)
@@ -265,6 +288,14 @@
                    (:eql-table (let ((table (make-hash-table :test 'eql)))
                                 (setf (gethash "key" table) 1)
                                 table))
+                   (:eql-inline-array
+                    (let ((table (make-hash-table :test 'eql)))
+                      (%writer-table "values" (vector 0 table))))
+                   (:eql-nested-table
+                    (%writer-table "section" (make-hash-table :test 'eql)))
+                   (:eql-array-table-element
+                    (%writer-table "items"
+                                   (vector (make-hash-table :test 'eql))))
                    (:non-string-key (let ((table (make-hash-table :test 'equal)))
                                       (setf (gethash :bad table) 1)
                                       table))

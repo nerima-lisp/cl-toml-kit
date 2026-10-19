@@ -82,7 +82,6 @@
                (prin1 value stream))))))
 
 (defun %write-inline-table (table stream path)
-  (%validate-writer-table table path)
   (if (zerop (hash-table-count table))
       (write-string "{}" stream)
       (progn
@@ -124,27 +123,18 @@
            (write-char #\. stream))
   (%write-key key stream))
 
-(defun %write-table-section (key value path stream)
-  (write-char #\[ stream)
+(defun %write-table-header (key path stream opening closing)
+  (write-string opening stream)
   (%write-key-path path key stream)
-  (write-string "]" stream)
-  (write-char #\Newline stream)
-  (%with-writer-path path key
-    (write-table value path stream)))
-
-(defun %write-table-sections (entries path stream)
-  (dolist (entry entries)
-    (%write-table-section (car entry) (cdr entry) path stream)))
+  (write-string closing stream)
+  (write-char #\Newline stream))
 
 (defun %write-array-table-sections (entries path stream)
   (dolist (entry entries)
     (let ((key (car entry))
           (value (cdr entry)))
       (loop for item across value
-            do (write-string "[[" stream)
-               (%write-key-path path key stream)
-               (write-string "]]" stream)
-               (write-char #\Newline stream)
+            do (%write-table-header key path stream "[[" "]]")
                (%with-writer-path path key
                  (write-table item path stream))))))
 
@@ -165,7 +155,12 @@
                  (:table (push (cons key value) tables))
                  (:array-table (push (cons key value) array-tables))))
              table)
-    (%write-table-sections (nreverse tables) path stream)
+    (dolist (entry (nreverse tables))
+      (let ((key (car entry))
+            (value (cdr entry)))
+        (%write-table-header key path stream "[" "]")
+        (%with-writer-path path key
+          (write-table value path stream))))
     (%write-array-table-sections (nreverse array-tables) path stream)))
 
 (defun %write-root (value stream)
