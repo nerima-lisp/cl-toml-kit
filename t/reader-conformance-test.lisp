@@ -2,7 +2,9 @@
 
 (defun %register-reader-conformance-tests ()
   (let ((fixtures (load-toml-fixtures)))
-    ;; cl-weave v1.3.0 requires literal it-each cases, so runtime fixtures use EVAL.
+    ;; flake.nix pins cl-weave v1.4.0; its it-each macro requires a literal proper list
+    ;; of cases (cl-weave/src/registration.lisp:41-70). Fixtures load at runtime, so EVAL
+    ;; receives their generated cases for macro expansion.
     (eval `(it-each
              ,(mapcar (lambda (fixture)
                         (list (namestring (toml-fixture-toml fixture))))
@@ -13,7 +15,6 @@
                       (%make-toml-fixture
                        :toml (pathname name)
                        :json (make-pathname :type "json" :defaults (pathname name)))))))
-    ;; cl-weave v1.3.0 requires literal it-each cases, so runtime fixtures use EVAL.
     (eval `(it-each
              ,(mapcar (lambda (pathname) (list (namestring pathname) pathname))
                       (getf fixtures :invalid))

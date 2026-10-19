@@ -42,64 +42,51 @@
            (loop for letter across ,letters-name
                  for character across ,values-name
                  unless (char= character #\Escape)
-                   do (setf (aref ,table (char-code character))
-                            (concatenate 'string "\\" (string letter))))
+                   do (setf (aref ,table (char-code character)) (concatenate 'string
+                                                                             "\\"
+                                                                             (string letter))))
            ,table))
-       (define-toml-character-map %toml-hex-escape-width ,hex-widths))))
+       (define-toml-error-messages %toml-hex-escape-width ,hex-widths))))
 
-(defmacro define-toml-integer-range (minimum-name minimum
-                                        maximum-name maximum predicate-name)
+(defmacro define-toml-integer-range (minimum-name minimum maximum-name maximum predicate-name)
   (let ((integer (gensym "INTEGER")))
     `(progn
-       (defconstant ,minimum-name ,minimum)
-       (defconstant ,maximum-name ,maximum)
+       (defconstant ,minimum-name
+         ,minimum)
+       (defconstant ,maximum-name
+         ,maximum)
        (defun ,predicate-name (,integer)
          (<= ,minimum-name ,integer ,maximum-name)))))
 
 (defmacro define-toml-byte-sequence (name octets)
   `(defparameter ,name
      (vector ,@octets)))
+
 (defmacro define-toml-character-class (name characters)
   (let ((character (gensym "CHARACTER")))
     `(defun ,name (,character)
-       (and (characterp ,character)
-            (member ,character ',characters :test #'char=)))))
-(defmacro define-toml-character-map (name entries)
-  (let ((character (gensym "CHARACTER")))
-    `(defun ,name (,character)
-       (case ,character
-         ,@(loop for (key value) in entries
-                 collect `(,key ,value))
-         (otherwise nil)))))
-(defmacro define-toml-integer-radices (name entries)
-  (let ((prefix (gensym "PREFIX")))
-    `(defun ,name (,prefix)
-       (case ,prefix
-         ,@(loop for (letter radix) in entries
-                 collect `(,letter ,radix))
-         (otherwise nil)))))
-(defmacro define-toml-error-messages (name entries)
-  (let ((key (gensym "KEY")))
-    `(defun ,name (,key)
-       (case ,key
-         ,@(loop for (kind message) in entries
-                 collect `(,kind ,message))
-         (otherwise nil)))))
+       (and (characterp ,character) (member ,character ',characters :test #'char=)))))
 
-(define-toml-ascii-table +toml-bare-key-table+ char
+(defmacro define-toml-error-messages (name entries &key (otherwise nil))
+  (let ((lookup-key (gensym "KEY")))
+    `(defun ,name (,lookup-key)
+       (case ,lookup-key
+         ,@(loop for (entry-key value) in entries
+                 collect `(,entry-key ,value))
+         (otherwise ,otherwise)))))
+
+(define-toml-ascii-table +toml-bare-key-table+
+                         char
                          (or (alpha-char-p char)
                              (digit-char-p char)
                              (char= char #\_)
                              (char= char #\-)))
 
-(define-toml-ascii-table +toml-decimal-table+ char
-                         (digit-char-p char 10))
+(define-toml-ascii-table +toml-decimal-table+ char (digit-char-p char 10))
 
-(define-toml-ascii-table +toml-space-table+ char
-                         (member char '(#\Space #\Tab)))
+(define-toml-ascii-table +toml-space-table+ char (member char '(#\Space #\Tab)))
 
-(define-toml-ascii-table +toml-control-table+ char
-                         (< (char-code char) #x20))
+(define-toml-ascii-table +toml-control-table+ char (< (char-code char) #x20))
 
 (define-toml-hex-value-table +toml-hex-value-table+)
 
@@ -108,21 +95,59 @@
     (and (< code 128) (aref +toml-hex-value-table+ code))))
 
 (define-toml-escape-data
- ((#\b #\Backspace) (#\t #\Tab) (#\n #\Newline) (#\f #\Page)
-  (#\r #\Return) (#\e #\Escape) (#\" #\") (#\\ #\\))
+ ((#\b #\Backspace) (#\t #\Tab)
+  (#\n #\Newline)
+  (#\f #\Page)
+  (#\r #\Return)
+  (#\e #\Escape)
+  (#\" #\")
+  (#\\ #\\))
  ((#\x 2) (#\u 4) (#\U 8)))
 
-(define-toml-integer-range +toml-min-integer+ -9223372036854775808
-                            +toml-max-integer+ 9223372036854775807
-                            %toml-integer-in-range-p)
+(define-toml-integer-range +toml-min-integer+
+                           -9223372036854775808
+                           +toml-max-integer+
+                           9223372036854775807
+                           %toml-integer-in-range-p)
 
-(progn
-  (defparameter +toml-positive-infinity-tokens+ '("inf" "+inf"))
-  (defparameter +toml-negative-infinity-token+ "-inf")
-  (defparameter +toml-nan-tokens+ '("nan" "+nan" "-nan"))
-  (defparameter +toml-nan+
-    (let ((zero 0.0d0))
-      (sb-int:with-float-traps-masked (:invalid)
-        (/ zero zero)))))
+(defparameter +toml-positive-infinity-tokens+
+  '("inf" "+inf"))
+
+(defparameter +toml-negative-infinity-token+
+  "-inf")
+
+(defparameter +toml-nan-tokens+
+  '("nan" "+nan" "-nan"))
+
+(defparameter +toml-nan+
+  (let ((zero 0.0d0))
+    (sb-int:with-float-traps-masked (:invalid) (/ zero zero))))
 
 (define-toml-byte-sequence +toml-utf8-bom+ (239 187 191))
+
+(defparameter +toml-carriage-return+
+  #\Return)
+
+(defparameter +toml-double-quote+
+  #\")
+
+(defconstant +toml-unicode-scalar-max+
+  #x10FFFF)
+
+(defconstant +toml-unicode-surrogate-start+
+  #xD800)
+
+(defconstant +toml-unicode-surrogate-end+
+  #xDFFF)
+
+(defparameter +toml-line-feed+
+  #\Newline)
+
+(defparameter +toml-newline-characters+
+  (list +toml-carriage-return+ +toml-line-feed+))
+
+(defparameter +toml-single-quote+
+  #\')
+
+(defparameter +toml-quote-characters+
+  (list +toml-double-quote+ +toml-single-quote+))

@@ -10,17 +10,21 @@
             ("value = 01")
             ("value = 1__0")
             ("value = 0x")
-            ("value = 0b102"))
-      "reports the invalid value ~S with source coordinates"
+            ("value = 0b102")
+            ("value = [1 2]")
+            ("value = { answer = 1, }"))
+      "reports invalid TOML input ~S with source coordinates"
       (text)
     (let ((condition (%reader-error text)))
       (expect (typep condition 'toml-parse-error))
       (expect (plusp (toml-parse-error-line condition)))
       (expect (plusp (toml-parse-error-column condition)))))
-  (it "rejects a floating-point overflow with a TOML parse error"
-    (expect (signals toml-parse-error (parse "value = 1e309"))))
-  (it "rejects a fractional minute with a TOML parse error"
-    (expect (signals toml-parse-error (parse "value = 07:32.5"))))
+  (it-each (("value = 1e309")
+            ("value = 1e-324")
+            ("value = 07:32.5"))
+      "rejects invalid numeric or time value ~S"
+      (text)
+    (expect (signals toml-parse-error (parse text))))
   (it-each ((#.(concatenate 'string "a = 1" (string #\Return)) 1 6 5)
             (#.(concatenate 'string "a = " (string (code-char 1))) 1 5 4)
             ("t/fixtures/toml-test/invalid/encoding/bad-utf8-at-end.toml" 5 11 241))
@@ -45,6 +49,27 @@
       (expect (typep condition 'toml-parse-error))
       (expect (plusp (toml-parse-error-line condition)))
       (expect (plusp (toml-parse-error-column condition)))))
+  (it-each (("[") ("[[items]") ("[items]]"))
+      "rejects malformed table header ~S"
+      (text)
+    (expect (signals toml-parse-error (parse text))))
+  (it-each (("value = \"\\uD800\"")
+            ("value = \"\\U00110000\""))
+      "rejects invalid Unicode scalar escape ~S"
+      (text)
+    (expect (signals toml-parse-error (parse text))))
+  (it "maps known expected keys and rejects unknown expected keys"
+    (let ((condition
+            (handler-case
+                (cl-toml-kit::%error-at
+                 (cl-toml-kit::%make-reader-state :source "x" :length 1)
+                 0 :float-digit)
+              (toml-parse-error (error) error))))
+      (expect (string= "float digit" (toml-parse-error-expected condition)))
+      (expect (signals error
+                (cl-toml-kit::%error-at
+                 (cl-toml-kit::%make-reader-state :source "x" :length 1)
+                 0 :unknown-error-key)))))
   (it "includes a readable source name and diagnostic text"
     (let ((condition (handler-case
                         (parse "a = @" :source-name "example.toml")

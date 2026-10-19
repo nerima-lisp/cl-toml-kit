@@ -1,178 +1,248 @@
 ;;;; src/reader-document.lisp
 (in-package #:cl-toml-kit)
 
-(defun %read-key-component (state position)
-  (setf (toml-reader-state-position state) position)
-  (%skip-space-and-comments state)
-  (setf position (toml-reader-state-position state))
-  (let ((char (%source-char state position)))
+(defun %read-key-component (state position success failure)
+  (let* ((position (%skip-space-and-comments-at state position))
+         (char (%source-char state position)))
     (cond
-      ((member char '(#\" #\'))
-       (when (and (eql (%source-char state (1+ position)) char)
-                  (eql (%source-char state (+ position 2)) char))
-         (%error-at state position "single-line key"))
-       (multiple-value-bind (value next) (%read-string-at state position char)
-         (values value next)))
+      ((member char +toml-quote-characters+)
+       (if (and (eql (%source-char state (1+ position)) char)
+                (eql (%source-char state (+ position 2)) char))
+           (funcall failure position :single-line-key nil)
+           (%read-string-at state position success failure)))
       ((toml-bare-key-character-p char)
        (let ((end (%scan-bare-key-end state position)))
-         (values (subseq (toml-reader-state-source state) position end) end)))
-      (t (%error-at state position "key")))))
+         (funcall success
+                  (subseq (toml-reader-state-source state) position end)
+                  end)))
+      (t (funcall failure position :key nil)))))
 
-(defun %read-key-path (state position)
-  (multiple-value-bind (first-key first-next) (%read-key-component state position)
-    (let ((index first-next))
-      (setf (toml-reader-state-position state) index)
-      (%skip-space-and-comments state)
-      (setf index (toml-reader-state-position state))
-      (if (not (eql (%source-char state index) #\.))
-          (values first-key index)
-          (let ((keys (list first-key)))
-            (loop
-              (incf index)
-              (setf (toml-reader-state-position state) index)
-              (%skip-space-and-comments state)
-              (setf index (toml-reader-state-position state))
-              (multiple-value-bind (key next) (%read-key-component state index)
-                (push key keys) (setf index next)
-                (setf (toml-reader-state-position state) index))
-              (%skip-space-and-comments state)
-              (setf index (toml-reader-state-position state))
-              (unless (eql (%source-char state index) #\.)
-                (return (values (nreverse keys) index)))))))))
+(defun %read-key-path (state position success failure)
+  (labels ((fail (error-position expected path)
+             (return-from %read-key-path
+               (funcall failure error-position expected path))))
+    (let* ((first
+             (block first-component
+               (%read-key-component
+                state position
+                (lambda (key next)
+                  (return-from first-component (cons key next)))
+                #'fail)))
+           (keys (list (car first)))
+           (index (cdr first)))
+      (loop
+        (setf index (%skip-space-and-comments-at state index))
+        (unless (eql (%source-char state index) #\.)
+          (return (funcall success
+                           (if (cdr keys) (nreverse keys) (car keys))
+                           index)))
+        (setf index (1+ index))
+        (let ((component
+                (block next-component
+                  (%read-key-component
+                   state index
+                   (lambda (key next)
+                     (return-from next-component (cons key next)))
+                   #'fail))))
+          (push (car component) keys)
+          (setf index (cdr component)))))))
 
-(defun %table-for-path (state path &key (create nil) (dotted nil) base)
-  (let ((table (or base (toml-reader-state-root state)))
-        (components path))
-    (loop while components
-          do (multiple-value-bind (key rest) (%path-next components)
-               (setf components rest)
-               (multiple-value-bind (value present) (gethash key table)
-               (cond
-                 ((not present)
-                  (unless create
-                    (%error-at state (toml-reader-state-position state) :defined-table path))
-                  (setf value (make-hash-table :test #'equal)
-                        (gethash key table) value
-                        (gethash value (toml-reader-state-table-states state))
-                        (if dotted :dotted :implicit)))
-                 ((hash-table-p value)
-                  (when (or (eq (gethash value (toml-reader-state-table-states state)) :inline)
-                            (and dotted
-                                 (eq (gethash value (toml-reader-state-table-states state))
-                                     :explicit)))
-                    (%error-at state (toml-reader-state-position state) :defined-table path)))
-                 ((and (vectorp value) (> (length value) 0)
-                       (hash-table-p (aref value (1- (length value)))))
-                  (if dotted
-                      (%error-at state (toml-reader-state-position state) :table path)
-                      (setf value (aref value (1- (length value))))
-                  )
-                  (when (eq (gethash value (toml-reader-state-table-states state)) :inline)
-                    (%error-at state (toml-reader-state-position state) :inline-table path)))
-                 (t (%error-at state (toml-reader-state-position state) :table path)))
-                 (setf table value))))
-    table))
+(defun %table-for-path-component (state table key path create dotted failure)
+  (multiple-value-bind (value present) (gethash key table)
+    (cond
+      ((not present)
+       (unless create
+         (return-from %table-for-path-component
+           (funcall failure (toml-reader-state-position state)
+                    :defined-table path)))
+       (setf value (make-hash-table :test #'equal)
+             (gethash key table) value
+             (gethash value (toml-reader-state-table-states state))
+             (if dotted :dotted :implicit)))
+      ((hash-table-p value)
+       (when (or (eq (gethash value (toml-reader-state-table-states state))
+                     :inline)
+                 (and dotted
+                      (eq (gethash value (toml-reader-state-table-states state))
+                          :explicit)))
+         (return-from %table-for-path-component
+           (funcall failure (toml-reader-state-position state)
+                    :defined-table path))))
+      ((and (vectorp value) (> (length value) 0)
+            (hash-table-p (aref value (1- (length value)))))
+       (if dotted
+           (return-from %table-for-path-component
+             (funcall failure (toml-reader-state-position state) :table path))
+           (setf value (aref value (1- (length value)))))
+       (when (eq (gethash value (toml-reader-state-table-states state)) :inline)
+         (return-from %table-for-path-component
+           (funcall failure (toml-reader-state-position state)
+                    :inline-table path))))
+      (t
+       (return-from %table-for-path-component
+         (funcall failure (toml-reader-state-position state) :table path))))
+    value))
 
-(defun %define-assignment (state path value)
+(defun %table-for-path (state path &key (create nil) (dotted nil) base failure)
+  (labels ((fail (error-position expected error-path)
+             (return-from %table-for-path
+               (funcall failure error-position expected error-path))))
+    (let ((table (or base (toml-reader-state-root state)))
+          (components path))
+      (loop while components
+            do (multiple-value-bind (key rest) (%path-next components)
+                 (setf components rest)
+                 (setf table (%table-for-path-component
+                              state table key path create dotted #'fail))))
+      table)))
+
+(defun %define-assignment (state path value failure)
   (let* ((base (or (toml-reader-state-current state)
                    (toml-reader-state-root state)))
          (parent (%table-for-path state (%path-parent path) :create t
-                                  :dotted (> (%path-length path) 1) :base base))
+                                  :dotted (> (%path-length path) 1)
+                                  :base base :failure failure))
          (key (%path-last path)))
     (multiple-value-bind (old present) (gethash key parent)
       (declare (ignore old))
-      (when present (%error-at state (toml-reader-state-position state) "unique key" path)))
+      (when present
+        (return-from %define-assignment
+          (funcall failure (toml-reader-state-position state) :unique-key path))))
     (setf (gethash key parent) value)
     (when (hash-table-p value)
       (setf (gethash value (toml-reader-state-table-states state)) :inline))))
 
-(defun %read-header (state position array-p)
-  (let ((index (+ position (if array-p 2 1))))
-    (multiple-value-bind (path next) (%read-key-path state index)
-      (setf index next)
-      (%skip-space-and-comments state)
-      (setf index (toml-reader-state-position state))
-      (unless (eql (%source-char state index) #\])
-        (%error-at state index "]" path))
-      (incf index)
-      (when (and array-p (not (eql (%source-char state index) #\])))
-        (%error-at state index "]]" path))
-      (when array-p (incf index))
-      (setf (toml-reader-state-position state) index)
-      (%skip-space-and-comments state)
-      (unless (member (%source-char state (toml-reader-state-position state))
-                      '(nil #\Newline #\Return))
-        (%error-at state (toml-reader-state-position state) :line-end path))
-      (let ((parent (%table-for-path state (%path-parent path) :create t))
-            (key (%path-last path)))
-        (if array-p
-            (let ((value (gethash key parent)))
-              (when (and value (vectorp value) (zerop (length value)))
-                (%error-at state position :array-table path))
-              (when (and value (not (vectorp value)))
-                (%error-at state position :array-table path))
-              (unless value
-                (setf value (make-array 0 :adjustable t :fill-pointer 0)
-                      (gethash key parent) value))
-              (let ((table (make-hash-table :test #'equal)))
-                (vector-push-extend table value)
-                (setf (gethash table (toml-reader-state-table-states state)) :explicit)
-                (setf (toml-reader-state-current state) table)))
-            (let ((table (gethash key parent)))
-              (cond
-                ((null table)
-                 (setf table (make-hash-table :test #'equal)
-                       (gethash key parent) table
-                       (gethash table (toml-reader-state-table-states state)) :explicit))
-                ((not (hash-table-p table)) (%error-at state position :table path))
-                ((member (gethash table (toml-reader-state-table-states state))
-                         '(:explicit :dotted))
-                 (%error-at state position "unique table" path))
-                ((eq (gethash table (toml-reader-state-table-states state)) :inline)
-                 (%error-at state position "extendable table" path))
-                (t (setf (gethash table (toml-reader-state-table-states state)) :explicit)))
-              (setf (toml-reader-state-current state) table))))
-      (setf (toml-reader-state-position state) index)
-      index)))
+(defun %read-header-end (state position array-p path success failure)
+  (let ((index (%skip-space-and-comments-at state position)))
+    (unless (eql (%source-char state index) #\])
+      (return-from %read-header-end
+        (funcall failure index :closing-bracket path)))
+    (incf index)
+    (when (and array-p (not (eql (%source-char state index) #\])))
+      (return-from %read-header-end
+        (funcall failure index :closing-array-table-delimiter path)))
+    (when array-p (incf index))
+    (setf index (%skip-space-and-comments-at state index))
+    (unless (let ((char (%source-char state index)))
+              (or (null char)
+                  (member char +toml-newline-characters+)))
+      (return-from %read-header-end (funcall failure index :line-end path)))
+    (funcall success nil index)))
 
-(define-toml-rule toml-read-document (state position)
-  (let ((index position))
-    (loop
-      (setf (toml-reader-state-position state) index)
-      (%skip-space-and-comments state)
-      (setf index (toml-reader-state-position state))
-      (cond
-        ((>= index (toml-reader-state-length state))
-         (return (funcall continuation (toml-reader-state-root state) index)))
-        ((member (%source-char state index) '(#\Newline #\Return))
-         (%skip-line-ending state) (setf index (toml-reader-state-position state)))
-        ((eql (%source-char state index) #\[)
-         (let ((array-p (eql (%source-char state (1+ index)) #\[)))
-           (setf index (%read-header state index array-p))
-           (%skip-line-ending state)
-           (setf index (toml-reader-state-position state))))
-        (t
-         (multiple-value-bind (path next) (%read-key-path state index)
-           (setf index next) (%skip-space-and-comments state)
-           (unless (eql (%source-char state index) #\=)
-             (%error-at state index "=" path))
-           (incf index)
-           (setf (toml-reader-state-position state) index)
-           (%skip-space-and-comments state)
-           (setf index (toml-reader-state-position state))
-           (toml-read-value state index
-                            (lambda (value value-end)
-                              (%define-assignment state path value)
-                              (setf index value-end)
-                              (setf (toml-reader-state-position state) value-end)
-                              (%skip-space-and-comments state)
-                              (unless
-                                  (member (%source-char state
-                                                         (toml-reader-state-position state))
-                                         '(nil #\Newline #\Return))
-                                (%error-at state (toml-reader-state-position state) :line-end path))
-                              (%skip-line-ending state)
-                              (setf index (toml-reader-state-position state))))))))))
+(defun %define-header-table (state position path array-p failure)
+  (let ((parent (%table-for-path state (%path-parent path) :create t
+                                 :failure failure))
+        (key (%path-last path)))
+    (if array-p
+        (let ((value (gethash key parent)))
+          (when (and value (vectorp value) (zerop (length value)))
+            (return-from %define-header-table
+              (funcall failure position :array-table path)))
+          (when (and value (not (vectorp value)))
+            (return-from %define-header-table
+              (funcall failure position :array-table path)))
+          (unless value
+            (setf value (make-array 0 :adjustable t :fill-pointer 0)
+                  (gethash key parent) value))
+          (let ((table (make-hash-table :test #'equal)))
+            (vector-push-extend table value)
+            (setf (gethash table (toml-reader-state-table-states state)) :explicit)
+            (setf (toml-reader-state-current state) table)))
+        (let ((table (gethash key parent)))
+          (cond
+            ((null table)
+             (setf table (make-hash-table :test #'equal)
+                   (gethash key parent) table
+                   (gethash table (toml-reader-state-table-states state)) :explicit))
+            ((not (hash-table-p table))
+             (return-from %define-header-table
+               (funcall failure position :table path)))
+            ((member (gethash table (toml-reader-state-table-states state))
+                     '(:explicit :dotted))
+             (return-from %define-header-table
+               (funcall failure position :unique-table path)))
+            ((eq (gethash table (toml-reader-state-table-states state)) :inline)
+             (return-from %define-header-table
+               (funcall failure position :extendable-table path)))
+            (t
+             (setf (gethash table (toml-reader-state-table-states state)) :explicit)))
+          (setf (toml-reader-state-current state) table)))))
+
+(defun %read-header (state position array-p success failure)
+  (labels ((fail (error-position expected path)
+             (return-from %read-header
+               (funcall failure error-position expected path))))
+    (%read-key-path
+     state (+ position (if array-p 2 1))
+     (lambda (path next)
+       (%read-header-end
+        state next array-p path
+        (lambda (value end)
+          (declare (ignore value))
+          (%define-header-table state position path array-p #'fail)
+          (setf (toml-reader-state-position state) end)
+          (funcall success nil end))
+        #'fail))
+     #'fail)))
+
+(defun %read-document-assignment-line (state position success failure)
+  (let* ((key-result
+           (block key-path
+             (%read-key-path
+              state position
+              (lambda (path next)
+                (return-from key-path (cons path next)))
+              failure)))
+         (path (car key-result))
+         (equals-position
+           (%skip-space-and-comments-at state (cdr key-result))))
+    (unless (eql (%source-char state equals-position) #\\=)
+      (funcall failure equals-position :equals path))
+    (let ((value-position
+            (%skip-space-and-comments-at state (1+ equals-position))))
+      (toml-read-value
+       state value-position
+       (lambda (value next)
+         (%define-assignment state path value failure)
+         (let ((end (%skip-space-and-comments-at state next)))
+           (unless (let ((char (%source-char state end)))
+                     (or (null char)
+                         (member char +toml-newline-characters+)))
+             (funcall failure end :line-end path))
+           (funcall success nil (%skip-line-ending-at state end))))
+       failure))))
+
+(define-toml-rule toml-read-document (state position success failure)
+  (labels ((fail (error-position expected path)
+             (return-from toml-read-document
+               (funcall failure error-position expected path))))
+    (let ((index position))
+      (loop
+        (setf index (%skip-space-and-comments-at state index))
+        (cond
+          ((>= index (toml-reader-state-length state))
+           (return (funcall success (toml-reader-state-root state) index)))
+          ((member (%source-char state index) +toml-newline-characters+)
+           (setf index (%skip-line-ending-at state index)))
+          ((eql (%source-char state index) #\[)
+           (let ((array-p (eql (%source-char state (1+ index)) #\[)))
+             (setf index
+                   (block next-line
+                     (%read-header
+                      state index array-p
+                      (lambda (value next)
+                        (declare (ignore value))
+                        (return-from next-line
+                          (%skip-line-ending-at state next)))
+                      #'fail)))))
+          (t
+           (setf index
+                 (%read-document-assignment-line
+                  state index
+                  (lambda (value next)
+                    (declare (ignore value))
+                    next)
+                  #'fail))))))))
 
 (defun %finalize-value (value)
   (cond

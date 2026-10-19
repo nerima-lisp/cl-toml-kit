@@ -7,9 +7,9 @@
           for char = (char source position)
           do (cond
                ((and (not multiline)
-                     (member char '(#\Return #\Newline)))
+                     (member char +toml-newline-characters+ :test #'char=))
                 (return position))
-               ((and (char= quote #\")
+               ((and (char= quote +toml-double-quote+)
                      (char= char #\\))
                 (incf position (if (< (1+ position) source-length) 2 1)))
                ((and multiline
@@ -28,7 +28,10 @@
           finally (return source-length))))
 
 (defun toml-comment-spans (source)
-  "Return a source-ordered list of (start . end) character-offset pairs, including the leading # and excluding CR/LF; starts are inclusive and ends exclusive."
+  "Return ordered cons pairs (start . end) of 0-based string indices.
+  Start is the index of #; end is exclusive and precedes a line ending (at CR in CRLF).
+  Unterminated single-line strings scan to the line ending or EOF; unterminated multiline
+  strings scan to EOF."
   (check-type source string)
   (let ((source-length (length source))
         (position 0)
@@ -40,10 +43,11 @@
                 (let ((start position))
                   (loop while (and (< position source-length)
                                    (not (member (char source position)
-                                                '(#\Return #\Newline))))
+                                                +toml-newline-characters+
+                                                :test #'char=)))
                         do (incf position))
                   (push (cons start position) spans)))
-               ((member char '(#\" #\'))
+               ((member char +toml-quote-characters+ :test #'char=)
                 (let* ((quote char)
                        (multiline
                          (and (< (+ position 2) source-length)

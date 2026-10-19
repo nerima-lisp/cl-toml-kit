@@ -24,6 +24,12 @@
             ("basic quoted key" "\"key#name\" = 1 # actual" ((15 . 23)))
             ("literal quoted key" "'key#name' = 1 # actual" ((15 . 23)))
             ("Unicode before comment" "name = \"é\" # note" ((11 . 17)))
+            ("unmatched opening quote" "value = \"unfinished # not comment" nil)
+            ("unmatched basic quote before newline" "value = \"unfinished # in string
+x = 1 # outside"
+             ((38 . 47)))
+            ("unmatched multiline quote through EOF" "value = \"\"\"unfinished
+x = 1 # inside" nil)
             ("CRLF line endings"
              #.(format nil "a = 1 # note~C~Cb = 2 # end" #\Return #\Newline)
              ((6 . 12) (20 . 25))))

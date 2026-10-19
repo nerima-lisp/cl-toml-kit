@@ -13,3 +13,8 @@
   (if (stringp path)
       (values path nil)
       (values (car path) (cdr path))))
+
+(defun %skip-space-and-comments-at (state position)
+  (setf (toml-reader-state-position state) position)
+  (%skip-space-and-comments state)
+  (toml-reader-state-position state))

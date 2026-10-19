@@ -3,12 +3,6 @@
 (defun %reader-nan-p (value)
   (and (floatp value) (sb-ext:float-nan-p value)))
 
-(defun %reader-float= (left right)
-  (and (floatp left) (floatp right)
-       (if (sb-ext:float-nan-p right)
-           (sb-ext:float-nan-p left)
-           (= left right))))
-
 (defun %reader-date-text (value)
   (cond
     ((cl-date-kit:offset-date-time-p value)
@@ -40,48 +34,60 @@
             ("0xDEAD_BEEF" 3735928559)
             ("0o755" 493)
             ("0b1101_0101" 213)
-            ("1_000_000" 1000000))
+            ("1_000_000" 1000000)
+            ("+1" 1))
       "reads integer ~S as ~S"
       (text expected)
-    (expect (equal (gethash "value" (parse (format nil "value = ~A" text)))
-                   expected)))
+    (expect (toml-test-value=
+             expected
+             (gethash "value" (parse (format nil "value = ~A" text))))))
   (it-each (("0.1" 0.1d0)
             ("1e308" 1.0d308)
             ("-0.0" -0.0d0))
       "reads float ~S as the expected double float"
       (text expected)
-    (expect (%reader-float= (gethash "value"
-                                     (parse (format nil "value = ~A" text)))
-                            expected)))
+    (expect (toml-test-value=
+             expected
+             (gethash "value" (parse (format nil "value = ~A" text))))))
   (it "reads the smallest subnormal double float"
-    (expect (= least-positive-double-float
-               (gethash "value" (parse "value = 5e-324")))))
-  (it "reads positive and negative infinity"
-    (expect (= sb-ext:double-float-positive-infinity
-               (gethash "value" (parse "value = inf"))))
-    (expect (= sb-ext:double-float-negative-infinity
-               (gethash "value" (parse "value = -inf")))))
-  (it-each (("nan") ("+nan") ("-nan"))
-      "reads ~S as NaN"
-      (text)
-    (expect (%reader-nan-p (gethash "value" (parse (format nil "value = ~A" text))))))
-  (it-each (("value = 'C:\\tmp\\file'" "C:\\tmp\\file"))
-      "reads string input ~S as ~S"
+    (expect (toml-test-value=
+             least-positive-double-float
+             (gethash "value" (parse "value = 5e-324")))))
+  (it-each (("inf" :positive-infinity)
+            ("+inf" :positive-infinity)
+            ("-inf" :negative-infinity)
+            ("nan" :nan)
+            ("+nan" :nan)
+            ("-nan" :nan))
+      "reads special float token ~S"
       (text expected)
-    (expect (string= (gethash "value" (parse text)) expected)))
-  (it "reads all basic string escapes"
-    (let* ((source "value = \"\\b\\t\\n\\f\\r\\e\\\"\\\\\\x41\\u0042\\U00000043\"")
-           (expected (format nil "~C~C~C~C~C~C~C~CABC"
-                             #\Backspace #\Tab #\Newline #\Page #\Return #\Escape
-                             #\" #\\)))
-      (expect (string= expected (gethash "value" (parse source))))))
-  (it "reads multiline strings and removes the initial newline"
-    (let ((source (format nil "value = \"\"\"~%first~%second\"\"\"")))
-      (expect (string= (format nil "first~%second"
-                               ) (gethash "value" (parse source))))))
-  (it "reads a multiline line-ending backslash"
-    (let ((source (format nil "value = \"\"\"first \\~%second\"\"\"")))
-      (expect (string= "first second" (gethash "value" (parse source))))))
+    (let ((value (gethash "value" (parse (format nil "value = ~A" text)))))
+      (expect (case expected
+                (:positive-infinity
+                 (= sb-ext:double-float-positive-infinity value))
+                (:negative-infinity
+                 (= sb-ext:double-float-negative-infinity value))
+                (:nan (%reader-nan-p value))))))
+  (it-each (("literal string"
+             "value = 'C:\\tmp\\file'"
+             "C:\\tmp\\file")
+            ("basic escapes"
+             "value = \"\\b\\t\\n\\f\\r\\e\\\"\\\\\\x41\\u0042\\U00000043\""
+             #.(format nil "~C~C~C~C~C~C~C~CABC"
+                       #\Backspace #\Tab #\Newline #\Page #\Return #\Escape
+                       #\" #\\))
+            ("multiline initial newline"
+             #.(format nil "value = \"\"\"~%first~%second\"\"\"")
+             #.(format nil "first~%second"))
+            ("multiline line-ending backslash"
+             #.(format nil "value = \"\"\"first \\~%second\"\"\"")
+             "first second"))
+      "reads string case ~A"
+      (case-name source expected)
+    (expect (toml-test-value= expected (gethash "value" (parse source)))))
+  (it "reads the largest Unicode scalar escape"
+    (expect (string= (string (code-char #x10FFFF))
+                     (gethash "value" (parse "value = \"\\U0010FFFF\"")))))
   (it-each (("1979-05-27T07:32:00Z" "1979-05-27T07:32:00Z")
             ("1979-05-27t07:32:00z" "1979-05-27T07:32:00Z")
             ("1979-05-27 07:32" "1979-05-27T07:32:00")
@@ -97,22 +103,40 @@
 (describe "TOML reader stream and document values"
   (it "reads a character stream"
     (with-input-from-string (stream (format nil "answer = 42~%"))
-      (expect (= 42 (gethash "answer" (parse stream))))))
-  (it-each (("" 0) ("# only a comment" 0) ("" 0))
+      (expect (toml-test-value= 42 (gethash "answer" (parse stream))))))
+  (it-each (("" 0) ("# only a comment" 0))
       "reads empty document input ~S as an empty table"
       (text expected-count)
-    (expect (= expected-count (hash-table-count (parse text)))))
+    (expect (toml-test-value= expected-count
+             (hash-table-count (parse text)))))
+  (it-each (("empty array" "value = []" #())
+            ("trailing comma" "value = [1,]" #(1))
+            ("two entries" "value = [1, 2]" #(1 2)))
+      "reads array case ~A"
+      (case-name source expected)
+    (expect (toml-test-value= expected (gethash "value" (parse source)))))
+  (it-each (("empty inline table" "value = {}" 0 nil)
+            ("single inline entry" "value = { answer = 42 }" 1 42))
+      "reads inline table case ~A"
+      (case-name source expected-count expected-answer)
+    (let ((table (gethash "value" (parse source))))
+      (expect (and (= expected-count (hash-table-count table))
+                   (or (null expected-answer)
+                       (toml-test-value= expected-answer
+                                         (gethash "answer" table)))))))
   (it "accepts CRLF between document lines"
     (let ((table (parse (format nil "a = 1~C~Cb = 2~C~C"
                                 #\Return #\Newline #\Return #\Newline))))
-      (expect (= 1 (gethash "a" table)))
-      (expect (= 2 (gethash "b" table)))))
+      (expect (and (toml-test-value= 1 (gethash "a" table))
+                   (toml-test-value= 2 (gethash "b" table))))))
   (it "reads dotted keys and nested table values"
     (let ((table (parse (format nil
                                "fruit.name = \"apple\"~%[fruit.physical]~%color = \"red\"~%"))))
-      (expect (string= "apple" (gethash "name" (gethash "fruit" table))))
-      (expect (string= "red" (gethash "color"
-                                        (gethash "physical" (gethash "fruit" table)))))))
+      (expect (toml-test-value=
+               "apple" (gethash "name" (gethash "fruit" table))))
+      (expect (toml-test-value=
+               "red" (gethash "color"
+                              (gethash "physical" (gethash "fruit" table)))))))
   (it "reads tables, array tables, and inline tables"
     (let ((table (parse
                   (with-output-to-string (stream)
@@ -120,50 +144,26 @@
                     (format stream "[[products]]~%name = \"A\"~%")
                     (format stream "[[products]]~%name = \"B\"~%")
                     (format stream "config = { enabled = true, count = 2 }~%")))))
-      (expect (string= "Tom" (gethash "name" (gethash "owner" table))))
+      (expect (toml-test-value= "Tom" (gethash "name" (gethash "owner" table))))
       (expect (= 2 (length (gethash "products" table))))
-      (expect (eql t (gethash "enabled" (gethash "config" (aref (gethash "products" table) 1))))))))
+      (expect (eql t (gethash "enabled"
+                              (gethash "config"
+                                       (aref (gethash "products" table) 1))))))))
 
-(describe "TOML definition macro expansions"
-  (it "keeps define-char-class predicate arguments hygienic"
-    (let* ((name (gensym "CHAR-CLASS-"))
-           (expansion
-             (macroexpand-1
-              `(cl-toml-kit::define-char-class
-                ,name cl-toml-kit::+toml-bare-key-table+)))
-           (definition (%macroexpanded-defun expansion name))
+(describe "TOML reader data macros"
+  (it-each (('cl-toml-kit::define-char-class
+             'cl-toml-kit::+toml-bare-key-table+ #\a)
+            ('cl-toml-kit::define-toml-character-class '(#\a #\b) #\a))
+      "defines a hygienic character predicate"
+      (macro entries character)
+    (let* ((name (gensym "CHARACTER-PREDICATE-"))
+           (definition (%macroexpanded-defun
+                        (macroexpand-1 (list macro name entries)) name))
            (argument (first (third definition)))
            (evaluations 0))
       (expect (and (symbolp argument) (null (symbol-package argument))))
       (eval definition)
-      (expect (funcall name (progn (incf evaluations) #\a)))
-      (expect (= evaluations 1))))
-  (it "defines character classes with hygienic predicate arguments"
-    (let* ((name (gensym "TOML-CHARACTER-CLASS-"))
-           (expansion
-             (macroexpand-1
-              `(cl-toml-kit::define-toml-character-class
-                ,name (#\a #\b))))
-           (definition (%macroexpanded-defun expansion name))
-           (argument (first (third definition)))
-           (evaluations 0))
-      (expect (and (symbolp argument) (null (symbol-package argument))))
-      (eval definition)
-      (expect (funcall name (progn (incf evaluations) #\a)))
-      (expect (= evaluations 1))))
-  (it "defines character maps with hygienic predicate arguments"
-    (let* ((name (gensym "TOML-CHARACTER-MAP-"))
-           (expansion
-             (macroexpand-1
-              `(cl-toml-kit::define-toml-character-map
-                ,name ((#\x :two) (#\u :four) (#\U :eight)))))
-           (definition (%macroexpanded-defun expansion name))
-           (argument (first (third definition)))
-           (evaluations 0))
-      (expect (and (symbolp argument) (null (symbol-package argument))))
-      (eval definition)
-      (expect (eq :four (funcall name
-                                 (progn (incf evaluations) #\u))))
+      (expect (funcall name (progn (incf evaluations) character)))
       (expect (= evaluations 1))))
   (it "generates an integer-range predicate with one argument evaluation"
     (let* ((macro-name (find-symbol "DEFINE-TOML-INTEGER-RANGE" "CL-TOML-KIT"))
@@ -180,69 +180,27 @@
            (argument (first (third definition)))
            (evaluations 0))
       (expect (and (symbolp argument) (null (symbol-package argument))))
-      (progn
-        (eval definition)
-        (expect (funcall predicate-name (progn (incf evaluations) 0))))
-      (expect (= evaluations 1))))
-  (it "generates integer-radix lookups with one argument evaluation"
-      (let* ((name (gensym "INTEGER-RADIXES-"))
-             (macro-name (find-symbol "DEFINE-TOML-INTEGER-RADICES" "CL-TOML-KIT"))
-             (expansion
-              (macroexpand-1
-               (list macro-name name
-                     (list (list #\x 16) (list #\o 8) (list #\b 2)))))
-             (definition (%macroexpanded-defun expansion name))
-             (argument (first (third definition)))
-             (evaluations 0))
-        (expect (and (symbolp argument) (null (symbol-package argument))))
-        (eval definition)
-        (expect (= 16 (funcall name (progn (incf evaluations) #\x))))
-        (expect (= evaluations 1))))
-  (it "generates error-message lookups with one argument evaluation"
-  (let* ((name (gensym "ERROR-MESSAGES-"))
-         (macro-name (find-symbol "DEFINE-TOML-ERROR-MESSAGES" "CL-TOML-KIT"))
-         (entries (list (list :defined-table "defined table")
-                        (list :array-table "array table")))
-         (expansion (macroexpand-1 (list macro-name name entries)))
-         (definition (%macroexpanded-defun expansion name))
-         (argument (first (third definition)))
-         (evaluations 0))
-    (expect (and (symbolp argument) (null (symbol-package argument))))
-    (progn
       (eval definition)
-      (expect
-        (and (string= "defined table" (funcall name
-                                   (progn (incf evaluations) :defined-table)))
-             (string= "array table" (funcall name :array-table)))))
-    (expect (= evaluations 1))))
-  (it "keeps escape data and hex widths in the expansion"
-  (let* ((macro-name (find-symbol "DEFINE-TOML-ESCAPE-DATA" "CL-TOML-KIT"))
-         (character-map-name
-           (find-symbol "DEFINE-TOML-CHARACTER-MAP" "CL-TOML-KIT"))
-         (letters-name (find-symbol "+TOML-ESCAPE-LETTERS+" "CL-TOML-KIT"))
-         (table-name (find-symbol "+TOML-ESCAPE-TABLE+" "CL-TOML-KIT"))
-         (width-name (find-symbol "%TOML-HEX-ESCAPE-WIDTH" "CL-TOML-KIT"))
-         (entries '((#\b #\Backspace) (#\t #\Tab)))
-         (widths '((#\x 2) (#\u 4) (#\U 8)))
-         (expansion (macroexpand-1 (list macro-name entries widths)))
-         (forms (rest expansion))
-         (letters-definition
-           (find-if (lambda (form)
-                      (and (consp form)
-                           (eq (first form) 'defparameter)
-                           (eq (second form) letters-name)))
-                    forms))
-         (table-definition
-           (find-if (lambda (form)
-                      (and (consp form)
-                           (eq (first form) 'defparameter)
-                           (eq (second form) table-name)))
-                    forms))
-         (width-map
-           (find-if (lambda (form)
-                      (and (consp form)
-                           (eq (first form) character-map-name)
-                           (eq (second form) width-name)))
-                    forms)))
-    (expect (and letters-definition table-definition))
-    (expect (and width-map (equal (third width-map) widths))))))
+      (expect (funcall predicate-name (progn (incf evaluations) 0)))
+      (expect (= evaluations 1))))
+  (it "maps lookup entries and signals on an unknown key"
+    (let ((name (gensym "TOML-LOOKUP-")))
+      (eval `(cl-toml-kit::define-toml-error-messages
+              ,name
+              ((:defined-table "defined table")
+               (:array-table "array table"))
+              :otherwise (error "Unknown lookup key")))
+      (expect (string= "defined table" (funcall name :defined-table)))
+      (expect (string= "array table" (funcall name :array-table)))
+      (expect (signals error (funcall name :missing)))))
+  (it "defines escape data and hexadecimal widths"
+    (expect (string=
+             (coerce '(#\b #\t #\n #\f #\r #\e #\" #\\) 'string)
+             cl-toml-kit::+toml-escape-letters+))
+    (expect (toml-test-value=
+             (vector #\Backspace #\Tab #\Newline #\Page #\Return #\Escape #\" #\\)
+             cl-toml-kit::+toml-escape-table+))
+    (expect (toml-test-value=
+             '(2 4 8 nil)
+             (mapcar #'cl-toml-kit::%toml-hex-escape-width
+                     '(#\x #\u #\U #\a))))))
