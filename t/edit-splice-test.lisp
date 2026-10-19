@@ -4,7 +4,7 @@
   (it "edits an inline table leaf and keeps the inline form"
     (let* ((source (%edit-test-bytes "config = { enabled = true, count = 2 } # keep~%"))
            (result (edit-toml source '("config" "count") 3)))
-      (expect (string= (%edit-test-format "config = { enabled = true, count = 3 } # keep~%")
+      (expect (string= (%toml-test-format-text "config = { enabled = true, count = 3 } # keep~%")
                        (%edit-test-text result)))
       (let ((config (%edit-test-value result '("config"))))
         (expect (= 3 (gethash "count" config)))
@@ -13,7 +13,7 @@
     (let* ((source (%edit-test-bytes "config = { enabled = true, count = 2 }~%"))
            (added (edit-toml source '("config" "mode") "safe"))
            (deleted (delete-toml added '("config" "enabled"))))
-      (expect (string= (%edit-test-format "config = { count = 2, mode = \"safe\" }~%")
+      (expect (string= (%toml-test-format-text "config = { count = 2, mode = \"safe\" }~%")
                        (%edit-test-text deleted)))
       (let ((added-config (%edit-test-value added '("config")))
             (deleted-config (%edit-test-value deleted '("config"))))
@@ -31,7 +31,7 @@
            (replaced (edit-toml source '("values" 1) 20))
            (with-label (edit-toml replaced '("values" 3) 4))
            (result (edit-toml with-label '("labels" 1) "new")))
-      (expect (string= (%edit-test-format
+      (expect (string= (%toml-test-format-text
                        (concatenate 'string
                                     "values = [1, 20, 3, 4]~%"
                                     "labels = [\"old\", \"new\"]~%other = true~%"))
@@ -48,17 +48,15 @@
     (let* ((source (%edit-test-bytes "values = [1,~%  2,~%]~%"))
            (added (edit-toml source '("values" 2) 3))
            (deleted (delete-toml added '("values" 0))))
-      (expect (string= (%edit-test-format "values = [1,~%  2,~%  3,~%]~%")
+      (expect (string= (%toml-test-format-text "values = [1,~%  2,~%  3,~%]~%")
                        (%edit-test-text added)))
       (expect (equalp #(1 2 3) (%edit-test-value added '("values"))))
       (expect (equalp #(2 3) (%edit-test-value deleted '("values"))))))
   (it "adds to a single trailing-comma array"
     (let* ((source (%edit-test-bytes "values = [1,]~%"))
-           (added (edit-toml source '("values" 1) 2))
-           (deleted (delete-toml added '("values" 0)))
-           (empty (delete-toml deleted '("values" 0))))
-      (expect (equalp #(2) (%edit-test-value deleted '("values"))))
-      (expect (equalp #() (%edit-test-value empty '("values"))))))
+           (added (edit-toml source '("values" 1) 2)))
+      (expect (string= (%toml-test-format-text "values = [1, 2,]~%") (%edit-test-text added)))
+      (expect (equalp #(1 2) (%edit-test-value added (list "values"))))))
   (it "deletes single trailing-comma array items"
     (let* ((source (%edit-test-bytes "values = [1,]~%"))
            (added (edit-toml source '("values" 1) 2))
@@ -69,7 +67,7 @@
   (it "does not join lines when deleting the final value"
     (let* ((source (%edit-test-bytes "first = 1~%last = 2~%next = 3~%"))
            (result (delete-toml source '("last"))))
-      (expect (string= (%edit-test-format "first = 1~%next = 3~%")
+      (expect (string= (%toml-test-format-text "first = 1~%next = 3~%")
                        (%edit-test-text result)))
       (expect (= 1 (%edit-test-value result '("first"))))
       (expect (= 3 (%edit-test-value result '("next"))))))
@@ -77,7 +75,7 @@
     (let* ((source (%edit-test-bytes
                     "[[products]]~%name = \"A\"~%~%[[products]]~%name = \"B\"~%"))
            (result (edit-toml source '("products" 1 "name") "B2")))
-      (expect (string= (%edit-test-format
+      (expect (string= (%toml-test-format-text
                        (concatenate 'string
                                     "[[products]]~%name = \"A\"~%~%"
                                     "[[products]]~%name = \"B2\"~%"))
@@ -89,7 +87,7 @@
     (let ((source (%edit-test-bytes "server.host = \"example\"~%")))
       (expect (signals toml-format-preservation-error
                 (edit-toml source '("server" "port") 8080)))
-      (expect (string= (%edit-test-format "server.host = \"example\"~%")
+      (expect (string= (%toml-test-format-text "server.host = \"example\"~%")
                        (%edit-test-text source)))))
   (it-each (("# keep~%name = \"old\"~%" "name")
             ("name = \"old\" # keep~%" "name"))
@@ -98,18 +96,18 @@
     (let ((bytes (%edit-test-bytes source)))
       (expect (signals toml-format-preservation-error
                 (delete-toml bytes (list key))))
-      (expect (string= (%edit-test-format source) (%edit-test-text bytes)))))
+      (expect (string= (%toml-test-format-text source) (%edit-test-text bytes)))))
   (it "rejects array deletion that would remove an element comment"
     (let ((source (%edit-test-bytes "values = [1, # first~%  2]~%")))
       (expect (signals toml-format-preservation-error
                 (delete-toml source '("values" 0))))
-      (expect (string= (%edit-test-format "values = [1, # first~%  2]~%")
+      (expect (string= (%toml-test-format-text "values = [1, # first~%  2]~%")
                        (%edit-test-text source)))))
   (it "inserts section keys before trailing trivia"
     (let* ((source (%edit-test-bytes
                     "[server]~%name = \"x\"~%~%# section note~%[other]~%value = 1~%"))
            (result (edit-toml source '("server" "port") 8080)))
-      (expect (string= (%edit-test-format
+      (expect (string= (%toml-test-format-text
                        (concatenate 'string
                                     "[server]~%name = \"x\"~%port = 8080~%"
                                     "~%# section note~%[other]~%value = 1~%"))
@@ -119,7 +117,7 @@
     (let ((source (%edit-test-bytes "values = [1, 2 # keep~%]~%")))
       (expect (signals toml-format-preservation-error
                 (edit-toml source '("values" 2) 3)))
-      (expect (string= (%edit-test-format "values = [1, 2 # keep~%]~%")
+      (expect (string= (%toml-test-format-text "values = [1, 2 # keep~%]~%")
                        (%edit-test-text source)))))
   (it "uses the preceding line ending for a root insertion"
     (let* ((crlf (coerce (list #\Return #\Newline) 'string))
@@ -139,6 +137,6 @@
   (it "quotes a dotted string key when inserting it"
     (let* ((source (%edit-test-bytes "other = 1~%"))
            (result (edit-toml source '("a.b") "value")))
-      (expect (string= (%edit-test-format "other = 1~%\"a.b\" = \"value\"~%")
+      (expect (string= (%toml-test-format-text "other = 1~%\"a.b\" = \"value\"~%")
                        (%edit-test-text result)))
       (expect (string= "value" (%edit-test-value result '("a.b")))))))

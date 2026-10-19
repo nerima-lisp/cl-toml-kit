@@ -1,7 +1,7 @@
 (in-package #:cl-toml-kit/test)
 
 (describe "editor regression boundaries"
-  (it "counts array-table headers through edit-toml callbacks"
+  (it "counts array-table headers through internal %edit-toml callbacks"
     (let* ((groups 128)
            (header-count (* 2 groups))
            (prefix-bound (* 8 header-count))
@@ -70,40 +70,46 @@
             (expect (= 1 (length items)))
             (expect (= item-value (gethash "value" (aref items 0)))))))))
   (it "scans escaped keys and counts two-byte UTF-8 offsets"
-  (let* ((source (%edit-test-bytes "\"é\" = 1~%\"line\\nkey\" = 2~%"))
-         (first-result (edit-toml source (list "é") 3))
-         (key (format nil "line~%key"))
-         (result (edit-toml first-result (list key) 4)))
-    (expect (string= (%edit-test-format "\"é\" = 3~%\"line\\nkey\" = 4~%")
-                     (%edit-test-text result)))
-    (expect (= 3 (%edit-test-value result (list "é"))))
-    (expect (= 4 (%edit-test-value result (list key))))))
+      (let* ((source (%edit-test-bytes "\"é\" = 1~%\"line\\nkey\" = 2~%"))
+             (first-result (edit-toml source (list "é") 3))
+             (key (format nil "line~%key"))
+             (result (edit-toml first-result (list key) 4)))
+        (expect (string= (%toml-test-format-text "\"é\" = 3~%\"line\\nkey\" = 4~%")
+                         (%edit-test-text result)))
+        (expect (= 3 (%edit-test-value result (list "é"))))
+        (expect (= 4 (%edit-test-value result (list key))))))
   (it "preserves Unicode quoted-key escapes and values"
-  (let* ((source
-           (%edit-test-bytes
-            "\"quote\\\"key\" = 1~%\"small\\u00e9\" = 2~%\"face\\U0001F642\" = 3~%'literal' = 4~%"))
-         (quoted (edit-toml source (list "quote\"key") 5))
-         (small (edit-toml quoted (list "smallé") 6))
-         (face (edit-toml small (list "face🙂") 7))
-         (result (edit-toml face (list "literal") 8)))
-    (expect (string=
-             (%edit-test-format
-                       (concatenate 'string
-                                    "\"quote\\\"key\" = 5~%\"small\\u00e9\" = 6~%"
-                                    "\"face\\U0001F642\" = 7~%'literal' = 8~%"))
-             (%edit-test-text result)))
-    (expect (= 5 (%edit-test-value result (list "quote\"key"))))
-    (expect (= 6 (%edit-test-value result (list "smallé"))))))
+      (let* ((source
+              (%edit-test-bytes
+               (concatenate
+                'string
+                "\"quote\\\"key\" = 1~%\"small\\u00e9\" = 2~%"
+                "\"face\\U0001F642\" = 3~%'literal' = 4~%")))
+             (quoted (edit-toml source (list "quote\"key") 5))
+             (small (edit-toml quoted (list "smallé") 6))
+             (face (edit-toml small (list "face🙂") 7))
+             (result (edit-toml face (list "literal") 8)))
+        (expect (string=
+                 (%toml-test-format-text
+                  (concatenate 'string
+                               "\"quote\\\"key\" = 5~%\"small\\u00e9\" = 6~%"
+                               "\"face\\U0001F642\" = 7~%'literal' = 8~%"))
+                 (%edit-test-text result)))
+        (expect (= 5 (%edit-test-value result (list "quote\"key"))))
+        (expect (= 6 (%edit-test-value result (list "smallé"))))))
   (it "checks supplementary Unicode and literal quoted keys"
-  (let* ((source
-           (%edit-test-bytes
-            "\"quote\\\"key\" = 1~%\"small\\u00e9\" = 2~%\"face\\U0001F642\" = 3~%'literal' = 4~%"))
-         (quoted (edit-toml source (list "quote\"key") 5))
-         (small (edit-toml quoted (list "smallé") 6))
-         (face (edit-toml small (list "face🙂") 7))
-         (result (edit-toml face (list "literal") 8)))
-    (expect (= 7 (%edit-test-value result (list "face🙂"))))
-    (expect (= 8 (%edit-test-value result (list "literal"))))))
+      (let* ((source
+              (%edit-test-bytes
+               (concatenate
+                'string
+                "\"quote\\\"key\" = 1~%\"small\\u00e9\" = 2~%"
+                "\"face\\U0001F642\" = 3~%'literal' = 4~%")))
+             (quoted (edit-toml source (list "quote\"key") 5))
+             (small (edit-toml quoted (list "smallé") 6))
+             (face (edit-toml small (list "face🙂") 7))
+             (result (edit-toml face (list "literal") 8)))
+        (expect (= 7 (%edit-test-value result (list "face🙂"))))
+        (expect (= 8 (%edit-test-value result (list "literal"))))))
   (it "checks character, key, and basic string scanner bounds"
     (let* ((char-at-limit
               (symbol-function (find-symbol "%EDIT-CHAR" "CL-TOML-KIT")))
