@@ -53,13 +53,9 @@
 
 (defun %datetime-text= (expected actual)
   (handler-case
-      (let ((normalized
-              (cl-date-kit:format-offset-date-time
-               (cl-date-kit:parse-offset-date-time expected :profile :rfc3339)
-               :profile :rfc3339)))
-        (and (cl-date-kit:offset-date-time-p actual)
-             (string= normalized
-                      (cl-date-kit:format-offset-date-time actual :profile :rfc3339))))
+      (toml-test-value=
+       (cl-date-kit:parse-offset-date-time expected :profile :rfc3339)
+       actual)
     (cl-date-kit:cl-date-kit-error () nil)))
 
 (defun %expected-value= (expected actual)

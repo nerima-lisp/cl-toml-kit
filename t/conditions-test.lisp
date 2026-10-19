@@ -9,10 +9,12 @@
           (encoding-error (make-condition 'toml-encoding-error
                                           :message "bad"
                                           :path '("root" "child"))))
-      (expect (string= "value" (toml-parse-error-expected parse-error)))
-      (expect (equal '("root" "child") (toml-parse-error-path parse-error)))
-      (expect (string= "bad" (toml-encoding-error-message encoding-error)))
-      (expect (equal '("root" "child") (toml-encoding-error-path encoding-error)))))
+      (expect (and (string= "value" (toml-parse-error-expected parse-error))
+                   (equal '("root" "child")
+                          (toml-parse-error-path parse-error))))
+      (expect (and (string= "bad" (toml-encoding-error-message encoding-error))
+                   (equal '("root" "child")
+                          (toml-encoding-error-path encoding-error))))))
   (it "constructs parse diagnostics"
     (let ((condition (make-condition 'toml-parse-error
                                      :source-name "input"
@@ -20,10 +22,10 @@
                                      :expected "expected"
                                      :context "context"
                                      :text (make-string 256 :initial-element #\x))))
-      (expect (equal (list 'key "name")
-                     (toml-parse-error-path condition)))
-      (expect (string= "expected" (toml-parse-error-expected condition)))
-      (expect (string= "context" (toml-parse-error-context condition)))
+      (expect (and (equal (list 'key "name")
+                          (toml-parse-error-path condition))
+                   (string= "expected" (toml-parse-error-expected condition))
+                   (string= "context" (toml-parse-error-context condition))))
       (expect (<= (length (toml-parse-error-text condition)) 256))))
   (it "reports every parse diagnostic accessor"
     (let ((condition (make-condition 'toml-parse-error
@@ -31,15 +33,16 @@
                                      :position 4 :line 2 :column 3
                                      :path '("root" 1) :expected "value"
                                      :context "table" :text "x =")))
-      (expect (string= "input.toml" (toml-parse-error-source-name condition)))
-      (expect (= 4 (toml-parse-error-position condition)))
-      (expect (= 2 (toml-parse-error-line condition)))
-      (expect (= 3 (toml-parse-error-column condition)))
-      (expect (equal '("root" 1) (toml-parse-error-path condition)))
-      (expect (string= "value" (toml-parse-error-expected condition)))
-      (expect (string= "table" (toml-parse-error-context condition)))
-      (expect (string= "x =" (toml-parse-error-text condition)))
-      (expect (plusp (length (format nil "~A" condition))))))
+      (expect (and (string= "input.toml"
+                            (toml-parse-error-source-name condition))
+                   (= 4 (toml-parse-error-position condition))
+                   (= 2 (toml-parse-error-line condition))))
+      (expect (and (= 3 (toml-parse-error-column condition))
+                   (equal '("root" 1) (toml-parse-error-path condition))
+                   (string= "value" (toml-parse-error-expected condition))))
+      (expect (and (string= "table" (toml-parse-error-context condition))
+                   (string= "x =" (toml-parse-error-text condition))
+                   (plusp (length (format nil "~A" condition)))))))
   (it "constructs an encoding condition with bounded path values"
     (let ((condition (make-condition 'toml-encoding-error
                                      :message (make-string 256 :initial-element #\m)

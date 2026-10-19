@@ -12,11 +12,16 @@
 (defvar *reader-conformance-tests-registered-p* nil)
 
 (defun run-tests ()
-  "Run the foundation data and condition specifications."
+  "Register deferred test groups once, then run the full suite with a reproducible property seed."
   (unless *reader-conformance-tests-registered-p*
     (%register-reader-conformance-tests)
     (%register-roundtrip-tests)
     (setf *reader-conformance-tests-registered-p* t))
-  (unless (run-all :reporter :spec :timeout-ms 10000)
-    (error "cl-toml-kit test suite failed"))
+  (let ((cl-weave:*property-seed*
+          (or (let ((environment-seed (uiop:getenv "CL_WEAVE_PROPERTY_SEED")))
+                (when environment-seed
+                  (parse-integer environment-seed)))
+              8675309)))
+    (unless (run-all :reporter :spec :timeout-ms 10000)
+      (error "cl-toml-kit test suite failed")))
   t)
