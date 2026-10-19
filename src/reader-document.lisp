@@ -196,21 +196,23 @@
          (path (car key-result))
          (equals-position
            (%skip-space-and-comments-at state (cdr key-result))))
-    (unless (eql (%source-char state equals-position) #\\=)
+    (unless (eql (%source-char state equals-position) #\=)
       (funcall failure equals-position :equals path))
     (let ((value-position
             (%skip-space-and-comments-at state (1+ equals-position))))
-      (toml-read-value
-       state value-position
-       (lambda (value next)
-         (%define-assignment state path value failure)
-         (let ((end (%skip-space-and-comments-at state next)))
-           (unless (let ((char (%source-char state end)))
-                     (or (null char)
-                         (member char +toml-newline-characters+)))
-             (funcall failure end :line-end path))
-           (funcall success nil (%skip-line-ending-at state end))))
-       failure))))
+      (block parsed-value
+        (toml-read-value
+         state value-position
+         (lambda (value next)
+           (%define-assignment state path value failure)
+           (let ((end (%skip-space-and-comments-at state next)))
+             (unless (let ((char (%source-char state end)))
+                       (or (null char)
+                           (member char +toml-newline-characters+)))
+               (funcall failure end :line-end path))
+             (return-from parsed-value
+               (funcall success nil (%skip-line-ending-at state end)))))
+         failure)))))
 
 (define-toml-rule toml-read-document (state position success failure)
   (labels ((fail (error-position expected path)
