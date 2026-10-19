@@ -12,13 +12,17 @@
 (defun %edit-array-table-counter-path (header latest)
   (append (%edit-header-context (butlast header) latest)
           (last header)))
-(defun %edit-array-table-context (header latest counts)
-  (let* ((counter-path (%edit-array-table-counter-path header latest))
+(defun %edit-array-table-context (header latest counts
+                                  array-table-counter-path)
+  (let* ((counter-path
+           (funcall array-table-counter-path header latest))
          (index (gethash counter-path counts 0)))
     (setf (gethash counter-path counts) (1+ index)
           (gethash header latest) index)
     (%edit-header-context header latest)))
-(defun %edit-scan-header-line (text line-start first length latest counts)
+(defun %edit-scan-header-line
+    (text line-start first length latest counts
+     &key (array-table-counter-path #'%edit-array-table-counter-path))
   (let* ((array-p (and (< (1+ first) length)
                        (char= (char text (1+ first)) #\[)))
          (key-start (+ first (if array-p 2 1))))
@@ -31,9 +35,9 @@
         (incf next))
       (unless (and (< next length) (char= (char text next) #\]))
         (%edit-fail header "Invalid table header"))
-      (incf next)
       (values (if array-p
-                  (%edit-array-table-context header latest counts)
+                  (%edit-array-table-context
+                   header latest counts array-table-counter-path)
                   (%edit-header-context header latest))
               (%edit-line-end text line-start)))))
 (defun %edit-scan-assignment-line (text line-start first length current-section)
@@ -45,8 +49,7 @@
     (setf next (%edit-horizontal-space text next length))
     (let* ((path (append (edit-section-path current-section) keys))
            (assignment
-             (%make-edit-assignment :path path :line-start line-start
-                                    :line-end nil :section current-section))
+             (%make-edit-assignment :path path :line-start line-start :line-end nil))
            (node (%edit-scan-value-node text next length path assignment)))
       (setf (edit-assignment-node assignment) node
             (edit-assignment-line-end assignment)
@@ -70,7 +73,8 @@
        (coerce (list #\Return #\Newline) 'string))
       (t (string #\Newline)))))
 
-(defun %edit-scan-document (text)
+(defun %edit-scan-document
+    (text &key (array-table-counter-path #'%edit-array-table-counter-path))
   (let* ((length (length text))
          (index 0)
          (assignments nil)
@@ -90,7 +94,8 @@
                    ((char= (char text first) #\[)
                     (multiple-value-bind (path next)
                         (%edit-scan-header-line
-                         text line-start first length latest counts)
+                         text line-start first length latest counts
+                         :array-table-counter-path array-table-counter-path)
                       (close-section line-start)
                       (setf current-section
                             (%make-edit-section :path path :start next :end length)

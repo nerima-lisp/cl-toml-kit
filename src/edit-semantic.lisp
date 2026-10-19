@@ -1,6 +1,15 @@
 (in-package #:cl-toml-kit)
 
-(declaim (ftype function %edit-semantic-change %edit-semantic-table-change %edit-semantic-array-change))
+(declaim
+  (ftype function
+    %edit-value-equal-p
+    %edit-hash-table-values-equal-p
+    %edit-vector-values-equal-p
+    %edit-array-component-valid-p
+    %edit-semantic-change
+    %edit-semantic-table-change
+    %edit-semantic-array-change
+    %edit-semantic-array-leaf-change))
 
 (defun %edit-copy-value (value)
   (cond
@@ -19,20 +28,9 @@
 (defun %edit-value-equal-p (left right)
   (cond
     ((and (hash-table-p left) (hash-table-p right))
-     (and (= (hash-table-count left) (hash-table-count right))
-          (block equal-table
-            (maphash
-             (lambda (key value)
-               (multiple-value-bind (other present) (gethash key right)
-                 (unless (and present (%edit-value-equal-p value other))
-                   (return-from equal-table nil))))
-             left)
-            t)))
+     (%edit-hash-table-values-equal-p left right))
     ((and (vectorp left) (vectorp right))
-     (and (= (length left) (length right))
-          (loop for index below (length left)
-                always (%edit-value-equal-p (aref left index)
-                                             (aref right index)))))
+     (%edit-vector-values-equal-p left right))
     ((or (hash-table-p left) (hash-table-p right)
          (vectorp left) (vectorp right))
      nil)
@@ -50,11 +48,7 @@
        (%edit-fail path "Edited path does not traverse a TOML table or array")))))
 
 (defun %edit-semantic-array-change (container component rest path new-value delete-p)
-  (unless (and (integerp component)
-               (<= 0 component)
-               (if (or delete-p rest)
-                   (< component (length container))
-                   (<= component (length container))))
+  (unless (%edit-array-component-valid-p container component rest delete-p)
     (%edit-fail path "An array index is outside the parsed TOML value"))
   (if rest
       (progn
@@ -62,20 +56,7 @@
               (%edit-semantic-change (aref container component)
                                      rest new-value delete-p))
         container)
-      (if delete-p
-          (make-array (1- (length container))
-                      :initial-contents
-                      (loop for index below (length container)
-                            unless (= index component)
-                              collect (aref container index)))
-          (if (= component (length container))
-              (make-array (1+ (length container))
-                          :initial-contents
-                          (append (loop for item across container collect item)
-                                  (list new-value)))
-              (progn
-                (setf (aref container component) new-value)
-                container)))))
+      (%edit-semantic-array-leaf-change container component new-value delete-p)))
 
 (defun %edit-semantic-table-change (container component rest path new-value delete-p)
   (if rest
@@ -96,3 +77,44 @@
               (remhash component container))
             (setf (gethash component container) new-value))
         container)))
+
+(defun %edit-hash-table-values-equal-p (left right)
+  (and (= (hash-table-count left) (hash-table-count right))
+       (block equal-table
+         (maphash
+          (lambda (key value)
+            (multiple-value-bind (other present) (gethash key right)
+              (unless (and present (%edit-value-equal-p value other))
+                (return-from equal-table nil))))
+          left)
+         t)))
+
+(defun %edit-vector-values-equal-p (left right)
+  (and (= (length left) (length right))
+       (loop for index below (length left)
+             always (%edit-value-equal-p (aref left index)
+                                          (aref right index)))))
+
+(defun %edit-array-component-valid-p (container component rest delete-p)
+  (and (integerp component)
+       (<= 0 component)
+       (if (or delete-p rest)
+           (< component (length container))
+           (<= component (length container)))))
+
+(defun %edit-semantic-array-leaf-change
+    (container component new-value delete-p)
+  (if delete-p
+      (make-array (1- (length container))
+                  :initial-contents
+                  (loop for index below (length container)
+                        unless (= index component)
+                          collect (aref container index)))
+      (if (= component (length container))
+          (make-array (1+ (length container))
+                      :initial-contents
+                      (append (loop for item across container collect item)
+                              (list new-value)))
+          (progn
+            (setf (aref container component) new-value)
+            container))))

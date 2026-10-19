@@ -59,6 +59,25 @@
                          (t (write-char escape out))))))
                (incf index)))))
 
+(defun %edit-scan-string-triple-end (text delimiter index limit)
+  (let ((end index))
+    (loop while (and (< end limit)
+                     (char= (char text end) delimiter))
+          do (incf end))
+    (values end (>= (- end index) 3))))
+
+(defun %edit-scan-string-step (text delimiter triple index limit)
+  (cond
+    ((and (char= delimiter #\")
+          (char= (char text index) #\\))
+     (values (+ index 2) nil))
+    ((and triple (char= (char text index) delimiter))
+     (%edit-scan-string-triple-end text delimiter index limit))
+    ((and (not triple) (char= (char text index) delimiter))
+     (values (1+ index) t))
+    (t
+     (values (1+ index) nil))))
+
 (defun %edit-scan-string (text position limit)
   (let* ((delimiter (char text position))
          (triple (and (<= (+ position 2) (1- limit))
@@ -66,21 +85,12 @@
                       (char= delimiter (char text (+ position 2)))))
          (index (+ position (if triple 3 1))))
     (loop while (< index limit)
-          do (cond
-               ((and (char= delimiter #\")
-                     (char= (char text index) #\\))
-                (incf index 2))
-               ((and triple (char= (char text index) delimiter))
-                (let ((end index))
-                  (loop while (and (< end limit)
-                                   (char= (char text end) delimiter))
-                        do (incf end))
-                  (when (>= (- end index) 3)
-                    (return-from %edit-scan-string end))
-                  (setf index end)))
-               ((and (not triple) (char= (char text index) delimiter))
-                (return-from %edit-scan-string (1+ index)))
-               (t (incf index))))
+          do (multiple-value-bind (next done-p)
+                 (%edit-scan-string-step
+                  text delimiter triple index limit)
+               (setf index next)
+               (when done-p
+                 (return-from %edit-scan-string index))))
     (%edit-fail nil "Unterminated string while editing TOML")))
 
 (defun %edit-scan-key-component (text position limit)
@@ -117,8 +127,12 @@
     (loop
       (setf index (%edit-skip-comment-and-trivia text index limit))
       (when (and (< index limit) (char= (char text index) #\]))
-        (return (%edit-make-node path position (1+ index) :array
-                                 (nreverse children) assignment)))
+        (return (%make-edit-node :path path
+                 :start position
+                 :end (1+ index)
+                 :kind :array
+                 :children (nreverse children)
+                 :assignment assignment)))
       (let ((child (%edit-scan-value-node
                     text index limit (append path (list element-index)) assignment)))
         (push child children)
@@ -135,8 +149,12 @@
     (loop
       (setf index (%edit-skip-comment-and-trivia text index limit))
       (when (and (< index limit) (char= (char text index) #\}))
-        (return (%edit-make-node path position (1+ index) :inline
-                                 (nreverse children) assignment)))
+        (return (%make-edit-node :path path
+                 :start position
+                 :end (1+ index)
+                 :kind :inline
+                 :children (nreverse children)
+                 :assignment assignment)))
       (let ((key-start index))
         (multiple-value-bind (keys next) (%edit-scan-key-path text index limit)
           (setf index (%edit-horizontal-space text next limit))
@@ -163,14 +181,23 @@
     (loop while (and (> end position)
                      (toml-space-character-p (char text (1- end))))
           do (decf end))
-    (%edit-make-node path position end :value nil assignment)))
+    (%make-edit-node :path path
+                   :start position
+                   :end end
+                   :kind :value
+                   :children nil
+                   :assignment assignment)))
 
 (defun %edit-scan-value-node (text position limit path assignment)
   (let ((character (%edit-char text position limit)))
     (cond
       ((member character '(#\" #\'))
-       (%edit-make-node path position (%edit-scan-string text position limit)
-                        :value nil assignment))
+       (%make-edit-node :path path
+                        :start position
+                        :end (%edit-scan-string text position limit)
+                        :kind :value
+                        :children nil
+                        :assignment assignment))
       ((char= character #\[)
        (%edit-scan-array-node text position limit path assignment))
       ((char= character #\{)

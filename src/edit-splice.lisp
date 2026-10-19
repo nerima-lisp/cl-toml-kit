@@ -18,35 +18,15 @@
 
 (defun %edit-delete-range (text node parent)
   (if (null parent)
-      (let ((assignment (edit-node-assignment node)))
-        (list (edit-assignment-line-start assignment)
-              (edit-assignment-line-end assignment)
-              (make-array 0 :element-type '(unsigned-byte 8))))
+      (%edit-root-delete-range node)
       (let* ((children (edit-node-children parent))
              (position (position node children :test #'eq))
              (previous (and (plusp position) (nth (1- position) children)))
              (next (and (< (1+ position) (length children))
                         (nth (1+ position) children))))
         (if (eq (edit-node-kind parent) :inline)
-            (cond
-              (next (list (edit-node-key-start node) (edit-node-key-start next)
-                          (make-array 0 :element-type '(unsigned-byte 8))))
-              (previous (list (edit-node-end previous) (edit-node-end node)
-                              (make-array 0 :element-type '(unsigned-byte 8))))
-              (t (list (edit-node-key-start node) (edit-node-end node)
-                       (make-array 0 :element-type '(unsigned-byte 8)))))
-            (cond
-              (next (list (edit-node-start node) (edit-node-start next)
-                          (make-array 0 :element-type '(unsigned-byte 8))))
-              (previous (list (edit-node-end previous) (edit-node-end node)
-                              (make-array 0 :element-type '(unsigned-byte 8))))
-              (t (let ((end (edit-node-end node)))
-                   (when (and (eq (edit-node-kind parent) :array)
-                              (< end (edit-node-end parent))
-                              (char= (char text end) #\,))
-                     (incf end))
-                   (list (edit-node-start node) end
-                         (make-array 0 :element-type '(unsigned-byte 8))))))))))
+            (%edit-inline-delete-range node previous next)
+            (%edit-sequence-delete-range text node parent previous next)))))
 
 (defun %edit-trivia-line-p (text start end)
   (let ((first (%edit-horizontal-space text start end)))
@@ -113,49 +93,60 @@
   (let ((separator (if (edit-node-children node) ", " ""))
         (position (- (edit-node-end node) 2)))
     (loop while (and (> position (edit-node-start node))
-                     (member (char text position)
-                             '(#\Space #\Tab)))
+                     (toml-space-character-p (char text position)))
           do (decf position))
     (incf position)
     (list position position
           (format nil "~A~A = ~A" separator (%edit-key-text key) value))))
 
-(defun %edit-insert-array (text node value)
-  (let* ((children (edit-node-children node))
-         (position (1- (edit-node-end node))))
+(defun %edit-array-insertion-position (text node children)
+  (let ((position (1- (edit-node-end node))))
     (when (position #\# text
-                   :start (if children
-                              (edit-node-end (car (last children)))
-                              (1+ (edit-node-start node)))
-                   :end (edit-node-end node))
+                    :start (if children
+                               (edit-node-end (car (last children)))
+                               (1+ (edit-node-start node)))
+                    :end (edit-node-end node))
       (%edit-fail (edit-node-path node)
                   "Array insertion cannot preserve a trailing comment"))
     (loop while (and (> position (edit-node-start node))
-                     (member (char text (1- position))
-                             '(#\Space #\Tab #\Newline #\Return)))
+                     (or (toml-space-character-p (char text (1- position)))
+                         (member (char text (1- position))
+                                 '(#\Newline #\Return))))
           do (decf position))
-    (let* ((trailing-comma (and children
-                                (> position (edit-node-start node))
-                                (char= (char text (1- position)) #\,)))
-           (insertion-position (if trailing-comma (1- position) position))
-           (multiline (find #\Newline text :start (edit-node-start node)
-                            :end (edit-node-end node)))
-           (line-ending (%edit-line-ending text insertion-position))
-           (line-start (or (position #\Newline text :end insertion-position :from-end t)
-                           -1))
-           (indent-start (1+ line-start))
-           (indent-end indent-start))
-      (loop while (and (< indent-end insertion-position)
-                       (member (char text indent-end) '(#\Space #\Tab)))
-            do (incf indent-end))
-      (let ((separator (if multiline
-                          (format nil ",~A~A" line-ending
-                                  (subseq text indent-start indent-end))
-                          ", ")))
-        (list insertion-position insertion-position
-              (if children
-                  (format nil "~A~A" separator value)
-                  value))))))
+    (if (and children
+             (> position (edit-node-start node))
+             (char= (char text (1- position)) #\,))
+        (1- position)
+        position)))
+
+(defun %edit-array-insertion-separator
+    (text node insertion-position)
+  (let* ((multiline (find #\Newline text
+                          :start (edit-node-start node)
+                          :end (edit-node-end node)))
+         (line-ending (%edit-line-ending text insertion-position))
+         (line-start (or (position #\Newline text
+                                   :end insertion-position
+                                   :from-end t)
+                         -1))
+         (indent-start (1+ line-start))
+         (indent-end indent-start))
+    (loop while (and (< indent-end insertion-position)
+                     (toml-space-character-p (char text indent-end)))
+          do (incf indent-end))
+    (if multiline
+        (format nil ",~A~A" line-ending
+                (subseq text indent-start indent-end))
+        ", ")))
+
+(defun %edit-insert-array (text node value)
+  (let* ((children (edit-node-children node))
+         (position (%edit-array-insertion-position text node children))
+         (separator (%edit-array-insertion-separator text node position)))
+    (list position position
+          (if children
+              (format nil "~A~A" separator value)
+              value))))
 
 (defun %edit-apply-bytes (source replacements)
   (let* ((ordered (sort (copy-list replacements) #'< :key #'first))
@@ -176,3 +167,38 @@
           (setf cursor end)))
       (replace result source :start1 output :start2 cursor :end2 size)
       result)))
+
+(defun %edit-root-delete-range (node)
+  (let ((assignment (edit-node-assignment node)))
+    (list (edit-assignment-line-start assignment)
+          (edit-assignment-line-end assignment)
+          (make-array 0 :element-type '(unsigned-byte 8)))))
+
+(defun %edit-inline-delete-range (node previous next)
+  (cond
+    (next
+     (list (edit-node-key-start node) (edit-node-key-start next)
+           (make-array 0 :element-type '(unsigned-byte 8))))
+    (previous
+     (list (edit-node-end previous) (edit-node-end node)
+           (make-array 0 :element-type '(unsigned-byte 8))))
+    (t
+     (list (edit-node-key-start node) (edit-node-end node)
+           (make-array 0 :element-type '(unsigned-byte 8))))))
+
+(defun %edit-sequence-delete-range (text node parent previous next)
+  (cond
+    (next
+     (list (edit-node-start node) (edit-node-start next)
+           (make-array 0 :element-type '(unsigned-byte 8))))
+    (previous
+     (list (edit-node-end previous) (edit-node-end node)
+           (make-array 0 :element-type '(unsigned-byte 8))))
+    (t
+     (let ((end (edit-node-end node)))
+       (when (and (eq (edit-node-kind parent) :array)
+                  (< end (edit-node-end parent))
+                  (char= (char text end) #\,))
+         (incf end))
+       (list (edit-node-start node) end
+             (make-array 0 :element-type '(unsigned-byte 8)))))))
