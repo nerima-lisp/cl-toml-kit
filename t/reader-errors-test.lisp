@@ -21,17 +21,18 @@
     (expect (signals toml-parse-error (parse "value = 1e309"))))
   (it "rejects a fractional minute with a TOML parse error"
     (expect (signals toml-parse-error (parse "value = 07:32.5"))))
-  (it-each ((#.(concatenate 'string "a = 1" (string #\Return)) 1 6)
-            (#.(concatenate 'string "a = " (string (code-char 1))) 1 5)
-            ("t/fixtures/toml-test/invalid/encoding/bad-utf8-at-end.toml" 5 11))
+  (it-each ((#.(concatenate 'string "a = 1" (string #\Return)) 1 6 5)
+            (#.(concatenate 'string "a = " (string (code-char 1))) 1 5 4)
+            ("t/fixtures/toml-test/invalid/encoding/bad-utf8-at-end.toml" 5 11 241))
       "reports a concrete position for malformed input ~S"
-      (input expected-line expected-column)
+      (input expected-line expected-column expected-position)
     (let ((condition (handler-case
                          (if (search ".toml" input)
                              (parse-file input)
                              (parse input))
                        (toml-parse-error (error) error))))
-      (expect (typep condition 'toml-parse-error))
+      (expect (and (typep condition 'toml-parse-error)
+                   (= expected-position (toml-parse-error-position condition))))
       (expect (= expected-line (toml-parse-error-line condition)))
       (expect (= expected-column (toml-parse-error-column condition)))))
   (it-each ((#.(format nil "a = 1~%b = 2~%c = 3~%a = 4"))
@@ -51,4 +52,20 @@
       (expect (string= "example.toml"
                        (toml-parse-error-source-name condition)))
       (expect (plusp (length (toml-parse-error-text condition))))
-      (expect (search "line" (princ-to-string condition))))))
+      (expect (search "line" (princ-to-string condition)))))
+  (it "reports decoded character coordinates before a decode error"
+    (let ((pathname (merge-pathnames "cl-toml-kit-reader-invalid-coordinate.toml"
+                                     (uiop:temporary-directory))))
+      (unwind-protect
+           (progn
+             (%reader-write-bytes pathname
+                                  #(35 32 195 169 13 10 118 97 108 117 101 32 61 32 255))
+             (let ((condition (handler-case
+                                  (parse-file pathname)
+                                (toml-parse-error (error) error))))
+               (expect (and (typep condition 'toml-parse-error)
+                            (= 14 (toml-parse-error-position condition))))
+               (expect (= 2 (toml-parse-error-line condition)))
+               (expect (= 9 (toml-parse-error-column condition)))))
+        (when (probe-file pathname)
+          (delete-file pathname))))))

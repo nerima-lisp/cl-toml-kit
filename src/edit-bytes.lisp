@@ -6,10 +6,14 @@
                                  +toml-utf8-bom+))
                     (length +toml-utf8-bom+) 0)))
     (handler-case
-        (values (sb-ext:octets-to-string (subseq bytes offset)) offset)
-      (error (condition)
-        (error (make-toml-parse-error :position 0 :line 1 :column 1
-                                       :expected "UTF-8" :text condition))))))
+        (values (cl-codec-kit:octets-to-string bytes :encoding :utf-8 :start offset) offset)
+      (cl-codec-kit:decode-error (condition)
+        (let ((position (cl-codec-kit:decode-error-position condition)))
+          (multiple-value-bind (line column)
+              (%byte-position-line-column bytes position offset)
+            (error (make-toml-parse-error :position position
+                                          :line line :column column
+                                          :expected "UTF-8" :text condition))))))))
 
 (defun %edit-utf8-length (character)
   (let ((code (char-code character)))
@@ -25,7 +29,7 @@
     positions))
 
 (defun %edit-string-to-bytes (text)
-  (sb-ext:string-to-octets text :external-format :utf-8))
+  (cl-codec-kit:string-to-octets text :encoding :utf-8))
 
 (defun %edit-value-bytes (value)
   (with-output-to-string (stream)

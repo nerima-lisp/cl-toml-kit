@@ -28,34 +28,41 @@
                                   (declare (ignore position))
                                   (%finalize-value value)))))
 
-(defun %decoding-error-position (condition)
-  (let ((text (princ-to-string condition))
-        (prefix "byte position "))
-    (when (search prefix text)
-      (parse-integer text :start (+ (search prefix text) (length prefix))
-                     :junk-allowed t))))
-
-(defun %byte-position-line-column (bytes position)
-  (let ((line 1)
+(defun %byte-position-line-column (bytes position &optional (start 0))
+  (let ((text (cl-codec-kit:octets-to-string bytes
+                                              :encoding :utf-8
+                                              :start start
+                                              :end position))
+        (line 1)
         (column 1))
-    (loop for index below position
-          for byte = (aref bytes index)
-          if (= byte #x0A)
-            do (incf line) (setf column 1)
-          else do (incf column))
+    (loop with index = 0
+          while (< index (length text))
+          do (let ((current-character (char text index)))
+               (incf index)
+               (cond
+                 ((char= current-character #\Return)
+                  (when (and (< index (length text))
+                             (char= (char text index) #\Newline))
+                    (incf index))
+                  (incf line)
+                  (setf column 1))
+                 ((char= current-character #\Newline)
+                  (incf line)
+                  (setf column 1))
+                 (t (incf column)))))
     (values line column)))
 
 (defun %decode-utf8 (bytes pathname)
   (handler-case
-      (sb-ext:octets-to-string bytes :external-format :utf-8)
-    (sb-int:character-decoding-error (condition)
-      (let ((position (%decoding-error-position condition)))
+      (cl-codec-kit:octets-to-string bytes :encoding :utf-8)
+    (cl-codec-kit:decode-error (condition)
+      (let ((position (cl-codec-kit:decode-error-position condition)))
         (multiple-value-bind (line column)
-            (%byte-position-line-column bytes (or position 0))
+            (%byte-position-line-column bytes position)
           (error
            (make-toml-parse-error
             :source-name (namestring pathname)
-            :position (or position 0) :line line :column column
+            :position position :line line :column column
             :expected "UTF-8")))))))
 
 (defun parse-file (pathname)
