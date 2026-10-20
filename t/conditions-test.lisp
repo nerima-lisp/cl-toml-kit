@@ -49,6 +49,51 @@
                                      :path (list (make-string 64 :initial-element #\p)))))
       (expect (<= (length (toml-encoding-error-message condition)) 256))
       (expect (<= (length (first (toml-encoding-error-path condition))) 64))))
+  (it "bounds encoding path components and aggregate report length"
+    (let* ((path (append (list (make-string 10000 :initial-element #\p)
+                               (ash 1 100000)
+                               (concatenate 'string
+                                            "control"
+                                            (coerce (list #\Newline #\Tab #\Return #\Null)
+                                                    'string)))
+                         (make-list 100 :initial-element "component")))
+           (condition (cl-toml-kit::make-toml-encoding-error :message "bad" :path path))
+           (normalized (toml-encoding-error-path condition))
+           (canonical-path (cl-toml-kit::%diagnostic-path-report-string normalized))
+           (hostile-size
+             (let ((*print-length* 1)
+                   (*print-level* 1)
+                   (*print-escape* nil))
+               (cl-toml-kit::%diagnostic-path-rendered-size normalized)))
+           (rendered-path
+             (let ((*print-length* 1)
+                   (*print-level* 1)
+                   (*print-escape* nil))
+               (cl-toml-kit::%diagnostic-path-report-string normalized)))
+           (report
+             (let ((*print-length* 1)
+                   (*print-level* 1)
+                   (*print-escape* nil))
+               (format nil "~A" condition))))
+      (expect (<= (cl-toml-kit::%diagnostic-path-rendered-size (first normalized))
+                  cl-toml-kit::+toml-diagnostic-path-component-limit+))
+      (expect (search "..." (first normalized)))
+      (expect (string= "integer" (second normalized)))
+      (expect (search "control" rendered-path))
+      (expect (notany (lambda (character)
+                        (member character '(#\Newline #\Tab #\Return #\Null)))
+                      rendered-path))
+      (expect (eq :... (car (last normalized))))
+      (expect (= hostile-size (length canonical-path)))
+      (expect (string= canonical-path rendered-path))
+      (expect (<= (length canonical-path)
+                  cl-toml-kit::+toml-diagnostic-path-limit+))
+      (expect (<= (length report)
+              (+ (length "TOML encode error at ")
+                 cl-toml-kit::+toml-diagnostic-path-limit+
+                 (length ": ")
+                 (length "bad"))))
+      (expect (search canonical-path report))))
   (it "reports encoding message and path"
     (let ((condition (make-condition 'toml-encoding-error
                                      :message "bad value" :path '("x"))))

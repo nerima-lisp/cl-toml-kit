@@ -6,6 +6,17 @@
           do (setf (gethash key table) value))
     table))
 
+(defvar *writer-diagnostic-printer-calls* 0)
+
+(defun %writer-unbounded-value-printer (value stream depth)
+  (declare (ignore value stream depth))
+  (incf *writer-diagnostic-printer-calls*)
+  (error "Rejected value printer was invoked"))
+
+(defstruct (%writer-unbounded-value
+            (:constructor %make-writer-unbounded-value ())
+            (:print-function %writer-unbounded-value-printer)))
+
 (defun %writer-nan ()
   (gethash "x" (cl-toml-kit:parse "x = nan")))
 
@@ -327,6 +338,27 @@
       (expect (typep condition 'type-error))
       (expect (eq (type-error-datum condition) :not-a-stream))
       (expect (eq (type-error-expected-type condition) 'stream))))
+  (it "bounds value diagnostics without printing rejected objects"
+    (let ((cases (list (list (1- (expt 10 20000)) "integer" nil)
+                       (list (make-string 200000 :initial-element #\x) "string" t)
+                       (list (list (make-string 200000 :initial-element #\x)) "list" nil)
+                       (list (%make-writer-unbounded-value) "value" nil))))
+      (dolist (case cases)
+        (let* ((value (first case))
+               (category (second case))
+               (top-level-p (third case))
+               (condition
+                 (handler-case
+                     (progn
+                       (encode (if top-level-p value (%writer-table "value" value)))
+                       nil)
+                   (toml-encoding-error (condition) condition))))
+          (expect (typep condition 'toml-encoding-error))
+          (expect (search (concatenate 'string "(value " category ")")
+                          (toml-encoding-error-message condition)))
+          (expect (<= (length (toml-encoding-error-message condition))
+                      cl-toml-kit::+toml-diagnostic-limit+))))
+      (expect (zerop *writer-diagnostic-printer-calls*))))
   (it "detects cycles across table, array, inline-table, and array-table traversal"
     (labels ((encoding-error-for (value)
                (handler-case

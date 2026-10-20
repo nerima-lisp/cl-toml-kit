@@ -6,10 +6,18 @@
           collect (aref path index))))
 
 (defun %signal-encoding-error (message value path)
-  (let ((*print-length* 10)
-        (*print-level* 3))
+  (let ((category (cond ((null value) "null")
+                        ((stringp value) "string")
+                        ((integerp value) "integer")
+                        ((hash-table-p value) "table")
+                        ((vectorp value) "array")
+                        ((characterp value) "character")
+                        ((symbolp value) "symbol")
+                        ((floatp value) "float")
+                        ((consp value) "list")
+                        (t "value"))))
     (error (make-toml-encoding-error
-            :message (format nil "~A (value ~S)" message value)
+            :message (format nil "~A (value ~A)" message category)
             :path (%writer-error-path path)))))
 
 (defun %validate-writer-table (table path)
