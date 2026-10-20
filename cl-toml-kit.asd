@@ -75,6 +75,7 @@
                (:file "reader-conformance-test")
                (:file "edit-replacement-test")
                (:file "edit-path-security-test")
+               (:file "edit-input-limits-test")
                (:file "edit-splice-test")
                (:file "edit-document-boundaries-test")
                (:file "edit-scan-boundaries-test")
