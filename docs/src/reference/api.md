@@ -374,13 +374,11 @@ condition.
 
 | Variable | Default | Hard ceiling | Current enforcement |
 | --- | ---: | ---: | --- |
-| `*toml-max-nesting-depth*` | `256` | `1024` | Writer and editor value scanning. |
-| `*toml-max-input-bytes*` | `16777216` | `1073741824` | Octet-vector input to `edit-toml`, checked before decoding. |
-| `*toml-max-input-characters*` | `16777216` | `1073741824` | Decoded character input to `edit-toml`. |
-| `*toml-max-number-token-length*` | `256` | `4096` | No current consumer; this does not limit reader tokens. |
-| `*toml-max-path-components*` | `1024` | `4096` | `edit-toml` paths. Dotted keys and table headers can make a path longer than its nesting depth. |
-
-`parse` and `parse-file` do not currently consult these variables.
+| `*toml-max-nesting-depth*` | `256` | `1024` | Maximum nested array or inline table depth accepted by `parse` and checked during `edit-toml`. |
+| `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. |
+| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, and for decoded `parse-file` text; streams stop after reading the first character over the limit. |
+| `*toml-max-number-token-length*` | `256` | `4096` | Character length of one numeric token. |
+| `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
 
 ## Conditions
 

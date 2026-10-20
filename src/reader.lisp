@@ -1,28 +1,53 @@
 ;;;; src/reader.lisp
 (in-package #:cl-toml-kit)
 
-(defun %source-string (source)
-  (etypecase source
-    (string (coerce source 'simple-string))
-    (stream (let ((text (make-array 256 :element-type 'character :adjustable t :fill-pointer 0)))
-              (loop for char = (read-char source nil nil)
-                    while char do (vector-push-extend char text))
-              (coerce text 'simple-string)))))
+(defun %source-string (source source-name)
+  (multiple-value-bind (limit message)
+      (%toml-limit :input-characters)
+    (flet ((input-limit-error (input position)
+             (let* ((simple-source
+                      (if (typep input 'simple-string)
+                          input
+                          (coerce (subseq input 0 position) 'simple-string)))
+                    (state
+                      (%make-reader-state
+                       :source simple-source
+                       :source-name source-name
+                       :length (length simple-source))))
+               (%error-at-message state position message))))
+      (etypecase source
+        (string
+         (when (> (length source) limit)
+           (input-limit-error source limit))
+         (coerce source 'simple-string))
+        (stream
+         (let ((text (make-array 256 :element-type 'character
+                                 :adjustable t :fill-pointer 0)))
+           (loop for char = (read-char source nil nil)
+                 while char
+                 do (when (= (fill-pointer text) limit)
+                      (input-limit-error text limit))
+                    (vector-push-extend char text))
+           (coerce text 'simple-string)))))))
 
 (defun parse (source &key source-name)
-  (let* ((text (%source-string source))
+  (let* ((text (%source-string source source-name))
          (allowed-control-characters (cons #\Tab +toml-newline-characters+))
          (root (make-hash-table :test #'equal))
          (state (%make-reader-state :source text :source-name source-name
                                     :length (length text) :root root)))
     (loop for index below (length text)
           for char = (char text index)
+          for code = (char-code char)
           do (cond
                ((and (char= char +toml-carriage-return+)
                      (or (= (1+ index) (length text))
                          (not (char= (char text (1+ index)) +toml-line-feed+))))
                 (%error-at state index :lf-after-cr))
-               ((and (or (< (char-code char) #x20) (= (char-code char) #x7F))
+               ((<= +toml-unicode-surrogate-start+ code
+                    +toml-unicode-surrogate-end+)
+                (%error-at state index :unicode-scalar-value))
+               ((and (or (< code #x20) (= code #x7F))
                      (not (member char allowed-control-characters :test #'char=)))
                 (%error-at state index :printable-character))))
     (flet ((finish-document (value position)
@@ -79,7 +104,17 @@
               :expected "UTF-8"))))))))
 
 (defun parse-file (pathname)
-  (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
-    (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))
-      (read-sequence bytes stream)
-      (parse (%decode-utf8 bytes pathname) :source-name (namestring pathname)))))
+  (let ((source-name (namestring pathname)))
+    (with-open-file (stream pathname :direction :input
+                            :element-type '(unsigned-byte 8))
+      (let ((byte-length (file-length stream)))
+        (multiple-value-bind (byte-limit byte-message)
+            (%toml-limit :input-bytes)
+          (when (> byte-length byte-limit)
+            (%error-at-message
+             (%make-reader-state :source "" :source-name source-name :length 0)
+             0 byte-message)))
+        (let ((bytes (make-array byte-length
+                                 :element-type '(unsigned-byte 8))))
+          (read-sequence bytes stream)
+          (parse (%decode-utf8 bytes pathname) :source-name source-name))))))

@@ -86,6 +86,7 @@
                (:file "edit-splice-boundaries-test")
                (:file "reader-nesting-security-test")
                (:file "reader-number-security-test")
+               (:file "reader-input-security-test")
                (:file "edit-semantic-boundaries-test"))
   :perform (test-op (operation component)
              (declare (ignore operation component))
