@@ -181,14 +181,26 @@
    (context :initarg :context :initform "TOML" :reader toml-parse-error-context)
    (text :initarg :text :initform "" :reader toml-parse-error-text))
   (:report (lambda (condition stream)
-             (let ((source-name (toml-parse-error-source-name condition))
-                   (expected (toml-parse-error-expected condition)))
+             (let* ((source-name (toml-parse-error-source-name condition))
+                    (expected (toml-parse-error-expected condition))
+                    (line (toml-parse-error-line condition))
+                    (column (toml-parse-error-column condition))
+                    (position (toml-parse-error-position condition))
+                    (line-text (if (integerp line)
+                                   (format nil "~D" line)
+                                 (%diagnostic-string line)))
+                    (column-text (if (integerp column)
+                                     (format nil "~D" column)
+                                   (%diagnostic-string column)))
+                    (position-text (if (integerp position)
+                                       (format nil "~D" position)
+                                     (%diagnostic-string position))))
                (format stream
-                       "TOML parse error~@[ in ~A~] at line ~D, column ~D (position ~D)~@[ at ~A~]~@[; expected ~A~]"
+                       "TOML parse error~@[ in ~A~] at line ~A, column ~A (position ~A)~@[ at ~A~]~@[; expected ~A~]"
                        (and source-name (%diagnostic-string source-name))
-                       (toml-parse-error-line condition)
-                       (toml-parse-error-column condition)
-                       (toml-parse-error-position condition)
+                       line-text
+                       column-text
+                       position-text
                        (%diagnostic-path-report-string (toml-parse-error-path condition))
                        (and expected (%diagnostic-string expected 128)))))))
 

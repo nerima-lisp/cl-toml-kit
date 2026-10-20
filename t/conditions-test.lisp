@@ -36,6 +36,36 @@
                    (string= "expected" (toml-parse-error-expected condition))
                    (string= "context" (toml-parse-error-context condition))))
       (expect (<= (length (toml-parse-error-text condition)) 256))))
+  (it "escapes noninteger parse coordinates in full reports"
+    (let* ((condition
+             (make-condition 'toml-parse-error
+                             :line (concatenate 'string
+                                                "line"
+                                                (string #\Newline)
+                                                "break")
+                             :column (concatenate 'string
+                                                  "column"
+                                                  (string #\Tab)
+                                                  "break")
+                             :position (concatenate 'string
+                                                    "position"
+                                                    (string (code-char 0))
+                                                    "break")))
+           (report (format nil "~A" condition))
+           (integer-condition
+             (make-condition 'toml-parse-error
+                             :line 10 :column 12 :position 14))
+           (integer-report
+             (let ((*print-base* 16)
+                   (*print-radix* t))
+               (format nil "~A" integer-condition))))
+      (expect
+       (string=
+        "TOML parse error at line line\\nbreak, column column\\tbreak (position position\\u0000break)"
+        report))
+      (expect
+       (string= "TOML parse error at line 10, column 12 (position 14)"
+                integer-report))))
   (it "reports every parse diagnostic accessor"
     (let* ((controls
             (coerce
