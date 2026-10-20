@@ -2,7 +2,8 @@
 
 Everything a caller needs is exported from the single `cl-toml-kit` package:
 the reader and writer entry points, the native value types and predicates,
-and the structured conditions. Nothing else is exported.
+the shared processing limits, and the structured conditions. Nothing else is
+exported.
 
 Symbols are grouped as they are exported in `src/package.lisp`. The
 [data model](../guide/data-model.md) defines the value mapping shared by
@@ -270,13 +271,10 @@ Dispatch `value` by its TOML kind. Clause keys are the kind keywords of
 single Common Lisp `typecase`.
 
 Unknown kind keywords signal `toml-value-model-error` during macro expansion.
-In a `:table` clause whose value is a hash table without the `equal` test, the
-expansion signals `toml-encoding-error` with the message `Invalid TOML table`.
+At runtime, a `:table` clause checks that its hash table uses the `equal` test;
+otherwise it signals `toml-encoding-error` with the message `Invalid TOML table`.
 When no clause matches and there is no `t` clause, it signals
 `toml-encoding-error` with the message `Not a TOML value`.
-
-**Signals**: `toml-value-model-error` for unknown kind keywords during macro
-expansion; `toml-encoding-error` in the two runtime cases above.
 
 **Example**:
 
@@ -365,6 +363,22 @@ Return true if `value` is a double-float.
 **Returns**: a boolean.
 
 **Signals**: `none`.
+
+## Shared processing limits
+
+These dynamically bindable special variables provide requested limits. Each
+operation requires the bound value to be a non-negative integer and uses the
+smaller of that value and the hard ceiling; it does not modify the binding. An
+invalid binding signals `type-error`, and an input exceeding the effective
+limit signals the operation's existing error condition.
+
+| Variable | Default | Hard ceiling | Meaning |
+| --- | ---: | ---: | --- |
+| `*toml-max-nesting-depth*` | `256` | `1024` | Array and table nesting depth scanned by the reader, writer, and editor. |
+| `*toml-max-input-bytes*` | `16777216` | `1073741824` | Byte input, including `parse-file` and the octet vector passed to `edit-toml`, checked before decoding. |
+| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character input from strings and character streams. |
+| `*toml-max-number-token-length*` | `256` | `4096` | Character length of one numeric token. |
+| `*toml-max-path-components*` | `256` | `1024` | Number of components in an editor path. |
 
 ## Conditions
 

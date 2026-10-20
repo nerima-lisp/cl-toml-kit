@@ -21,6 +21,7 @@
                (:version "cl-codec-kit" "0.6.0"))
   :components ((:file "package")
                (:file "syntax-data")
+               (:file "limits")
                (:file "comment-scan")
                (:file "conditions")
                (:file "data")
@@ -57,6 +58,7 @@
   :pathname "t"
   :serial t
   :components ((:file "package")
+               (:file "limits-test")
                (:file "helpers-values")
                (:file "helpers-values-test")
                (:file "helpers-edit")

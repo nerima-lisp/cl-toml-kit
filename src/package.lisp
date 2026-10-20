@@ -11,6 +11,10 @@
    #:toml-value-kind #:toml-value-typecase
    #:toml-table #:toml-table-p #:toml-array #:toml-array-p
    #:toml-integer #:toml-integer-p #:toml-float #:toml-float-p
+   ;; Shared processing limits
+   #:*toml-max-nesting-depth* #:*toml-max-input-bytes*
+   #:*toml-max-input-characters* #:*toml-max-number-token-length*
+   #:*toml-max-path-components*
    ;; Conditions
    #:toml-kit-error #:toml-value-model-error #:toml-value-model-error-message
    #:toml-parse-error #:toml-parse-error-source-name
