@@ -51,7 +51,7 @@
       (expect (string= (%toml-test-format-text expected) (%edit-test-text result)))
       (expect (string= "new" (%edit-test-value result '("text"))))))
   (it-edit-table
-    "preserves edited text and parsed values"
+    "preserves edited text and parsed values for ~S at path ~S"
    (("name = \"old\"~%other = 1~%" ("name") ""
      "name = \"\"~%other = 1~%" "")
     ("server . port = 8080 # keep~%" ("server" "port") 9090
