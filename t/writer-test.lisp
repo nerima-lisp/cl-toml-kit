@@ -78,7 +78,8 @@
     (let* ((package (find-package "CL-TOML-KIT/TEST"))
            (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
            (cl-toml-kit::*toml-writer-emitter-specifications*
-             '((:string (write-string value stream)))))
+             '((:string (write-string cl-toml-kit::value
+                                      cl-toml-kit::stream)))))
       (unwind-protect
            (progn
              (eval (list 'cl-toml-kit::define-toml-emitter
@@ -90,18 +91,41 @@
         (when (fboundp name)
           (fmakunbound name))
         (unintern name package))))
+  (it "uses emitter specifications with alternate parameter names"
+    (let* ((package (find-package "CL-TOML-KIT/TEST"))
+           (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
+           (cl-toml-kit::*toml-writer-emitter-specifications*
+             '((:string
+                (write-string (if cl-toml-kit::path
+                                  ""
+                                  cl-toml-kit::value)
+                              cl-toml-kit::stream)))))
+      (unwind-protect
+           (progn
+             (eval (list 'cl-toml-kit::define-toml-emitter
+                         name '(item output location)))
+             (let ((output (make-string-output-stream)))
+               (funcall (symbol-function name) "generated value" output nil)
+               (expect (string= "generated value"
+                                (get-output-stream-string output)))))
+        (when (fboundp name)
+          (fmakunbound name))
+        (unintern name package))))
   (it "signals a value model error for an unknown emitter kind"
     (let* ((package (find-package "CL-TOML-KIT/TEST"))
            (name (intern (symbol-name (gensym "WRITER-EMITTER-")) package))
            (cl-toml-kit::*toml-writer-emitter-specifications*
-             '((:unknown (write-string value stream)))))
+             '((:unknown
+                (write-string cl-toml-kit::value
+                              cl-toml-kit::stream)))))
       (unwind-protect
-           (let ((expansion
-                   (macroexpand-1
-                    (list 'cl-toml-kit::define-toml-emitter
-                          name '(value stream path)))))
+           (let* ((expansion
+                    (macroexpand-1
+                     (list 'cl-toml-kit::define-toml-emitter
+                           name '(value stream path))))
+                  (dispatch (caddr (cadddr expansion))))
              (expect (signals toml-value-model-error
-                       (macroexpand-1 (cadddr expansion)))))
+                       (macroexpand-1 dispatch))))
         (unintern name package)))))
 
 (describe "TOML writer scalar data"
