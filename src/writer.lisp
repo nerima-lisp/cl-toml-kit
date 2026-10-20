@@ -27,56 +27,53 @@
 
 (declaim (ftype function %write-string-value %write-value))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *toml-writer-active-containers* nil)
-  (defvar *toml-writer-nesting-depth* nil)
-  (defvar *toml-writer-nesting-limit* nil)
-  (defvar *toml-writer-nesting-message* nil)
-  (defmacro %with-writer-path (path key &body body)
-    `(progn
-       (vector-push-extend ,key ,path)
-       (unwind-protect
-            (progn ,@body)
-         (decf (fill-pointer ,path)))))
+(defvar *toml-writer-active-containers* nil)
+(defvar *toml-writer-nesting-depth* nil)
+(defvar *toml-writer-nesting-limit* nil)
+(defvar *toml-writer-nesting-message* nil)
 
-  (progn
-    (defmacro %with-writer-context (&optional (initial-depth 0) &body body)
-      `(if *toml-writer-active-containers*
-           (progn ,@body)
-         (multiple-value-bind (limit message)
-             (%toml-limit :nesting-depth)
-           (let ((*toml-writer-active-containers* (make-hash-table :test #'eq))
-                 (*toml-writer-nesting-depth* ,initial-depth)
-                 (*toml-writer-nesting-limit* limit)
-                 (*toml-writer-nesting-message* message))
-             ,@body))))
+(defmacro %with-writer-path (path key &body body)
+  `(progn
+     (vector-push-extend ,key ,path)
+     (unwind-protect
+         (progn ,@body)
+       (decf (fill-pointer ,path)))))
 
-    (defmacro %with-writer-container (container path nested-p &body body)
-      (let ((object (gensym "CONTAINER-"))
-            (count-depth-p (gensym "COUNT-DEPTH-P")))
-        `(%with-writer-context 0
-           (let ((,object ,container)
-                 (,count-depth-p ,nested-p))
-             (when (gethash ,object *toml-writer-active-containers*)
-               (error (make-toml-encoding-error
-                       :message "Cyclic TOML value"
-                       :path (%writer-error-path ,path))))
-             (when (and ,count-depth-p
-                        (>= *toml-writer-nesting-depth*
-                            *toml-writer-nesting-limit*))
-               (error (make-toml-encoding-error
-                       :message *toml-writer-nesting-message*
-                       :path (%writer-error-path ,path))))
-             (setf (gethash ,object *toml-writer-active-containers*) t)
-             (when ,count-depth-p
-               (incf *toml-writer-nesting-depth*))
-             (unwind-protect
-                  (progn ,@body)
-               (when ,count-depth-p
-                 (decf *toml-writer-nesting-depth*))
-               (remhash ,object *toml-writer-active-containers*))))))))
+(defmacro %with-writer-context (&optional (initial-depth 0) &body body)
+  `(if *toml-writer-active-containers*
+       (progn ,@body)
+     (multiple-value-bind (limit message)
+         (%toml-limit :nesting-depth)
+       (let ((*toml-writer-active-containers* (make-hash-table :test #'eq))
+             (*toml-writer-nesting-depth* ,initial-depth)
+             (*toml-writer-nesting-limit* limit)
+             (*toml-writer-nesting-message* message))
+         ,@body))))
 
-(declaim (inline %validate-writer-key))
+(defmacro %with-writer-container (container path nested-p &body body)
+  (let ((object (gensym "CONTAINER-"))
+        (count-depth-p (gensym "COUNT-DEPTH-P")))
+    `(%with-writer-context 0
+       (let ((,object ,container)
+             (,count-depth-p ,nested-p))
+         (when (gethash ,object *toml-writer-active-containers*)
+           (error (make-toml-encoding-error
+                   :message "Cyclic TOML value"
+                   :path (%writer-error-path ,path))))
+         (when (and ,count-depth-p
+                    (>= *toml-writer-nesting-depth*
+                        *toml-writer-nesting-limit*))
+           (error (make-toml-encoding-error
+                   :message *toml-writer-nesting-message*
+                   :path (%writer-error-path ,path))))
+         (setf (gethash ,object *toml-writer-active-containers*) t)
+         (when ,count-depth-p
+           (incf *toml-writer-nesting-depth*))
+         (unwind-protect
+              (progn ,@body)
+           (when ,count-depth-p
+             (decf *toml-writer-nesting-depth*))
+           (remhash ,object *toml-writer-active-containers*))))))
 
 (defun %validate-toml-string (value path)
   (when (loop for character across value
@@ -84,6 +81,9 @@
     (error (make-toml-encoding-error
             :message "String contains a surrogate code point"
             :path (%writer-error-path path)))))
+
+(declaim (inline %validate-writer-key))
+
 (defun %validate-writer-key (key path)
   (%with-writer-path path key
     (unless (stringp key)
@@ -177,7 +177,7 @@
                (%write-value (aref value index) stream path)))
     (write-char #\] stream)))
 
-(define-toml-emitter %write-value (value stream path))
+(define-toml-emitter %write-value)
 
 (defun %entry-kind (value)
   (cond ((hash-table-p value) :table)
@@ -237,12 +237,9 @@
   (unless (hash-table-p value)
     (%signal-encoding-error "The top-level TOML value must be a hash-table"
                             value nil))
-  (multiple-value-bind (limit message)
-      (%toml-limit :nesting-depth)
-    (let ((*toml-writer-active-containers* (make-hash-table :test #'eq))
-          (*toml-writer-nesting-depth* 0)
-          (*toml-writer-nesting-limit* limit)
-          (*toml-writer-nesting-message* message))
+  ;; A root write must isolate its context, including during reentrant writes.
+  (let ((*toml-writer-active-containers* nil))
+    (%with-writer-context 0
       (write-table value (make-array 8 :adjustable t :fill-pointer 0)
                    stream nil))))
 

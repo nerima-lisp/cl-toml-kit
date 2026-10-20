@@ -91,28 +91,23 @@ expansion time."
                        :message (format nil "Unknown TOML value kind ~S." key)))
               (setf (gethash key forms-by-kind) forms)))))
     (let* ((fallback-function (when otherwise-forms (gensym "FALLBACK")))
-           (table-fallback-forms
-             (if otherwise-forms
-                 `((,fallback-function))
-                 '((error 'toml-encoding-error
-                          :message "Invalid TOML table"))))
-           (unknown-fallback-forms
-             (if otherwise-forms
-                 `((,fallback-function))
-                 '((error 'toml-encoding-error
-                          :message "Not a TOML value"))))
+           (fallback-forms (when otherwise-forms `((,fallback-function))))
            (dispatch
              `(typecase ,object
                 ,@(loop for (kind type alias) in *toml-value-specifications*
                         for forms = (gethash kind forms-by-kind)
                         when forms
                           collect `(,type
-                                    ,(if (eq kind :table)
-                                         `(if (toml-table-p ,object)
-                                              (progn ,@forms)
-                                              (progn ,@table-fallback-forms))
-                                         `(progn ,@forms))))
-                (otherwise ,@unknown-fallback-forms))))
+                                      ,(if (eq kind :table)
+                                           `(if (toml-table-p ,object)
+                                                (progn ,@forms)
+                                                (progn ,@(or fallback-forms
+                                                             '((error 'toml-encoding-error
+                                                                      :message "Invalid TOML table")))))
+                                           `(progn ,@forms))))
+                (otherwise ,@(or fallback-forms
+                                 '((error 'toml-encoding-error
+                                          :message "Not a TOML value")))))))
       `(let ((,object ,value))
          ,(if otherwise-forms
               `(flet ((,fallback-function () ,@otherwise-forms))
