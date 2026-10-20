@@ -16,12 +16,11 @@
                              +toml-line-feed+))
                (incf (toml-reader-state-position state))))))
 
-(defun %error-at (state position expected-key &optional (path nil))
-  (let* ((expected (%toml-reader-error-message expected-key))
-         (source (toml-reader-state-source state))
+(defun %error-at-message (state position message &optional path)
+  (let* ((source (toml-reader-state-source state))
          (end (min (length source) (+ position 40)))
          (span (cl-parser-kit:make-span :source source :start position :end end))
-         (diagnostic (cl-parser-kit:make-diagnostic :message expected :span span))
+         (diagnostic (cl-parser-kit:make-diagnostic :message message :span span))
          (text (cl-parser-kit:diagnostic->string diagnostic))
          (line 1)
          (column 1))
@@ -44,7 +43,12 @@
     (error (make-toml-parse-error
             :source-name (toml-reader-state-source-name state)
             :position position :line line :column column :path path
-            :expected expected :context "TOML" :text text))))
+            :expected message :context "TOML" :text text))))
+
+(defun %error-at (state position expected-key &optional (path nil))
+  (%error-at-message state position
+                     (%toml-reader-error-message expected-key)
+                     path))
 
 (defun %skip-space-and-comments (state)
   (loop

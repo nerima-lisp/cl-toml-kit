@@ -75,7 +75,7 @@
 
 (defun %parse-float-significand (state position end success failure)
   (let ((index position) (mantissa 0) (fraction 0)
-        (seen-dot nil) (previous-digit nil))
+        (significant-digits 0) (seen-dot nil) (previous-digit nil))
     (loop while (< index end)
           for char = (%source-char state index)
           do (cond
@@ -87,7 +87,7 @@
                 (unless previous-digit
                   (funcall failure index :exponent-digit nil))
                 (return-from %parse-float-significand
-                  (funcall success mantissa fraction index)))
+                  (funcall success mantissa fraction significant-digits index)))
                ((char= char +toml-underscore+)
                 (unless previous-digit
                   (funcall failure index :digit-between-underscores nil))
@@ -98,11 +98,13 @@
                     (funcall failure index :float-digit nil))
                   (setf mantissa (+ (* mantissa 10) digit)
                         previous-digit t)
+                  (when (or (plusp significant-digits) (plusp digit))
+                    (incf significant-digits))
                   (when seen-dot (incf fraction)))))
           (incf index))
     (unless previous-digit
       (funcall failure end :float-digit nil))
-    (funcall success mantissa fraction nil)))
+    (funcall success mantissa fraction significant-digits nil)))
 
 (defun %parse-float-exponent (state position end success failure)
   (let ((index (1+ position)) (negative nil) (exponent 0)
@@ -127,23 +129,46 @@
       (funcall failure end :exponent-digit nil))
     (funcall success (if negative (- exponent) exponent))))
 
-(defun %finish-float-range (start mantissa fraction exponent negative end
-                                  success failure)
+(defun %finish-float-range
+    (start mantissa fraction significant-digits exponent negative end
+     success failure)
   (when negative (setf mantissa (- mantissa)))
-  (multiple-value-bind (value failed-p)
-      (handler-case
-          (let ((value (coerce (* mantissa (expt 10 (- exponent fraction)))
-                               'double-float)))
-            (when (and negative (zerop mantissa))
-              (setf value (float-sign -1.0d0 value)))
-            (values value (and (not (zerop mantissa)) (zerop value))))
-        (floating-point-overflow ()
-          (values nil t)))
-    (if failed-p
+  (let* ((scale (- exponent fraction))
+         (decimal-order
+           (when (plusp significant-digits)
+             (+ scale (1- significant-digits)))))
+    (if (and decimal-order
+             (or (> scale 308) (< decimal-order -324)))
         (funcall failure start :representable-finite-float nil)
-        (funcall success value end))))
+        (multiple-value-bind (value failed-p)
+            (handler-case
+                (let* ((scale-factor
+                         (if (zerop mantissa)
+                             1
+                             (loop with factor = 1
+                                   with remaining = scale
+                                   while (< remaining -308)
+                                   do (setf factor (* factor (expt 10 -308))
+                                            remaining (+ remaining 308))
+                                   finally
+                                     (return
+                                       (* factor (expt 10 remaining))))))
+                       (value
+                         (coerce (* mantissa scale-factor) 'double-float)))
+                  (when (and negative (zerop mantissa))
+                    (setf value (float-sign -1.0d0 value)))
+                  (values value (and (not (zerop mantissa)) (zerop value))))
+              (floating-point-overflow ()
+                (values nil t)))
+          (if failed-p
+              (funcall failure start :representable-finite-float nil)
+              (funcall success value end))))))
 
 (defun %parse-float-range (state start end success failure)
+  (multiple-value-bind (limit message)
+      (%toml-limit :number-token-length)
+    (when (> (- end start) limit)
+      (%error-at-message state start message)))
   (let ((index start) (negative nil))
     (when (%toml-numeric-sign-p (%source-char state index))
       (setf negative (char= (%source-char state index) #\-))
@@ -153,17 +178,19 @@
                (or (toml-decimal-character-p (%source-char state (1+ index)))
                    (char= (%source-char state (1+ index)) +toml-underscore+)))
       (funcall failure (1+ index) :no-leading-zero nil))
-    (flet ((accept-significand (mantissa fraction exponent-position)
+    (flet ((accept-significand (mantissa fraction significant-digits
+                                exponent-position)
              (if exponent-position
                  (flet ((accept-exponent (exponent)
                           (%finish-float-range
-                           start mantissa fraction exponent negative end
-                           success failure)))
+                           start mantissa fraction significant-digits
+                           exponent negative end success failure)))
                    (declare (dynamic-extent #'accept-exponent))
                    (%parse-float-exponent state exponent-position end
                                           #'accept-exponent failure))
                  (%finish-float-range
-                  start mantissa fraction 0 negative end success failure))))
+                  start mantissa fraction significant-digits 0 negative end
+                  success failure))))
       (declare (dynamic-extent #'accept-significand))
       (%parse-float-significand state index end #'accept-significand failure))))
 
@@ -197,6 +224,10 @@
     (funcall success value end)))
 
 (defun %parse-integer-range (state start end success failure)
+  (multiple-value-bind (limit message)
+      (%toml-limit :number-token-length)
+    (when (> (- end start) limit)
+      (%error-at-message state start message)))
   (let ((index start) (negative nil) (signed nil))
     (when (%toml-numeric-sign-p (%source-char state index))
       (setf negative (char= (%source-char state index) #\-)
