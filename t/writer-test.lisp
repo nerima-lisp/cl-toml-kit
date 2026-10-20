@@ -485,4 +485,39 @@
           (%edit-test-text result)))
         (expect
          (string= "safe"
-                  (%edit-test-value result '("server" "settings" "mode"))))))))
+                  (%edit-test-value result '("server" "settings" "mode")))))))
+  (it "rejects surrogate code points in string values and quoted keys"
+    (labels ((encoding-error-for (value)
+               (handler-case
+                   (progn (encode value) nil)
+                 (toml-encoding-error (condition) condition)))
+             (captured-output (value)
+               (let ((stream (make-string-output-stream)))
+                 (handler-case
+                     (write-toml value stream)
+                   (toml-encoding-error () nil))
+                 (get-output-stream-string stream)))
+             (verify-rejected (value surrogate)
+               (let ((condition (encoding-error-for value))
+                     (output (captured-output value)))
+                 (expect (typep condition 'toml-encoding-error))
+                 (expect (not (find surrogate output)))
+                 (when (typep condition 'toml-encoding-error)
+                   (expect
+                    (string= "String contains a surrogate code point"
+                             (toml-encoding-error-message condition)))
+                   (expect
+                    (not (find surrogate
+                               (toml-encoding-error-message condition))))))))
+      (dolist (surrogate (list (code-char #xd800) (code-char #xdfff)))
+        (expect (characterp surrogate))
+        (verify-rejected
+         (%writer-table
+          "value"
+          (concatenate 'string "before" (string surrogate) "after"))
+         surrogate)
+        (verify-rejected
+         (%writer-table
+          (concatenate 'string "quoted " (string surrogate))
+          1)
+         surrogate)))))

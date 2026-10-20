@@ -24,7 +24,6 @@
   (defvar *toml-writer-nesting-depth* nil)
   (defvar *toml-writer-nesting-limit* nil)
   (defvar *toml-writer-nesting-message* nil)
-
   (defmacro %with-writer-path (path key &body body)
     `(progn
        (vector-push-extend ,key ,path)
@@ -71,10 +70,17 @@
 
 (declaim (inline %validate-writer-key))
 
+(defun %validate-toml-string (value path)
+  (when (loop for character across value
+              thereis (<= #xd800 (char-code character) #xdfff))
+    (error (make-toml-encoding-error
+            :message "String contains a surrogate code point"
+            :path (%writer-error-path path)))))
 (defun %validate-writer-key (key path)
   (unless (stringp key)
     (%with-writer-path path key
-      (%signal-encoding-error (%toml-writer-error-message :key) key path))))
+      (%signal-encoding-error (%toml-writer-error-message :key) key path)))
+  (%validate-toml-string key path))
 
 (defun %write-key (key stream)
   (if (and (plusp (length key))
@@ -84,6 +90,7 @@
       (%write-string-value key stream)))
 
 (defun %write-string-value (value stream)
+  (%validate-toml-string value nil)
   (write-char #\" stream)
   (let ((start 0)
         (length (length value)))
