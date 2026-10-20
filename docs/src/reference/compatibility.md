@@ -1,9 +1,5 @@
 # Compatibility
 
-This page records what `cl-toml-kit` is compatible with and what it promises:
-the TOML version it implements, the conformance corpus it checks against, the
-implementation it supports, its dependencies, and the stability of its API.
-
 ## TOML version
 
 `cl-toml-kit` is a reader and a writer for [TOML v1.1.0](https://toml.io/en/v1.1.0).
@@ -42,41 +38,39 @@ repository root.
 
 ## Supported implementation
 
-SBCL is the only supported implementation. The project is SBCL-only by design:
-it relies on SBCL's insertion-order hash-table traversal to preserve table key
-order, a property the test suite pins down. Other Common Lisp implementations
-are not supported and not verified. The flake builds for the `x86_64-linux`
-and `aarch64-darwin` platforms.
+SBCL is the only supported implementation. The writer relies on SBCL's
+insertion-order hash-table traversal within its output groups: values, tables,
+then arrays of tables. Other Common Lisp implementations are not supported
+and not verified. The flake builds for the `x86_64-linux` and `aarch64-darwin`
+platforms.
 
 ## Dependencies
 
-| System | Version | Role |
+| System | Minimum version | Role |
 |---|---|---|
 | `cl-parser-kit` | 1.1.1 | runtime |
-| `cl-date-kit` | 1.1.1 | runtime |
+| `cl-date-kit` | 1.2.0 | runtime |
 | `cl-codec-kit` | 0.6.0 | runtime |
 | `cl-weave` | 1.4.0 | test only |
+| `cl-json-kit` | 1.2.0 | test only |
 
-The library depends at runtime on `cl-parser-kit`, `cl-date-kit`, and
-`cl-codec-kit`, with the versions pinned in `cl-toml-kit.asd` and in the flake
-inputs. `cl-date-kit` provides the date and time types in the
-[value mapping](../guide/data-model.md). The test system additionally uses
-`cl-weave`, which is not a dependency of the library itself. The flake also
-pins build tooling (`cl-nix-forge`, `paredit-cli`, `treefmt-nix`); none of
-these are library dependencies. Adding the library to your project is covered
-in [Getting started](../getting-started.md).
+The library requires the minimum runtime dependency versions declared in
+`cl-toml-kit.asd`. The flake locks build inputs and pins tooling
+(`cl-nix-forge`, `paredit-cli`, `treefmt-nix`); these tools are not library
+dependencies. `cl-date-kit` provides the date and time types in the
+[value mapping](../guide/data-model.md). Adding the library to your project is
+covered in [Getting started](../getting-started.md).
 
 ## Stability
 
-The package version is 0.2.0 (see `:version` in `cl-toml-kit.asd`), so the API
-is still pre-1.0. At 0.2.0 the library makes no compatibility promise beyond
-the documented behavior: exported symbols and their behavior may change
-without a deprecation window.
+Version 0.3.0 is pre-1.0 (see `:version` in `cl-toml-kit.asd`). Exported
+symbols and their behavior may change without a deprecation window; documented
+behavior is the only compatibility promise.
 
 Once 1.0.0 is released, the exported surface is intended to follow
 [Semantic Versioning](https://semver.org/). That surface is the `cl-toml-kit`
 package symbols documented in [API reference](api.md) and
 [Conditions](conditions.md), and the value mapping documented in
 [Data model](../guide/data-model.md). A breaking change to it then requires a
-major version bump. No deprecation policy exists yet, and this page does not
-promise one. When a breaking change is released, it is recorded here.
+major version bump. No deprecation policy exists yet. When a breaking change is
+released, it is recorded here.

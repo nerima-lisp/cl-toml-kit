@@ -1,8 +1,8 @@
 # Benchmarks
 
-This page records diagnostic measurements for the Reader and Writer. Wall-clock
-values are for local A/B comparison only. Automated checks use allocation
-limits and the observed size-doubling order; they do not gate merges on time.
+Wall-clock values are for local A/B comparison only. Automated checks enforce
+the 256 MiB per-call allocation ceiling and compare allocation as input size
+doubles; they do not gate merges on time.
 
 ## Reproduction
 
@@ -16,11 +16,11 @@ REPOS=${NERIMA_LISP_REPOS:?Set this to the directory containing the dependency c
 DEPS=$(mktemp -d)
 git -C "$REPOS/cl-parser-kit.git" archive --prefix=cl-parser-kit/ v1.1.1 \
   | tar -x -C "$DEPS"
-git -C "$REPOS/cl-date-kit.git" archive --prefix=cl-date-kit/ v1.1.1 \
+git -C "$REPOS/cl-date-kit.git" archive --prefix=cl-date-kit/ v1.2.0 \
   | tar -x -C "$DEPS"
 git -C "$REPOS/cl-codec-kit.git" archive --prefix=cl-codec-kit/ v0.6.0 \
   | tar -x -C "$DEPS"
-git -C "$REPOS/cl-weave.git" archive --prefix=cl-weave/ v1.3.0 \
+git -C "$REPOS/cl-weave.git" archive --prefix=cl-weave/ v1.4.0 \
   | tar -x -C "$DEPS"
 git -C "$REPOS/cl-json-kit.git" archive --prefix=cl-json-kit/ v1.2.0 \
   | tar -x -C "$DEPS"
@@ -32,13 +32,16 @@ sbcl --dynamic-space-size 4096 --non-interactive \
   --load run-benchmarks.lisp
 ```
 
-## Phase 2 results
+## Reader and Writer measurements
 
 The generated Reader input contains 4,096, 8,192, or 16,384 assignments. The
 Writer input contains the same number of alternating integer and string values.
-All nine cases passed their allocation and order checks.
+All nine cases met their per-case allocation limits. For each operation, the
+4,096-entry row is the baseline. `Time ratio` and `Bytes ratio` compare the
+median with the preceding size; the allocation-order check passes when the
+bytes ratio is at most 4.0.
 
-| Case | Size | Median seconds | Min / max seconds | Median bytes | Time | Bytes | Order |
+| Case | Size | Median seconds | Min / max seconds | Median bytes | Time ratio | Bytes ratio | Allocation-order check |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | `reader/parse` | 4,096 | 0.003749 | 0.003315 / 0.006385 | 1,165,414 | - | - | - |
 | `reader/parse` | 8,192 | 0.012678 | 0.006885 / 0.023060 | 2,165,658 | 3.382 | 1.858 | pass |
@@ -50,14 +53,9 @@ All nine cases passed their allocation and order checks.
 | `writer/write-toml` | 8,192 | 0.001741 | 0.001445 / 0.003365 | 5,824 | 1.576 | 0.993 | pass |
 | `writer/write-toml` | 16,384 | 0.004969 | 0.002952 / 0.010353 | 5,798 | 2.854 | 0.996 | pass |
 
-The preceding phase measured `write-toml` at about 267KB per call because the
-measurement was too coarse. The repeated-difference measurement above isolates
-the call and shows the allocation at about 5.8KB for the same 16,384-entry
-input.
+## Reader allocation results
 
-## Phase 3 Reader results
-
-The Reader now represents a single-component key as its string directly. Only
+The Reader represents a single-component key as its string directly. Only
 dotted keys use a temporary list. This removes the per-assignment key-path list
 for the generated benchmark while preserving the result and diagnostic
 behavior.
@@ -69,20 +67,17 @@ behavior.
 | `reader/parse`, 16,384 assignments, bytes/call | 4,033,350 | 3,770,272 | -6.5% |
 | 16,384 assignments, bytes/assignment | 246 | 230 | -16 bytes |
 
-The final 16,384-entry run had a median time of 0.040083 seconds. The time
-value is a local wall-clock observation and is noisier than allocation.
-
-For single-line strings without escapes, the Reader now returns one `subseq`
+For single-line strings without escapes, the Reader returns one `subseq`
 of the source instead of filling and coercing the shared character buffer. In
 the competitor harness correctness input, this changed kit allocation from
 134,848 to 129,088 bytes per call.
 
 ### Reader allocation classification
 
-The following classification is based on `sb-sprof` allocation samples for the
-16,384-entry generated Reader input. The profiler reports allocation sites, not
-an exact retained-size census, so the sample percentages are attribution
-signals rather than a byte-for-byte decomposition.
+`sb-sprof` allocation samples for the 16,384-entry generated Reader input
+produce this classification. The profiler reports allocation sites, not an
+exact retained-size census, so the sample percentages are attribution signals
+rather than a byte-for-byte decomposition.
 
 | Class | Objects or site | Allocation evidence | Lifetime |
 | --- | --- | ---: | --- |
@@ -104,12 +99,8 @@ led by `PUTHASH/EQUAL` and `%read-key-path`. Writer CPU samples were led by
 `STRING-SOUT`/`%write-string`, while allocation samples were led by
 `%write-string` and `%write-string-value`.
 
-The Reader source was not changed in phase 2 because the measured hot paths
-are result hash-table insertion and key-path construction, both required by
-the current result model. Phase 3 removed the avoidable single-key path list.
-The Writer changes batch contiguous string output
-and keep the active path in one adjustable vector, avoiding temporary path
-lists and their reversal.
+The Writer batches contiguous string output and keeps the active path in one
+adjustable vector, avoiding temporary path lists and their reversal.
 
 ## Competitor comparison
 
@@ -117,7 +108,7 @@ The `clop` comparison is implemented in `benchmark/competitors.lisp`. The
 comparison used clop commit `c0c3fe7efa5ac95ba1644febfb2c2acab757fcda` and
 passed the normalized-output correctness gate:
 
-| Assignments | kit sec | clop sec | kit bytes | clop bytes | clop / kit |
+| Assignments | kit sec | clop sec | kit bytes | clop bytes | Allocation ratio (clop / kit) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
 | 256 | 0.000232 | 0.003444 | 129,088 | 6,204,416 | 48.1x |
 | 512 | 0.000411 | 0.008469 | 228,096 | 12,185,024 | 53.4x |
