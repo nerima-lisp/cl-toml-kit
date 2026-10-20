@@ -85,20 +85,20 @@
             :message "String contains a surrogate code point"
             :path (%writer-error-path path)))))
 (defun %validate-writer-key (key path)
-  (unless (stringp key)
-    (%with-writer-path path key
-      (%signal-encoding-error (%toml-writer-error-message :key) key path)))
-  (%validate-toml-string key path))
+  (%with-writer-path path key
+    (unless (stringp key)
+      (%signal-encoding-error (%toml-writer-error-message :key) key path))
+    (%validate-toml-string key path)))
 
 (defun %write-key (key stream)
   (if (and (plusp (length key))
            (loop for character across key
                  always (toml-bare-key-character-p character)))
       (write-string key stream)
-      (%write-string-value key stream)))
+      (%write-string-value key stream nil)))
 
-(defun %write-string-value (value stream)
-  (%validate-toml-string value nil)
+(defun %write-string-value (value stream path)
+  (%validate-toml-string value path)
   (write-char #\" stream)
   (let ((start 0)
         (length (length value)))

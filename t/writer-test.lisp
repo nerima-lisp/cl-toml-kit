@@ -542,7 +542,7 @@
         (expect
          (string= "safe"
                   (%edit-test-value result '("server" "settings" "mode")))))))
-  (it "rejects surrogate code points in string values and quoted keys"
+  (it "rejects surrogate code points in string values and quoted keys with paths"
     (labels ((encoding-error-for (value)
                (handler-case
                    (progn (encode value) nil)
@@ -553,27 +553,26 @@
                      (write-toml value stream)
                    (toml-encoding-error () nil))
                  (get-output-stream-string stream)))
-             (verify-rejected (value surrogate)
+             (verify-rejected (value surrogate expected-path)
                (let ((condition (encoding-error-for value))
                      (output (captured-output value)))
-                 (expect (typep condition 'toml-encoding-error))
+                 (expect (and (typep condition 'toml-encoding-error)
+                              (equal expected-path
+                                     (toml-encoding-error-path condition))))
                  (expect (not (find surrogate output)))
-                 (when (typep condition 'toml-encoding-error)
-                   (expect
-                    (string= "String contains a surrogate code point"
-                             (toml-encoding-error-message condition)))
-                   (expect
-                    (not (find surrogate
-                               (toml-encoding-error-message condition))))))))
+                 (expect (and (typep condition 'toml-encoding-error)
+                              (string= "String contains a surrogate code point"
+                                       (toml-encoding-error-message condition))
+                              (not (find surrogate
+                                         (toml-encoding-error-message condition))))))))
       (dolist (surrogate (list (code-char #xd800) (code-char #xdfff)))
-        (expect (characterp surrogate))
         (verify-rejected
          (%writer-table
           "value"
           (concatenate 'string "before" (string surrogate) "after"))
-         surrogate)
-        (verify-rejected
-         (%writer-table
-          (concatenate 'string "quoted " (string surrogate))
-          1)
-         surrogate)))))
+         surrogate
+         '("value"))
+        (let ((key (concatenate 'string "quoted " (string surrogate))))
+          (verify-rejected (%writer-table key 1)
+                           surrogate
+                           (cl-toml-kit::%diagnostic-path (list key))))))))

@@ -4,7 +4,7 @@
   (defparameter *toml-writer-emitter-specifications*
     '((:table (%write-inline-table value stream path))
       (:array (%write-array value stream path))
-      (:string (%write-string-value value stream))
+      (:string (%write-string-value value stream path))
       (:integer (%write-integer-value value stream path))
       (:float (%write-float-value value stream))
       (:true (write-string "true" stream))
