@@ -23,11 +23,17 @@
 (defun %edit-byte-positions (text offset)
   (let ((positions (make-array (1+ (length text)))))
     (setf (aref positions 0) offset)
-    (loop for index below (length text)
-          do (setf (aref positions (1+ index))
-                   (+ (aref positions index)
-                      (cl-codec-kit:string-size-in-octets
-                       text :start index :end (1+ index) :encoding :utf-8))))
+    ;; Callers pass valid UTF-8 text; edit-toml uses %edit-octets-to-string.
+    (loop with byte-position = offset
+          for index below (length text)
+          for code = (char-code (char text index))
+          do (incf byte-position
+                   (cond
+                     ((<= code #x7f) 1)
+                     ((<= code #x7ff) 2)
+                     ((<= code #xffff) 3)
+                     (t 4)))
+             (setf (aref positions (1+ index)) byte-position))
     positions))
 
 (defun %edit-string-to-bytes (text)
