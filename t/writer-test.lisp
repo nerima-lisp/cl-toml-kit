@@ -326,4 +326,163 @@
               (type-error (error) error))))
       (expect (typep condition 'type-error))
       (expect (eq (type-error-datum condition) :not-a-stream))
-      (expect (eq (type-error-expected-type condition) 'stream)))))
+      (expect (eq (type-error-expected-type condition) 'stream))))
+  (it "detects cycles across table, array, inline-table, and array-table traversal"
+    (labels ((encoding-error-for (value)
+               (handler-case
+                   (progn (encode value) nil)
+                 (toml-encoding-error (condition) condition)))
+             (verify-cycle (value expected-path)
+               (let ((condition (encoding-error-for value)))
+                 (expect (typep condition 'toml-encoding-error))
+                 (expect (search "Cyclic TOML value"
+                                 (toml-encoding-error-message condition)))
+                 (expect (equal expected-path
+                                (toml-encoding-error-path condition))))))
+      (let ((table (%writer-table)))
+        (setf (gethash "self" table) table)
+        (verify-cycle table '("self")))
+      (let ((array (make-array 1)))
+        (setf (aref array 0) array)
+        (verify-cycle (%writer-table "values" array) '("values" 0)))
+      (let ((table (%writer-table)))
+        (setf (gethash "self" table) table)
+        (verify-cycle (%writer-table "values" (vector 0 table))
+                      '("values" 1 "self")))
+      (let ((items (make-array 1))
+            (item (%writer-table)))
+        (setf (aref items 0) item
+              (gethash "items" item) items)
+        (verify-cycle (%writer-table "items" items)
+                      '("items" "items")))
+      (let* ((shared (%writer-table "leaf" 1))
+             (encoded (encode (%writer-table "left" shared "right" shared))))
+        (expect (and (search "[left]" encoded)
+                     (search "[right]" encoded))))))
+  (it "enforces nesting limits consistently across tables and arrays"
+    (labels ((nested-table (levels)
+               (let ((root (%writer-table))
+                     (parent nil))
+                 (setf parent root)
+                 (loop repeat levels
+                       do (let ((child (%writer-table)))
+                            (setf (gethash "next" parent) child
+                                  parent child)))
+                 (setf (gethash "leaf" parent) 1)
+                 root))
+             (encoding-error-for (value)
+               (handler-case (progn
+                               (encode value)
+                               nil)
+                 (toml-encoding-error (condition)
+                   condition)))
+             (expect-limit-error (value expected-path)
+               (multiple-value-bind (limit message)
+                   (cl-toml-kit::%toml-limit :nesting-depth)
+                 (declare (ignore limit))
+                 (let ((condition (encoding-error-for value)))
+                   (expect (typep condition 'toml-encoding-error))
+                   (expect
+                    (string= message (toml-encoding-error-message condition)))
+                   (expect
+                    (equal expected-path (toml-encoding-error-path condition)))))))
+      (let ((cl-toml-kit:*toml-max-nesting-depth* 2))
+        (multiple-value-bind (limit message)
+            (cl-toml-kit::%toml-limit :nesting-depth)
+          (declare (ignore message))
+          (expect (= limit 2)))
+        (expect-limit-error (nested-table 3) '("next" "next" "next"))
+        (expect (search "[next.next]" (encode (nested-table 2))))
+        (expect
+         (stringp
+          (encode (%writer-table "values" (vector 0 (%writer-table "leaf" 1))))))
+        (expect
+         (stringp
+          (encode (%writer-table "items" (vector (%writer-table "leaf" 1))))))
+        (let ((cl-toml-kit:*toml-max-nesting-depth* 1))
+          (expect-limit-error
+           (%writer-table "values" (vector 0 (%writer-table "leaf" 1)))
+           '("values" 1))
+          (expect-limit-error
+           (%writer-table "items" (vector (%writer-table "leaf" 1)))
+           '("items")))
+        (let ((cl-toml-kit:*toml-max-nesting-depth* 0))
+          (expect
+           (string= (format nil "flat = 1~%") (encode (%writer-table "flat" 1))))
+          (expect-limit-error (%writer-table "child" (%writer-table "leaf" 1))
+                              '("child"))))))
+  (it "writes 1024 nested containers under the hard ceiling"
+    (let ((cl-toml-kit:*toml-max-nesting-depth*
+            (1+ cl-toml-kit::+toml-max-nesting-depth-ceiling+))
+          (root (%writer-table))
+          (parent nil))
+      (setf parent root)
+      (loop repeat cl-toml-kit::+toml-max-nesting-depth-ceiling+
+            do (let ((child (%writer-table)))
+                 (setf (gethash "next" parent) child
+                       parent child)))
+      (setf (gethash "leaf" parent) 1)
+      (multiple-value-bind (limit message)
+          (cl-toml-kit::%toml-limit :nesting-depth)
+        (declare (ignore message))
+        (expect (= limit
+                   cl-toml-kit::+toml-max-nesting-depth-ceiling+)))
+      (expect (= (1+ cl-toml-kit::+toml-max-nesting-depth-ceiling+)
+                 (count #\Newline (encode root))))))
+  (it "initializes context for direct writer values and TOML edits"
+    (labels ((write-value-direct (value)
+               (handler-case
+                   (with-output-to-string (stream)
+                     (cl-toml-kit::%write-value
+                      value stream (make-array 8 :adjustable t :fill-pointer 0)))
+                 (toml-encoding-error (condition) condition)))
+             (expect-limit-error (value expected-path)
+               (multiple-value-bind (limit message)
+                   (cl-toml-kit::%toml-limit :nesting-depth)
+                 (declare (ignore limit))
+                 (let ((condition (write-value-direct value)))
+                   (expect (typep condition 'toml-encoding-error))
+                   (expect
+                    (string= message (toml-encoding-error-message condition)))
+                   (expect
+                    (equal expected-path (toml-encoding-error-path condition))))))
+             (expect-cycle-error (value expected-path)
+               (let ((condition (write-value-direct value)))
+                 (expect (typep condition 'toml-encoding-error))
+                 (expect (search "Cyclic TOML value"
+                                 (toml-encoding-error-message condition)))
+                 (expect
+                  (equal expected-path (toml-encoding-error-path condition))))))
+      (let ((cl-toml-kit:*toml-max-nesting-depth* 2))
+        (expect
+         (stringp
+          (write-value-direct (%writer-table "child" (%writer-table "leaf" 1)))))
+        (expect (stringp (write-value-direct (vector (%writer-table "leaf" 1))))))
+      (let ((cl-toml-kit:*toml-max-nesting-depth* 1))
+        (expect-limit-error (%writer-table "child" (%writer-table "leaf" 1))
+                            '("child"))
+        (expect-limit-error (vector (%writer-table "leaf" 1)) '(0)))
+      (let ((table (%writer-table)))
+        (setf (gethash "self" table) table)
+        (expect-cycle-error table '("self")))
+      (let ((array (make-array 1)))
+        (setf (aref array 0) array)
+        (expect-cycle-error array '(0)))
+      (let* ((shared (%writer-table "leaf" 1))
+             (encoded
+               (write-value-direct (%writer-table "left" shared "right" shared))))
+        (expect (and (stringp encoded)
+                     (search "left = { leaf = 1 }" encoded)
+                     (search "right = { leaf = 1 }" encoded))))
+      (let* ((source (%edit-test-bytes
+                      (format nil "[server]~%name = ~S~%" "example")))
+             (settings (%writer-table "mode" "safe"))
+             (result (edit-toml source '("server" "settings") settings)))
+        (expect
+         (string=
+          (format nil "[server]~%name = ~S~%settings = { mode = ~S }~%"
+                  "example" "safe")
+          (%edit-test-text result)))
+        (expect
+         (string= "safe"
+                  (%edit-test-value result '("server" "settings" "mode"))))))))
