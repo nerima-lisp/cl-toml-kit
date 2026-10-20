@@ -132,7 +132,9 @@
             (#.(format nil "[[t]]~%[t.u]~%[t.u]") 12 3 1 "unique table"
              ("t" "u"))
             (#.(format nil "[a]~C~C[a]" (code-char 13) (code-char 10))
-             5 2 1 "unique table" ("a")))
+             5 2 1 "unique table" ("a"))
+            (#.(format nil "bee = \"\"\"~%hee~%gee\\~C ~%" (code-char 9))
+             21 4 1 "closing string delimiter" nil))
       "reports golden error slots for ~S"
       (text position line column expected path)
     (let ((condition (%reader-error text)))
