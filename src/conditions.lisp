@@ -17,9 +17,12 @@
     (with-output-to-string (out)
       (loop with n = 0
             for c across text
-            for escaped = (if (member c '(#\Newline #\Return #\Tab #\Backspace))
-                              (aref *toml-basic-string-escape* (char-code c))
-                              (string c))
+            for code = (char-code c)
+            for escaped = (cond ((member c (list #\Newline #\Return #\Tab #\Backspace))
+                                 (aref *toml-basic-string-escape* code))
+                                ((or (< code 32) (<= #x7f code #x9f))
+                                 (format nil "\\u~4,'0X" code))
+                                (t (string c)))
             while (<= (+ n (length escaped)) limit)
             do (write-string escaped out)
                (incf n (length escaped))))))
@@ -162,7 +165,11 @@
 (define-condition toml-value-model-error (toml-kit-error)
   ((message :initarg :message :reader toml-value-model-error-message))
   (:report (lambda (condition stream)
-             (write-string (toml-value-model-error-message condition) stream))))
+             (let ((message (toml-value-model-error-message condition)))
+               (write-string (if (stringp message)
+                                 (%diagnostic-string message)
+                                 message)
+                             stream)))))
 
 (define-condition toml-parse-error (toml-kit-error)
   ((source-name :initarg :source-name :initform nil
@@ -175,19 +182,22 @@
    (context :initarg :context :initform "TOML" :reader toml-parse-error-context)
    (text :initarg :text :initform "" :reader toml-parse-error-text))
   (:report (lambda (condition stream)
-             (format stream
-                     "TOML parse error~@[ in ~A~] at line ~D, column ~D "
-                     "(position ~D)~@[ at ~A~]~@[; expected ~A~]"
-                     (toml-parse-error-source-name condition)
-                     (toml-parse-error-line condition)
-                     (toml-parse-error-column condition)
-                     (toml-parse-error-position condition)
-                     (%diagnostic-path-report-string (toml-parse-error-path condition))
-                     (toml-parse-error-expected condition)))))
+             (let ((source-name (toml-parse-error-source-name condition))
+                   (expected (toml-parse-error-expected condition)))
+               (format stream
+                       "TOML parse error~@[ in ~A~] at line ~D, column ~D "
+                       "(position ~D)~@[ at ~A~]~@[; expected ~A~]"
+                       (and source-name (%diagnostic-string source-name))
+                       (toml-parse-error-line condition)
+                       (toml-parse-error-column condition)
+                       (toml-parse-error-position condition)
+                       (%diagnostic-path-report-string (toml-parse-error-path condition))
+                       (and expected (%diagnostic-string expected 128)))))))
 
 (defun make-toml-parse-error (&key source-name position line column path expected context text)
   (make-condition 'toml-parse-error
-                  :source-name source-name :position position :line line :column column
+                  :source-name (and source-name (%diagnostic-string source-name))
+                  :position position :line line :column column
                   :path (%diagnostic-path path)
                   :expected (and expected (%diagnostic-string expected 128))
                   :context (%diagnostic-string (or context "TOML"))
@@ -198,9 +208,10 @@
             :reader toml-encoding-error-message)
    (path :initarg :path :initform nil :reader toml-encoding-error-path))
   (:report (lambda (condition stream)
-             (format stream "TOML encode error~@[ at ~A~]: ~A"
-                     (%diagnostic-path-report-string (toml-encoding-error-path condition))
-                     (toml-encoding-error-message condition)))))
+             (let ((message (toml-encoding-error-message condition)))
+               (format stream "TOML encode error~@[ at ~A~]: ~A"
+                       (%diagnostic-path-report-string (toml-encoding-error-path condition))
+                       (if (null message) "NIL" (%diagnostic-string message)))))))
 
 (defun make-toml-encoding-error (&key message path)
   (make-condition 'toml-encoding-error
@@ -212,9 +223,10 @@
             :reader toml-format-preservation-error-message)
    (path :initarg :path :initform nil :reader toml-format-preservation-error-path))
   (:report (lambda (condition stream)
-             (format stream "TOML format-preserving edit error~@[ at ~A~]: ~A"
-                     (%diagnostic-path-report-string (toml-format-preservation-error-path condition))
-                     (toml-format-preservation-error-message condition)))))
+             (let ((message (toml-format-preservation-error-message condition)))
+               (format stream "TOML format-preserving edit error~@[ at ~A~]: ~A"
+                       (%diagnostic-path-report-string (toml-format-preservation-error-path condition))
+                       (if (null message) "NIL" (%diagnostic-string message)))))))
 
 (defun make-toml-format-preservation-error (&key message path)
   (make-condition 'toml-format-preservation-error
