@@ -36,7 +36,7 @@
       (destructuring-bind (input expected) case
         (string= expected
                  (with-output-to-string (stream)
-                   (funcall function input stream)))))
+                   (funcall function input stream nil)))))
     (list
      (list "plain" "\"plain\"")
      (list " " "\" \"")
@@ -51,8 +51,10 @@
      (list "café 🧪" "\"café 🧪\"")))
    (handler-case
        (progn
-         (funcall function (string (code-char #xd800))
-                  (make-string-output-stream))
+         (funcall function
+          (string (code-char #xd800))
+          (make-string-output-stream)
+          nil)
          nil)
      (toml-encoding-error (condition)
        (null (toml-encoding-error-path condition)))
