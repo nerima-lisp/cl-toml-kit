@@ -180,9 +180,7 @@
                 (funcall line-ending "abc" 0)))))
   (it "shares a parent's reversed path with its child"
     (let* ((assignments
-             (first
-              (multiple-value-list
-               (cl-toml-kit::%edit-scan-document "value = [1]"))))
+             (cl-toml-kit::%edit-scan-document "value = [1]"))
            (parent (cl-toml-kit::edit-assignment-node (first assignments)))
            (child (first (cl-toml-kit::edit-node-children parent))))
       (expect
