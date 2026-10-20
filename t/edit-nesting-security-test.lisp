@@ -12,24 +12,26 @@
     (loop repeat depth do (write-char #\} stream))))
 
 (describe "editor nesting limits"
-  (it "rejects array nesting above the configured depth"
-    (let* ((*toml-max-nesting-depth* 4)
-           (text (format nil "value = ~A" (%edit-test-nested-arrays 5)))
+  (it "rejects array nesting above the configured depth via edit-toml"
+    (let* ((*toml-max-nesting-depth* 256)
+           (text (format nil "value = ~A" (%edit-test-nested-arrays 257)))
+           (source (%edit-test-bytes text))
            (condition
              (handler-case
-                 (progn (cl-toml-kit::%edit-scan-document text) nil)
+                 (edit-toml source '("value") 0)
                (toml-format-preservation-error (condition) condition))))
       (expect (and condition
                    (string= "TOML nesting depth limit exceeded"
                             (toml-format-preservation-error-message
                              condition))))))
-  (it "rejects inline-table nesting above the configured depth"
-    (let* ((*toml-max-nesting-depth* 4)
+  (it "rejects inline-table nesting above the configured depth via edit-toml"
+    (let* ((*toml-max-nesting-depth* 1024)
            (text (format nil "value = ~A"
-                         (%edit-test-nested-inline-tables 5)))
+                         (%edit-test-nested-inline-tables 1025)))
+           (source (%edit-test-bytes text))
            (condition
              (handler-case
-                 (progn (cl-toml-kit::%edit-scan-document text) nil)
+                 (edit-toml source '("value") 0)
                (toml-format-preservation-error (condition) condition))))
       (expect (and condition
                    (string= "TOML nesting depth limit exceeded"
