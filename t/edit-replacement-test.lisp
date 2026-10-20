@@ -133,4 +133,10 @@
            (surrogate (code-char #xD800))
            (value (coerce (list #\n surrogate #\w) 'string)))
       (expect (signals toml-encoding-error
-                (edit-toml source '("a") value))))))
+                (edit-toml source '("a") value)))))
+  (it "rejects edit replacements that exceed the document nesting limit"
+    (let ((cl-toml-kit:*toml-max-nesting-depth* 2)
+          (source (%edit-test-bytes "a = [1]")))
+      (expect (signals toml-encoding-error
+                (edit-toml source '("a" 0) #(#(1)))))
+      (expect (string= "a = [1]" (%edit-test-text source))))))

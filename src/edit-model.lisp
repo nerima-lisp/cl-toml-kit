@@ -15,6 +15,7 @@
   path-reversed
   start
   end
+  (parent-depth 0 :type (integer 0 *))
   (kind :value :type edit-node-kind)
   children
   assignment

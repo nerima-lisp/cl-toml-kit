@@ -40,21 +40,21 @@
          (decf (fill-pointer ,path)))))
 
   (progn
-    (defmacro %with-writer-context (&body body)
+    (defmacro %with-writer-context (&optional (initial-depth 0) &body body)
       `(if *toml-writer-active-containers*
            (progn ,@body)
-           (multiple-value-bind (limit message)
-               (%toml-limit :nesting-depth)
-             (let ((*toml-writer-active-containers* (make-hash-table :test #'eq))
-                   (*toml-writer-nesting-depth* 0)
-                   (*toml-writer-nesting-limit* limit)
-                   (*toml-writer-nesting-message* message))
-               ,@body))))
+         (multiple-value-bind (limit message)
+             (%toml-limit :nesting-depth)
+           (let ((*toml-writer-active-containers* (make-hash-table :test #'eq))
+                 (*toml-writer-nesting-depth* ,initial-depth)
+                 (*toml-writer-nesting-limit* limit)
+                 (*toml-writer-nesting-message* message))
+             ,@body))))
 
     (defmacro %with-writer-container (container path nested-p &body body)
       (let ((object (gensym "CONTAINER-"))
             (count-depth-p (gensym "COUNT-DEPTH-P")))
-        `(%with-writer-context
+        `(%with-writer-context 0
            (let ((,object ,container)
                  (,count-depth-p ,nested-p))
              (when (gethash ,object *toml-writer-active-containers*)

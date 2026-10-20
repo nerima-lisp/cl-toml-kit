@@ -208,26 +208,30 @@
     (text position limit path-reversed assignment
      depth nesting-limit nesting-message)
   (let ((character (%edit-char text position limit)))
-    (cond
-      ((and character
-            (member character +toml-quote-characters+ :test #'char=))
-       (%make-edit-node :path-reversed path-reversed
-                        :start position
-                        :end (%edit-scan-string text position limit)
-                        :kind :value
-                        :children nil
-                        :assignment assignment))
-      ((and character
-            (member character '(#\[ #\{) :test #'char=))
-       (let ((container-depth (1+ depth)))
-         (when (> container-depth nesting-limit)
-           (%edit-fail (reverse path-reversed) "~A" nesting-message))
-         (if (char= character #\[)
-             (%edit-scan-array-node
-              text position limit path-reversed assignment container-depth
-              nesting-limit nesting-message)
-             (%edit-scan-inline-node
-              text position limit path-reversed assignment container-depth
-              nesting-limit nesting-message))))
-      (t
-       (%edit-scan-scalar-node text position limit path-reversed assignment)))))
+    (let ((node
+            (cond
+              ((and character
+                    (member character +toml-quote-characters+ :test #'char=))
+               (%make-edit-node :path-reversed path-reversed
+                                :start position
+                                :end (%edit-scan-string text position limit)
+                                :kind :value
+                                :children nil
+                                :assignment assignment))
+              ((and character
+                    (member character '(#\[ #\{) :test #'char=))
+               (let ((container-depth (1+ depth)))
+                 (when (> container-depth nesting-limit)
+                   (%edit-fail (reverse path-reversed) "~A" nesting-message))
+                 (if (char= character #\[)
+                     (%edit-scan-array-node
+                      text position limit path-reversed assignment container-depth
+                      nesting-limit nesting-message)
+                     (%edit-scan-inline-node
+                      text position limit path-reversed assignment container-depth
+                      nesting-limit nesting-message))))
+              (t
+               (%edit-scan-scalar-node
+                text position limit path-reversed assignment)))))
+      (setf (edit-node-parent-depth node) depth)
+      node)))

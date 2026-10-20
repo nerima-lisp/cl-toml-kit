@@ -39,9 +39,10 @@
 (defun %edit-string-to-bytes (text)
   (cl-codec-kit:string-to-octets text :encoding :utf-8))
 
-(defun %edit-value-bytes (value)
+(defun %edit-value-bytes (value &optional (initial-depth 0))
   (with-output-to-string (stream)
-    (%write-value value stream (make-array 8 :adjustable t :fill-pointer 0))))
+    (%with-writer-context initial-depth
+      (%write-value value stream (make-array 8 :adjustable t :fill-pointer 0)))))
 
 (defun %edit-value-bytes-for-node (text node value)
   (when (stringp value)
@@ -53,7 +54,7 @@
                    :fill-pointer t
                    :initial-contents path))))
   (if (not (stringp value))
-      (%edit-value-bytes value)
+      (%edit-value-bytes value (edit-node-parent-depth node))
       (%edit-string-value-bytes-for-node text node value)))
 
 (defun %edit-string-value-bytes-for-node (text node value)
