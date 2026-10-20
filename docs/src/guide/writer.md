@@ -89,9 +89,9 @@ Dotted paths apply the same rule per component and join the components with
 The writer uses TOML basic strings wherever a string value or key appears. The
 escape set is `\b`, `\t`, `\n`, `\f`, `\r`, `\"`, and `\\`. Control characters
 U+0000 through U+001F and U+007F that are not in that set are written as
-`\uXXXX` with four uppercase hex digits. Every other character, including all
-non-ASCII characters, is written literally, so UTF-8 text passes through
-unchanged:
+`\uXXXX` with four uppercase hex digits. Other representable characters,
+including C1 controls U+0080 through U+009F and other non-ASCII characters,
+are written literally in the TOML text:
 
 ```lisp
 (cl-toml-kit:encode
@@ -155,11 +155,14 @@ When a value cannot be represented in TOML, the writer signals
   defaults to `eql`, so tables created without `:test 'equal` are rejected);
 - a non-string key;
 - an integer outside the signed 64-bit range;
-- any other unsupported Lisp value, including `nil` and lists.
+- any other unsupported Lisp value, including `nil` and lists;
+- cyclic values or values deeper than `*toml-max-nesting-depth*` (256 by
+  default; see [shared processing limits](../reference/api.md#shared-processing-limits));
+- strings or keys that contain surrogate code points.
 
-The error message identifies the rejected value's type without printing the
-value. The `toml-encoding-error-path` accessor holds the path from the root
-table, including vector indices. See
+The error message identifies the failure without printing the rejected object.
+The `toml-encoding-error-path` accessor holds the path from the root table,
+including vector indices. See
 [Conditions](../reference/conditions.md#toml-encoding-error) for the full
 condition details.
 
@@ -173,4 +176,4 @@ condition details.
 
 `write-toml` additionally runs `(check-type stream stream)` before writing
 anything, so passing a non-stream signals `type-error` instead. Neither entry
-point mutates the value you pass in; only the stream receives output.
+point mutates the value you pass in.

@@ -1,13 +1,20 @@
 # Conditions
 
 `cl-toml-kit` signals typed conditions with structured, machine-readable
-slots. Parse, encoding, and format-preservation conditions store bounded,
-sanitized diagnostics. Paths retain up to 32 source components and append
-`:...` when truncated; each rendered component is bounded to 64 characters,
-and the rendered path to 256 characters. For parse errors, `expected` is
-truncated to 128 characters, and `context` and `text` are truncated to 256
-characters. Newlines, carriage returns, tabs, and backspaces are escaped as
-`\n`, `\r`, `\t`, and `\b`.
+slots. Parse, encoding, and format-preservation error helpers normalize
+diagnostic strings before storing them. Report methods normalize messages again
+when printing, including values supplied through direct condition construction.
+Diagnostic text is limited to 256 characters after escaping, except `expected`,
+which is limited to 128.
+In diagnostic strings, newlines, carriage returns, tabs, and backspaces use
+`\n`, `\r`, `\t`, and `\b`; other C0 and C1 control characters use `\uXXXX`.
+Surrogate code points also use `\uXXXX`.
+Stored error paths retain at most 32 components and add an ellipsis marker when
+truncated. Their printed form is limited to 256 characters, and each component
+is limited to 64 printed characters. String path components escape controls
+and surrogate code points. Integer components remain integers when their
+printed form fits both caps; otherwise, oversized integers use the bounded
+`integer` label. Other components become bounded strings or short type labels.
 
 ## The shared base condition
 
@@ -26,8 +33,9 @@ See also: [`toml-kit-error`](api.md#toml-kit-error).
 `toml-value-model-error` is a subtype of `toml-kit-error`. The
 `toml-value-typecase` macro signals it during macro expansion when a clause
 uses an unknown TOML kind keyword. Read `toml-value-model-error-message` for
-the explanation. The reader returns the stored message; the condition's
-report method sanitizes it only when printing the condition.
+the explanation. The reader returns the stored message, which can be a
+non-string, unescaped, or exceed the diagnostic limit. The report method
+sanitizes it only when printing the condition.
 
 See also: [`toml-value-model-error`](api.md#toml-value-model-error).
 
@@ -85,7 +93,7 @@ values that cannot be represented in TOML. Its public readers are:
 | `toml-encoding-error-message` | A bounded description of the failure. Defaults to `"TOML encoding failed"`. |
 | `toml-encoding-error-path` | The path from the root table to the offending value; `nil` when the failure is at the top level. String components normally identify table keys, and integer components normally identify vector indices. Rejected table keys may be normalized for display; for example, a symbol becomes its name and an oversized integer may become `"integer"`. A final `:...` marks truncation. |
 
-Encoding an integer outside the signed 64-bit range triggers it:
+An integer outside the signed 64-bit range triggers it:
 
 ```lisp
 (handler-case
@@ -100,11 +108,16 @@ Encoding an integer outside the signed 64-bit range triggers it:
 ;;     ("n"))
 ```
 
-`(ash 1 63)` is `9223372036854775808`, one past the signed 64-bit maximum.
-The message uses the type category `integer` instead of printing the rejected
-value. The writer classifies Lisp `nil` under the diagnostic category `null`,
-which does not mean TOML has a null value; encoding it produces the message
-`Unsupported TOML value (value null)`.
+`(ash 1 63)` is one past the signed 64-bit maximum. The message identifies the
+value's category with a `(value <category>)` label and does not print the
+rejected object. A `nil` value produces `Unsupported TOML value (value null)`.
+
+The writer also rejects cyclic values and values deeper than
+`*toml-max-nesting-depth*`. The top-level table is not counted; each nested
+table or array adds one level. The default is 256; see [shared processing
+limits](api.md#shared-processing-limits). Strings or keys that contain
+surrogate code points are also rejected. Each failure signals
+`toml-encoding-error`.
 
 The `:report` method renders the condition as one line:
 
