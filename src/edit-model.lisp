@@ -27,10 +27,13 @@
   (error (make-toml-format-preservation-error
           :path path :message (apply #'format nil format-control arguments))))
 
+(defun %edit-byte-elements-p (value)
+  (every (lambda (byte) (typep byte '(unsigned-byte 8))) value))
+
 (defun %edit-byte-vector-p (value)
   (and (vectorp value)
        (not (stringp value))
-       (every (lambda (byte) (typep byte '(unsigned-byte 8))) value)))
+       (%edit-byte-elements-p value)))
 
 (defun %edit-normalize-path (path)
   (multiple-value-bind (component-limit limit-message)

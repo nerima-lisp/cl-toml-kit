@@ -54,7 +54,7 @@
       (%toml-limit :input-bytes)
     (when (> (length source) byte-limit)
       (%edit-fail nil "~A" byte-message)))
-  (unless (%edit-byte-vector-p source)
+  (unless (%edit-byte-elements-p source)
     (error 'type-error :datum source :expected-type '(vector (unsigned-byte 8))))
   (let ((normalized-path (%edit-normalize-path path)))
     (when (and (not new-value-p) (not delete-p))
