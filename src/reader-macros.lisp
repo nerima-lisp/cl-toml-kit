@@ -15,6 +15,7 @@
      (declare (type toml-reader-state ,state)
               (type fixnum ,position)
               (type function ,success ,failure)
+              (dynamic-extent ,success ,failure)
               (optimize (speed 3) (safety 1)))
      (setf (toml-reader-state-position ,state) ,position)
      ,@body))

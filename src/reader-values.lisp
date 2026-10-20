@@ -70,6 +70,7 @@
            (return-from toml-read-array nil)))))))
 
 (defun %inline-table-target (state table keys created error-position failure)
+  (declare (dynamic-extent failure))
   (let ((target table)
         (components (%path-parent keys)))
     (loop while components
@@ -98,6 +99,7 @@
     target))
 
 (defun %store-inline-value (state table keys created value error-position failure)
+  (declare (dynamic-extent failure))
   (let ((target (%inline-table-target
                  state table keys created error-position failure)))
     (unless target (return-from %store-inline-value nil))
@@ -109,6 +111,7 @@
       t)))
 
 (defun %read-inline-pair (state position table created success failure)
+  (declare (dynamic-extent success failure))
   (let ((key-result
          (block parsed-key
            (%read-key-path

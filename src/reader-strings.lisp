@@ -1,6 +1,7 @@
 (in-package #:cl-toml-kit)
 
 (defun %read-string-at (state position success failure)
+  (declare (dynamic-extent success failure))
   (let* ((quote (%source-char state position))
          (triple (and (eql (%source-char state (1+ position)) quote)
                       (eql (%source-char state (+ position 2)) quote)))
@@ -32,6 +33,7 @@
        (setf index next)))))
 
 (defun %read-string-closer (state index quote triple success failure)
+  (declare (dynamic-extent success failure))
   (let ((char (%source-char state index)))
     (cond
      ((and triple (char= char quote)
@@ -54,6 +56,7 @@
      (t nil))))
 
 (defun %read-string-character (state index quote triple failure)
+  (declare (dynamic-extent failure))
   (let ((char (%source-char state index)))
     (cond
      ((and (char= quote #\") (char= char #\\))
@@ -91,6 +94,7 @@
            (return position)))))))
 
 (defun %read-string-escape-at (state index failure)
+  (declare (dynamic-extent failure))
   (block decoded-escape
     (%read-escape state index
                   (lambda (value next)
@@ -115,6 +119,7 @@
           finally (return nil))))
 
 (defun %read-escape (state position success failure)
+  (declare (dynamic-extent success failure))
   (let* ((char (%source-char state (1+ position)))
          (index (and char (position char +toml-escape-letters+ :test #'char=)))
          (width (%toml-hex-escape-width char)))

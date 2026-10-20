@@ -38,6 +38,7 @@
              always (char= (char source (+ start index)) (char token index)))))
 
 (defun %parse-date-value (state start end success failure)
+  (declare (dynamic-extent success failure))
   (let* ((text (subseq (toml-reader-state-source state) start end))
          (value
           (handler-case
@@ -73,6 +74,7 @@
            (%toml-date-time-offset-marker-p (char text index))))))
 
 (defun %parse-float-significand (state position end success failure)
+  (declare (dynamic-extent success failure))
   (let ((index position) (mantissa 0) (fraction 0)
         (seen-dot nil) (previous-digit nil))
     (loop while (< index end)
@@ -109,6 +111,7 @@
     (funcall success (list mantissa fraction nil) end)))
 
 (defun %parse-float-exponent (state position end success failure)
+  (declare (dynamic-extent success failure))
   (let ((index (1+ position)) (negative nil) (exponent 0)
         (previous-digit nil))
     (when (%toml-numeric-sign-p (%source-char state index))
@@ -136,6 +139,7 @@
 
 (defun %finish-float-range (state start mantissa fraction exponent negative end
                                   success failure)
+  (declare (dynamic-extent success failure))
   (when negative (setf mantissa (- mantissa)))
   (handler-case
       (let ((value (coerce (* mantissa (expt 10 (- exponent fraction)))
@@ -150,6 +154,7 @@
                              (funcall failure start :representable-finite-float nil))))
 
 (defun %parse-float-range (state start end success failure)
+  (declare (dynamic-extent success failure))
   (let ((index start) (negative nil))
     (when (%toml-numeric-sign-p (%source-char state index))
       (setf negative (char= (%source-char state index) #\-))
@@ -181,6 +186,7 @@
 
 (defun %parse-integer-digits
     (state error-position position end base negative success failure)
+  (declare (dynamic-extent success failure))
   (let ((index position) (value 0) (digits 0)
         (previous-digit nil) (leading-zero nil))
     (loop while (< index end)
@@ -214,6 +220,7 @@
     (funcall success value end)))
 
 (defun %parse-integer-range (state start end success failure)
+  (declare (dynamic-extent success failure))
   (let ((index start) (negative nil) (signed nil))
     (when (%toml-numeric-sign-p (%source-char state index))
       (setf negative (char= (%source-char state index) #\-)

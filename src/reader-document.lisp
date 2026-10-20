@@ -2,6 +2,7 @@
 (in-package #:cl-toml-kit)
 
 (defun %read-key-component (state position success failure)
+  (declare (dynamic-extent success failure))
   (let* ((position (%skip-space-and-comments-at state position))
          (char (%source-char state position)))
     (cond
@@ -18,16 +19,17 @@
       (t (funcall failure position :key nil)))))
 
 (defun %read-key-path (state position success failure)
+  (declare (dynamic-extent success failure))
   (labels ((fail (error-position expected path)
              (return-from %read-key-path
                (funcall failure error-position expected path))))
+    (declare (dynamic-extent (function fail)))
     (let* ((first
              (block first-component
-               (%read-key-component
-                state position
-                (lambda (key next)
-                  (return-from first-component (cons key next)))
-                #'fail)))
+               (flet ((accept-key (key next)
+                        (return-from first-component (cons key next))))
+                 (declare (dynamic-extent (function accept-key)))
+                 (%read-key-component state position #'accept-key #'fail))))
            (keys (list (car first)))
            (index (cdr first)))
       (loop
@@ -39,15 +41,15 @@
         (setf index (1+ index))
         (let ((component
                 (block next-component
-                  (%read-key-component
-                   state index
-                   (lambda (key next)
-                     (return-from next-component (cons key next)))
-                   #'fail))))
+                  (flet ((accept-key (key next)
+                           (return-from next-component (cons key next))))
+                    (declare (dynamic-extent (function accept-key)))
+                    (%read-key-component state index #'accept-key #'fail)))))
           (push (car component) keys)
           (setf index (cdr component)))))))
 
 (defun %table-for-path-component (state table key path create dotted failure)
+  (declare (dynamic-extent failure))
   (multiple-value-bind (value present) (gethash key table)
     (cond
       ((not present)
@@ -97,6 +99,7 @@
       table)))
 
 (defun %define-assignment (state path value failure)
+  (declare (dynamic-extent failure))
   (let* ((base (or (toml-reader-state-current state)
                    (toml-reader-state-root state)))
          (parent (%table-for-path state (%path-parent path) :create t
@@ -113,6 +116,7 @@
       (setf (gethash value (toml-reader-state-table-states state)) :inline))))
 
 (defun %read-header-end (state position array-p path success failure)
+  (declare (dynamic-extent success failure))
   (let ((index (%skip-space-and-comments-at state position)))
     (unless (eql (%source-char state index) #\])
       (return-from %read-header-end
@@ -130,6 +134,7 @@
     (funcall success nil index)))
 
 (defun %define-header-table (state position path array-p failure)
+  (declare (dynamic-extent failure))
   (let ((parent (%table-for-path state (%path-parent path) :create t
                                  :failure failure))
         (key (%path-last path)))
@@ -169,6 +174,7 @@
           (setf (toml-reader-state-current state) table)))))
 
 (defun %read-header (state position array-p success failure)
+  (declare (dynamic-extent success failure))
   (labels ((fail (error-position expected path)
              (return-from %read-header
                (funcall failure error-position expected path))))
@@ -186,13 +192,13 @@
      #'fail)))
 
 (defun %read-document-assignment-line (state position success failure)
+  (declare (dynamic-extent success failure))
   (let* ((key-result
            (block key-path
-             (%read-key-path
-              state position
-              (lambda (path next)
-                (return-from key-path (cons path next)))
-              failure)))
+             (flet ((accept-key-path (path next)
+                      (return-from key-path (cons path next))))
+               (declare (dynamic-extent (function accept-key-path)))
+               (%read-key-path state position #'accept-key-path failure))))
          (path (car key-result))
          (equals-position
            (%skip-space-and-comments-at state (cdr key-result))))
@@ -201,50 +207,47 @@
     (let ((value-position
             (%skip-space-and-comments-at state (1+ equals-position))))
       (block parsed-value
-        (toml-read-value
-         state value-position
-         (lambda (value next)
-           (%define-assignment state path value failure)
-           (let ((end (%skip-space-and-comments-at state next)))
-             (unless (let ((char (%source-char state end)))
-                       (or (null char)
-                           (member char +toml-newline-characters+)))
-               (funcall failure end :line-end path))
-             (return-from parsed-value
-               (funcall success nil (%skip-line-ending-at state end)))))
-         failure)))))
+        (flet ((accept-value (value next)
+                 (%define-assignment state path value failure)
+                 (let ((end (%skip-space-and-comments-at state next)))
+                   (unless (let ((char (%source-char state end)))
+                             (or (null char)
+                                 (member char +toml-newline-characters+)))
+                     (funcall failure end :line-end path))
+                   (return-from parsed-value
+                     (funcall success nil (%skip-line-ending-at state end))))))
+          (declare (dynamic-extent (function accept-value)))
+          (toml-read-value state value-position #'accept-value failure))))))
 
 (define-toml-rule toml-read-document (state position success failure)
   (labels ((fail (error-position expected path)
              (return-from toml-read-document
                (funcall failure error-position expected path))))
-    (let ((index position))
-      (loop
-        (setf index (%skip-space-and-comments-at state index))
-        (cond
-          ((>= index (toml-reader-state-length state))
-           (return (funcall success (toml-reader-state-root state) index)))
-          ((member (%source-char state index) +toml-newline-characters+)
-           (setf index (%skip-line-ending-at state index)))
-          ((eql (%source-char state index) #\[)
-           (let ((array-p (eql (%source-char state (1+ index)) #\[)))
+    (declare (dynamic-extent (function fail)))
+    (flet ((next-header-line (value next)
+             (declare (ignore value))
+             (%skip-line-ending-at state next))
+           (next-assignment-line (value next)
+             (declare (ignore value))
+             next))
+      (declare (dynamic-extent (function next-header-line) (function next-assignment-line)))
+      (let ((index position))
+        (loop
+          (setf index (%skip-space-and-comments-at state index))
+          (cond
+            ((>= index (toml-reader-state-length state))
+             (return (funcall success (toml-reader-state-root state) index)))
+            ((member (%source-char state index) +toml-newline-characters+)
+             (setf index (%skip-line-ending-at state index)))
+            ((eql (%source-char state index) #\[)
+             (let ((array-p (eql (%source-char state (1+ index)) #\[)))
+               (setf index
+                     (%read-header state index array-p
+                                   #'next-header-line #'fail))))
+            (t
              (setf index
-                   (block next-line
-                     (%read-header
-                      state index array-p
-                      (lambda (value next)
-                        (declare (ignore value))
-                        (return-from next-line
-                          (%skip-line-ending-at state next)))
-                      #'fail)))))
-          (t
-           (setf index
-                 (%read-document-assignment-line
-                  state index
-                  (lambda (value next)
-                    (declare (ignore value))
-                    next)
-                  #'fail))))))))
+                   (%read-document-assignment-line
+                    state index #'next-assignment-line #'fail)))))))))
 
 (defun %finalize-value (value)
   (cond
