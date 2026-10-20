@@ -42,14 +42,14 @@
     (loop
       (when (<= position section-start)
         (return position))
-      (let* ((newline (position #\Newline text :end position :from-end t))
+      (let* ((newline (position +toml-line-feed+ text :end position :from-end t))
              (line-start (if newline (1+ newline) 0)))
         (cond
           ((= line-start position)
            (if (and newline
                     (%edit-trivia-line-p
                      text
-                     (1+ (or (position #\Newline text :end newline :from-end t)
+                     (1+ (or (position +toml-line-feed+ text :end newline :from-end t)
                              (1- section-start)))
                      newline))
                (setf position newline)
@@ -61,9 +61,9 @@
 
 (defun %edit-deletion-has-comment-p (text start end)
   (or (position #\# text :start start :end end)
-      (let* ((current-newline (position #\Newline text :end start :from-end t))
+      (let* ((current-newline (position +toml-line-feed+ text :end start :from-end t))
              (previous-newline (and current-newline
-                                    (position #\Newline text :end current-newline
+                                    (position +toml-line-feed+ text :end current-newline
                                               :from-end t)))
              (previous-start (if previous-newline (1+ previous-newline) 0))
              (previous-end current-newline))
@@ -86,7 +86,7 @@
          (line-ending (%edit-line-ending text position))
          (prefix (if (and (plusp position)
                           (not (member (char text (1- position))
-                                       '(#\Newline #\Return))))
+                                       +toml-newline-characters+)))
                      line-ending ""))
          (line (format nil "~A = ~A~A" (%edit-key-path-text key-path)
                        value line-ending)))
@@ -114,7 +114,7 @@
     (loop while (and (> position (edit-node-start node))
                      (or (toml-space-character-p (char text (1- position)))
                          (member (char text (1- position))
-                                 '(#\Newline #\Return))))
+                                 +toml-newline-characters+)))
           do (decf position))
     (if (and children
              (> position (edit-node-start node))
@@ -124,11 +124,11 @@
 
 (defun %edit-array-insertion-separator
     (text node insertion-position)
-  (let* ((multiline (find #\Newline text
+  (let* ((multiline (find +toml-line-feed+ text
                           :start (edit-node-start node)
                           :end (edit-node-end node)))
          (line-ending (%edit-line-ending text insertion-position))
-         (line-start (or (position #\Newline text
+         (line-start (or (position +toml-line-feed+ text
                                    :end insertion-position
                                    :from-end t)
                          -1))

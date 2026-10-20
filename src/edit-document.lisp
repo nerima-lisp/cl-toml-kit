@@ -64,21 +64,22 @@
 
 (defun %edit-trivia-or-comment-line-p (text first length)
   (or (= first length)
-      (member (char text first) '(#\Newline #\Return #\#))))
+      (member (char text first) +toml-newline-characters+)
+      (char= (char text first) #\#)))
 
 (defun %edit-line-ending (text &optional position)
   (let* ((limit (or position (length text)))
-         (previous (position #\Newline text :end limit :from-end t))
-         (next (position #\Newline text :start limit)))
+         (previous (position +toml-line-feed+ text :end limit :from-end t))
+         (next (position +toml-line-feed+ text :start limit)))
     (cond
       ((and previous (> previous 0)
-            (char= (char text (1- previous)) #\Return))
-       (coerce (list #\Return #\Newline) 'string))
-      (previous (string #\Newline))
+            (char= (char text (1- previous)) +toml-carriage-return+))
+       (coerce (list +toml-carriage-return+ +toml-line-feed+) 'string))
+      (previous (string +toml-line-feed+))
       ((and next (> next 0)
-            (char= (char text (1- next)) #\Return))
-       (coerce (list #\Return #\Newline) 'string))
-      (t (string #\Newline)))))
+            (char= (char text (1- next)) +toml-carriage-return+))
+       (coerce (list +toml-carriage-return+ +toml-line-feed+) 'string))
+      (t (string +toml-line-feed+)))))
 
 (defun %edit-scan-document
     (text &key (array-table-counter-path #'%edit-array-table-counter-path))
