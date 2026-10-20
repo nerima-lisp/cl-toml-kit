@@ -2,8 +2,7 @@
 
 The reader and the writer share one native Common Lisp value model. TOML
 values map directly onto existing Common Lisp types, so there are no wrapper
-structs and no conversion step between reading and writing. The table below is
-the whole model.
+structs and no conversion step between reading and writing.
 
 ## Mapping table
 
@@ -24,8 +23,7 @@ the whole model.
 Every TOML table, whether it comes from a `[table]` header, an inline table,
 or an element of an array of tables, is a hash table whose test is `equal`.
 Every TOML array is a `simple-vector`, with no distinction between arrays of
-values and arrays of tables. `nil` and lists are not TOML values, so anything
-not listed in the table is rejected.
+values and arrays of tables. The writer rejects Lisp types outside this model.
 
 The union of these types is the `toml-value` type. `toml-value-p`,
 `toml-value-kind`, and the per-kind predicates are all derived from one
@@ -59,15 +57,14 @@ table.
 
 ## Table key order
 
-The reader inserts keys in source order and never removes them. The writer
-emits entries in the order SBCL's `maphash` visits them. Together these mean a
-parse-encode round trip preserves the order of the keys in the document you
-read.
+The reader inserts keys in source order. The writer visits each table in
+SBCL's `maphash` order, but groups entries into values, tables, and arrays of
+tables in that order. Insertion order is retained within each group, while a
+parse-encode round trip can move keys across groups.
 
-This is an intentional reliance on SBCL's insertion-order hash-table
-traversal. It is not a portable Common Lisp guarantee: other implementations
-may visit hash-table entries in any order. The behavior is fixed by the test
-suite. If your code depends on key order, keep this scope in mind.
+This relies on SBCL's insertion-order hash-table traversal, which is not a
+portable Common Lisp guarantee. The test suite checks representative output
+ordering. If your code depends on key order, keep this scope in mind.
 
 ## Date and time values
 
@@ -85,9 +82,8 @@ want to write `offset-date-time` without the prefix, your own package must
 import that symbol from cl-date-kit. The examples on this site always use the
 `cl-date-kit:` prefix instead.
 
-This page does not cover how to construct cl-date-kit values. See the
-[cl-date-kit documentation](https://nerima-lisp.github.io/cl-date-kit/) for
-construction and arithmetic.
+For construction and arithmetic, see the
+[cl-date-kit documentation](https://nerima-lisp.github.io/cl-date-kit/).
 
 ## Integers
 

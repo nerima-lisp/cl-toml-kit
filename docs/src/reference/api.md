@@ -25,19 +25,12 @@ table.
 | Argument | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `source` | `string` or `stream` | n/a | The TOML document, as a string or a character input stream. |
-| `source-name` | any value | `nil` | Diagnostic label passed through to the parse-error reader. |
+| `source-name` | any value | `nil` | Diagnostic label stored as a bounded, sanitized string on parse errors. |
 
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
 
 **Signals**: `toml-parse-error` for malformed TOML.
-
-**Example**:
-
-```lisp
-(cl-toml-kit:parse "title = \"TOML\"")
-;; => #<HASH-TABLE :TEST EQUAL :COUNT 1>
-```
 
 See also: [Reader](../guide/reader.md), [Conditions](conditions.md#toml-parse-error).
 
@@ -87,7 +80,8 @@ out-of-range integers, or unsupported values.
  (let ((table (make-hash-table :test 'equal)))
    (setf (gethash "title" table) "TOML")
    table))
-;; => "title = \"TOML\"\n"
+;; TOML output (the returned string ends with a newline):
+;; title = "TOML"
 ```
 
 See also: [Writer](../guide/writer.md), [Conditions](conditions.md#toml-encoding-error).
@@ -116,7 +110,8 @@ Write `value` as TOML text to the character `stream` and return the original
      (setf (gethash "n" table) 1)
      table)
    out))
-;; => "n = 1\n"
+;; TOML output (the returned string ends with a newline):
+;; n = 1
 ```
 
 See also: [Writer](../guide/writer.md).
@@ -135,22 +130,26 @@ Edit a UTF-8 TOML document represented by a vector of unsigned-byte 8 values.
 array indices. A string component is one key, so dots in a string key are not
 path separators; use multiple components for a nested path. Existing values
 are replaced when `new-value` is supplied. Use `:delete t` with `new-value`
-set to `nil`, or use `delete-toml`, to remove an existing value. Bytes outside
-the edited span, including the BOM, comments, key order, whitespace, line
-endings, and string delimiters, are retained.
+set to `nil`, or use `delete-toml`, to remove an existing value. If both
+`new-value` and `:delete t` are omitted, `toml-format-preservation-error` is
+signaled. Bytes outside the edited span, including the BOM, comments, key
+order, whitespace, line endings, and string delimiters, are retained.
 
 ```lisp
 (cl-toml-kit:edit-toml
  #(110 97 109 101 32 61 32 34 111 108 100 34 32 32 35 32 107 101 101 112 13 10)
  '("name")
  "new")
-;; => bytes for "name = \"new\"  # keep\r\n"
+;; Result: UTF-8 bytes for this TOML line, ending with CRLF:
+;; name = "new"  # keep
 ```
 
 Adding a missing table entry writes a TOML-formatted key path with ` = ` and
-uses the surrounding line ending. Array-of-tables elements must be selected
-with an integer path component, such as `("products" 1 "name")`; an edit
-that leaves the element ambiguous signals `toml-format-preservation-error`.
+uses the surrounding line ending. To append to an existing array, use its
+current length as the final path index; for example, `("items" 2)` appends to
+`items = [1, 2]`. Array-of-tables elements must be selected with an integer
+path component, such as `("products" 1 "name")`; an edit that leaves the
+element ambiguous signals `toml-format-preservation-error`.
 Adding `("server" "port")` when the source already has
 `server.host = "example"` is also rejected because it would extend a parent
 created by a dotted-key assignment.
@@ -187,7 +186,6 @@ it with `toml-false-p` rather than depending on its value or printed form.
 
 ```lisp
 (cl-toml-kit:toml-false-p cl-toml-kit:+toml-false+) ; => t
-(eq cl-toml-kit:+toml-false+ nil) ; => nil
 ```
 
 See also: [Data model](../guide/data-model.md).
@@ -366,19 +364,22 @@ Return true if `value` is a double-float.
 
 ## Shared processing limits
 
-These dynamically bindable special variables provide requested limits. Each
-operation requires the bound value to be a non-negative integer and uses the
-smaller of that value and the hard ceiling; it does not modify the binding. An
-invalid binding signals `type-error`, and an input exceeding the effective
-limit signals the operation's existing error condition.
+These dynamically bindable special variables provide limits to operations
+that consult them. Such an operation requires the bound value to be a
+non-negative integer and uses the smaller of that value and the hard ceiling;
+it does not modify the binding. An invalid binding signals `type-error`, and
+an input exceeding the effective limit signals that operation's error
+condition.
 
-| Variable | Default | Hard ceiling | Meaning |
+| Variable | Default | Hard ceiling | Current enforcement |
 | --- | ---: | ---: | --- |
-| `*toml-max-nesting-depth*` | `256` | `1024` | Array and table nesting depth scanned by the reader, writer, and editor. |
-| `*toml-max-input-bytes*` | `16777216` | `1073741824` | Byte input, including `parse-file` and the octet vector passed to `edit-toml`, checked before decoding. |
-| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character input from strings and character streams. |
-| `*toml-max-number-token-length*` | `256` | `4096` | Character length of one numeric token. |
-| `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
+| `*toml-max-nesting-depth*` | `256` | `1024` | Writer and editor value scanning. |
+| `*toml-max-input-bytes*` | `16777216` | `1073741824` | Octet-vector input to `edit-toml`, checked before decoding. |
+| `*toml-max-input-characters*` | `16777216` | `1073741824` | Decoded character input to `edit-toml`. |
+| `*toml-max-number-token-length*` | `256` | `4096` | No current consumer; this does not limit reader tokens. |
+| `*toml-max-path-components*` | `1024` | `4096` | `edit-toml` paths. Dotted keys and table headers can make a path longer than its nesting depth. |
+
+`parse` and `parse-file` do not currently consult these variables.
 
 ## Conditions
 
@@ -388,8 +389,8 @@ accessors only.
 
 ### `toml-kit-error`
 
-A condition, subtype of `error`. It is the base of every condition this
-library signals and carries no slots.
+A condition, subtype of `error`. It is the base of the library-defined error
+conditions and carries no slots.
 
 See also: [The shared base condition](conditions.md#the-shared-base-condition).
 
@@ -419,12 +420,14 @@ See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-source-name`
 
-Return the value passed as `source-name` to `parse`, unchanged, or `nil`.
+Return the bounded, sanitized diagnostic label supplied as `source-name`, or
+`nil` when it was omitted.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-position`
 
-Return the zero-based character offset in the input where parsing failed.
+Return the zero-based character offset where TOML parsing failed. For a
+`parse-file` UTF-8 decoding error, return the byte offset in the file.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-line`
