@@ -46,25 +46,24 @@
                   (%edit-header-context header latest))
               (%edit-line-end text line-start)))))
 
-(defun %edit-scan-assignment-line (text line-start first length current-section)
+(defun %edit-scan-assignment-line
+    (text line-start first length current-section nesting-limit nesting-message)
   (multiple-value-bind (keys next) (%edit-scan-key-path text first length)
     (setf next (%edit-horizontal-space text next length))
     (unless (and (< next length) (char= (char text next) #\=))
       (%edit-fail keys "Assignment has no equals sign"))
     (incf next)
     (setf next (%edit-horizontal-space text next length))
-    (multiple-value-bind (nesting-limit nesting-message)
-        (%toml-limit :nesting-depth)
-      (let* ((path (append (edit-section-path current-section) keys))
-             (path-reversed (reverse path))
-             (assignment
-               (%make-edit-assignment :path path :line-start line-start :line-end nil))
-             (node (%edit-scan-value-node text next length path-reversed assignment
-                                          0 nesting-limit nesting-message)))
-        (setf (edit-assignment-node assignment) node
-              (edit-assignment-line-end assignment)
-              (%edit-line-end text (edit-node-end node)))
-        (values assignment (edit-assignment-line-end assignment))))))
+    (let* ((path (append (edit-section-path current-section) keys))
+           (path-reversed (reverse path))
+           (assignment
+             (%make-edit-assignment :path path :line-start line-start :line-end nil))
+           (node (%edit-scan-value-node text next length path-reversed assignment
+                                        0 nesting-limit nesting-message)))
+      (setf (edit-assignment-node assignment) node
+            (edit-assignment-line-end assignment)
+            (%edit-line-end text (edit-node-end node)))
+      (values assignment (edit-assignment-line-end assignment)))))
 
 (defun %edit-trivia-or-comment-line-p (text first length)
   (or (= first length)
@@ -87,39 +86,42 @@
 
 (defun %edit-scan-document
     (text &key (array-table-counter-path #'%edit-array-table-counter-path))
-  (let* ((length (length text))
-         (index 0)
-         (assignments nil)
-         (sections nil)
-         (latest (make-hash-table :test #'equal))
-         (counts (make-hash-table :test #'equal))
-         (current-section (%make-edit-section :path nil :start 0 :end length)))
-    (labels ((close-section (end)
-               (setf (edit-section-end current-section) end)
-               (push current-section sections)))
-      (loop while (< index length)
-            do (let* ((line-start index)
-                      (first (%edit-horizontal-space text index length)))
-                 (cond
-                   ((%edit-trivia-or-comment-line-p text first length)
-                    (setf index (%edit-line-end text line-start)))
-                   ((char= (char text first) #\[)
-                    (multiple-value-bind (path next)
-                        (%edit-scan-header-line
-                         text line-start first length latest counts
-                         :array-table-counter-path array-table-counter-path)
-                      (close-section line-start)
-                      (setf current-section
-                            (%make-edit-section :path path :start next :end length)
-                            index next)))
-                   (t
-                    (multiple-value-bind (assignment next)
-                        (%edit-scan-assignment-line
-                         text line-start first length current-section)
-                      (push assignment assignments)
-                      (setf index next))))))
-      (close-section length)
-      (values (nreverse assignments) (nreverse sections)))))
+  (multiple-value-bind (nesting-limit nesting-message)
+      (%toml-limit :nesting-depth)
+    (let* ((length (length text))
+           (index 0)
+           (assignments nil)
+           (sections nil)
+           (latest (make-hash-table :test #'equal))
+           (counts (make-hash-table :test #'equal))
+           (current-section (%make-edit-section :path nil :start 0 :end length)))
+      (labels ((close-section (end)
+                 (setf (edit-section-end current-section) end)
+                 (push current-section sections)))
+        (loop while (< index length)
+              do (let* ((line-start index)
+                        (first (%edit-horizontal-space text index length)))
+                   (cond
+                     ((%edit-trivia-or-comment-line-p text first length)
+                      (setf index (%edit-line-end text line-start)))
+                     ((char= (char text first) #\[)
+                      (multiple-value-bind (path next)
+                          (%edit-scan-header-line
+                           text line-start first length latest counts
+                           :array-table-counter-path array-table-counter-path)
+                        (close-section line-start)
+                        (setf current-section
+                              (%make-edit-section :path path :start next :end length)
+                              index next)))
+                     (t
+                      (multiple-value-bind (assignment next)
+                          (%edit-scan-assignment-line
+                           text line-start first length current-section
+                           nesting-limit nesting-message)
+                        (push assignment assignments)
+                        (setf index next))))))
+        (close-section length)
+        (values (nreverse assignments) (nreverse sections))))))
 
 (defun %edit-collect-nodes (assignments path)
   (let ((matches nil)
