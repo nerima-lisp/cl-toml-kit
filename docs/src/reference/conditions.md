@@ -35,8 +35,8 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 
 | Reader | Meaning |
 | --- | --- |
-| `toml-parse-error-source-name` | Unchanged `source-name` value; `nil` if omitted. |
-| `toml-parse-error-position` | Zero-based character offset in the input where parsing failed. Default `0`. |
+| `toml-parse-error-source-name` | Bounded, sanitized diagnostic label; `nil` if omitted. |
+| `toml-parse-error-position` | Zero-based character offset where parsing failed, or byte offset for a `parse-file` UTF-8 decoding error. Default `0`. |
 | `toml-parse-error-line` | One-based line number where parsing failed. Default `1`. |
 | `toml-parse-error-column` | One-based column number where parsing failed. Default `1`. |
 | `toml-parse-error-path` | Path of table keys and vector indices from the document root to the failure; `nil` when no path applies. |
@@ -44,8 +44,7 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 | `toml-parse-error-context` | The context label of the failure; defaults to `"TOML"`. |
 | `toml-parse-error-text` | A bounded, sanitized snippet of the input near the failure. Default `""`. |
 
-The `source-name` value is passed through unchanged; non-`nil` values are
-printed with `~A` in the report.
+The `:report` method renders a non-`nil` source name with `~A`.
 
 ```lisp
 (handler-case
@@ -58,21 +57,14 @@ printed with `~A` in the report.
           :expected     (cl-toml-kit:toml-parse-error-expected condition))))
 ```
 
-The condition's `:report` method combines these into a single human-readable
-line of this shape:
+The `:report` method renders the condition as one human-readable line. The
+`in <source-name>` part appears only when a source name was given, `at <path>`
+only when a path applies, and `; expected <expected>` only when the parser
+recorded an expected value. `context` and `text` are available only through
+their readers. For the input above, the report is:
 
 ```text
-TOML parse error in <source-name> at line <line>, column <column> (position <position>) at <path>; expected <expected>
-```
-
-The `in <source-name>` part appears only when a source name was given, `at
-<path>` only when a path applies, and `; expected <expected>` only when the
-parser recorded an expected value. `context` and `text` are available only
-through their readers. The following is an example report from the implemented
-reader:
-
-```text
-TOML parse error in config.toml at line 3, column 9 (position 41) at ("server" "port"); expected value
+TOML parse error in config.toml at line 1, column 21 (position 20); expected closing string delimiter
 ```
 
 See also: [`toml-parse-error`](api.md#toml-parse-error).
@@ -98,19 +90,20 @@ Encoding an integer outside the signed 64-bit range triggers it:
   (cl-toml-kit:toml-encoding-error (condition)
     (list (cl-toml-kit:toml-encoding-error-message condition)
           (cl-toml-kit:toml-encoding-error-path condition))))
-;; => ("Integer is outside TOML's signed 64-bit range (value 9223372036854775808)"
+;; => ("Integer is outside TOML's signed 64-bit range (value integer)"
 ;;     ("n"))
 ```
 
 `(ash 1 63)` is `9223372036854775808`, one past the signed 64-bit maximum.
-The message appends `(value ~S)`, printed with `*print-length*` bound to 10
-and `*print-level*` bound to 3. A `nil` value is another common trigger and
-produces the message `Unsupported TOML value (value NIL)`.
+The message uses the type category `integer` instead of printing the rejected
+value. The writer classifies Lisp `nil` under the diagnostic category `null`,
+which does not mean TOML has a null value; encoding it produces the message
+`Unsupported TOML value (value null)`.
 
 The `:report` method renders the condition as one line:
 
 ```text
-TOML encode error at ("n"): Integer is outside TOML's signed 64-bit range (value 9223372036854775808)
+TOML encode error at ("n"): Integer is outside TOML's signed 64-bit range (value integer)
 ```
 
 The `at <path>` part appears only when a path applies.

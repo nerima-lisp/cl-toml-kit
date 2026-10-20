@@ -18,22 +18,24 @@ or put the repository where ASDF can find it:
 (asdf:load-system "cl-toml-kit")
 ```
 
-The runtime depends on `cl-parser-kit`, `cl-date-kit`, and `cl-codec-kit`; only
-the test system additionally uses `cl-weave`. SBCL is the supported implementation. See
+The runtime depends on `cl-parser-kit`, `cl-date-kit`, and `cl-codec-kit`; the
+test system additionally uses `cl-weave` and `cl-json-kit`. SBCL is the
+supported implementation. See
 [Getting Started](https://nerima-lisp.github.io/cl-toml-kit/getting-started/).
 
 ## Use
 
 ```lisp
 (defparameter *document*
-  (cl-toml-kit:parse "title = \"TOML\"\nactive = false\n"))
+  (cl-toml-kit:parse
+   (format nil "title = \"TOML\"~%active = false~%")))
 
 (gethash "title" *document*)                            ; => "TOML", T
 (cl-toml-kit:toml-false-p (gethash "active" *document*)) ; => T
 
 (let ((table (make-hash-table :test 'equal)))
   (setf (gethash "title" table) "TOML")
-  (cl-toml-kit:encode table))                           ; => "title = \"TOML\"\n"
+  (cl-toml-kit:encode table))
 ```
 
 `+toml-false+` is an opaque sentinel. Test it with `toml-false-p` rather than
@@ -115,7 +117,7 @@ the document.
 ## Development
 
 ```sh
-timeout 1800 nix flake check   # tests, coverage, docs, formatting, paredit lint
+nix flake check               # tests, coverage, docs, formatting, paredit lint
 sbcl --script run-tests.lisp   # tests only
 ```
 

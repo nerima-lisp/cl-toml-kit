@@ -28,10 +28,20 @@ nix develop
 
 ## With ASDF
 
-Put the repository where ASDF can find it, for example under `~/common-lisp/`
-or a directory on your `CL_SOURCE_REGISTRY`, then load it:
+For each runtime dependency, download the source archive from its project link
+above at the minimum tagged version listed under
+[Supported versions](#supported-versions), then unpack it into a separate
+directory. ASDF must be able to find this checkout and all three dependency
+systems. Set `CL_SOURCE_REGISTRY` to register each project root:
+
+```sh
+export CL_SOURCE_REGISTRY='(:source-registry (:directory "/path/to/cl-toml-kit/") (:directory "/path/to/cl-parser-kit/") (:directory "/path/to/cl-date-kit/") (:directory "/path/to/cl-codec-kit/") :inherit-configuration)'
+```
+
+Start an SBCL REPL in the checkout, then load the system:
 
 ```lisp
+(require :asdf)
 (asdf:load-system "cl-toml-kit")
 ```
 
@@ -43,23 +53,19 @@ builds use the input revisions recorded in this project's
 Everything a caller needs is exported from the single `cl-toml-kit` package.
 Every example on this site references symbols with the `cl-toml-kit:` prefix.
 
-## Supported runtime
+## Supported versions
 
-`cl-toml-kit` targets **SBCL** only and reads and writes TOML v1.1.0. The
+`cl-toml-kit` targets SBCL only and reads and writes TOML v1.1.0. The
 runtime dependencies are `cl-parser-kit` (1.1.1 or newer), `cl-date-kit`
-(1.2.0 or newer), and `cl-codec-kit` (0.6.0 or newer).
+(1.2.0 or newer), and `cl-codec-kit` (0.6.0 or newer). The test system also
+requires `cl-weave` (1.4.0 or newer) and `cl-json-kit` (1.2.0 or newer).
 
-## Verifying the install
+## Running tests
 
-Run the canonical gate:
-
-```console
-timeout 1800 nix flake check
-```
-
-It runs the test suite, checks source coverage, builds the documentation,
-checks formatting, and lints the sources with paredit-cli. To run only the test
-suite:
+The standalone test system requires the runtime dependencies above and both
+test dependencies. Download their source archives at the minimum tagged
+versions above, then add `:directory` entries for their roots to the
+`CL_SOURCE_REGISTRY` form before running:
 
 ```sh
 sbcl --script run-tests.lisp
@@ -72,7 +78,7 @@ keys:
 
 ```lisp
 (defparameter *document*
-  (cl-toml-kit:parse "title = \"TOML\"\nactive = false\n"))
+  (cl-toml-kit:parse (format nil "title = \"TOML\"~%active = false~%")))
 
 (gethash "title" *document*)                             ; => "TOML", T
 (cl-toml-kit:toml-false-p (gethash "active" *document*)) ; => T
@@ -90,7 +96,8 @@ reads from a pathname instead of a string.
 (let ((table (make-hash-table :test 'equal)))
   (setf (gethash "title" table) "TOML")
   (cl-toml-kit:encode table))
-;; => "title = \"TOML\"\n"
+;; TOML output (the returned string ends with a newline):
+;; title = "TOML"
 ```
 
 `write-toml` writes the same representation to an existing character stream.
@@ -108,7 +115,7 @@ The writer rejects values that are not valid TOML with a typed condition:
        table))
   (cl-toml-kit:toml-encoding-error (condition)
     (cl-toml-kit:toml-encoding-error-message condition)))
-;; => "Unsupported TOML value (value (1 2 3))"
+;; => "Unsupported TOML value (value list)"
 ```
 
 `toml-encoding-error-path` names the location of the rejected value. Malformed

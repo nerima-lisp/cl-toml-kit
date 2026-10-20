@@ -19,8 +19,8 @@ Within each table, the writer makes three passes over the hash table:
    element.
 
 The passes recurse into every nested table, so a table inside a table gets
-`[outer.inner]` headers, and so on. Every line ends with a newline, and so
-does the output.
+`[outer.inner]` headers, and so on. Every emitted line ends with a newline. An
+empty top-level table encodes to the empty string.
 
 An empty table is still a table entry. It is emitted as a `[path]` header with
 no lines after it, not as `{}`. The inline form `{}` appears only when a table
@@ -50,7 +50,16 @@ A worked example with all three entry kinds:
                   (setf (gethash "y" point) 2)
                   point)))
   (cl-toml-kit:encode table))
-;; => "title = \"TOML\"\nenabled = false\n[server]\nhost = \"example.com\"\nport = 8080\n[[points]]\nx = 1\n[[points]]\ny = 2\n"
+;; TOML output (the returned string ends with a newline):
+;; title = "TOML"
+;; enabled = false
+;; [server]
+;; host = "example.com"
+;; port = 8080
+;; [[points]]
+;; x = 1
+;; [[points]]
+;; y = 2
 ```
 
 ## Keys
@@ -69,7 +78,10 @@ Dotted paths apply the same rule per component and join the components with
         (gethash "key with spaces" table) 2
         (gethash "" table) 3)
   (cl-toml-kit:encode table))
-;; => "plain-key = 1\n\"key with spaces\" = 2\n\"\" = 3\n"
+;; TOML output (the returned string ends with a newline):
+;; plain-key = 1
+;; "key with spaces" = 2
+;; "" = 3
 ```
 
 ## Strings
@@ -85,9 +97,10 @@ unchanged:
 (cl-toml-kit:encode
  (let ((table (make-hash-table :test 'equal)))
    (setf (gethash "text" table)
-         (format nil "tab:~C bel:~C back:~C uni:λ" #\Tab #\Bell #\Backspace))
+         (format nil "tab:~C bel:~C back:~C uni:λ" #\Tab (code-char 7) #\Backspace))
    table))
-;; => "text = \"tab:\\t bel:\\u0007 back:\\b uni:λ\"\n"
+;; TOML output (the returned string ends with a newline):
+;; text = "tab:\t bel:\u0007 back:\b uni:λ"
 ```
 
 ## Numbers
@@ -109,7 +122,10 @@ integer `2`, and exponents use `e`:
          (gethash "tiny" table) 1.0d-5
          (gethash "infinity" table) sb-ext:double-float-positive-infinity)
    table))
-;; => "whole = 2.0\ntiny = 1.0e-5\ninfinity = inf\n"
+;; TOML output (the returned string ends with a newline):
+;; whole = 2.0
+;; tiny = 1.0e-5
+;; infinity = inf
 ```
 
 The exact digit count and exponent spelling are whatever SBCL's float printer
@@ -131,7 +147,8 @@ the profiles' exact output.
 
 ## Errors
 
-`toml-encoding-error` is the one condition the writer signals. You get it for:
+When a value cannot be represented in TOML, the writer signals
+`toml-encoding-error` for:
 
 - a top-level value that is not a hash table;
 - a hash table whose test is not `equal`, at any depth (`make-hash-table`
@@ -140,20 +157,18 @@ the profiles' exact output.
 - an integer outside the signed 64-bit range;
 - any other unsupported Lisp value, including `nil` and lists.
 
-The error message includes a printed form of the rejected value, and the
-`toml-encoding-error-path` accessor holds the path from the root table,
-including vector indices. See
+The error message identifies the rejected value's type without printing the
+value. The `toml-encoding-error-path` accessor holds the path from the root
+table, including vector indices. See
 [Conditions](../reference/conditions.md#toml-encoding-error) for the full
 condition details.
-
-A concrete example:
 
 ```lisp
 (let ((table (make-hash-table :test 'equal)))
   (setf (gethash "big" table) (ash 1 63))
   (cl-toml-kit:encode table))
 ;; signals TOML encode error at ("big"):
-;; "Integer is outside TOML's signed 64-bit range (value 9223372036854775808)"
+;; "Integer is outside TOML's signed 64-bit range (value integer)"
 ```
 
 `write-toml` additionally runs `(check-type stream stream)` before writing

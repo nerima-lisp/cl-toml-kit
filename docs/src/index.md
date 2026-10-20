@@ -9,7 +9,8 @@ coordinates and a path into the document.
 
 ```lisp
 (cl-toml-kit:encode (cl-toml-kit:parse "title = \"TOML\""))
-;; => "title = \"TOML\"\n"
+;; TOML output (the returned string ends with a newline):
+;; title = "TOML"
 ```
 
 ## Next steps
