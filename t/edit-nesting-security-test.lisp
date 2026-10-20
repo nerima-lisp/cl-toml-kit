@@ -57,4 +57,20 @@
            (source (%edit-test-bytes text))
            (result (edit-toml source path 7)))
       (expect (= (1+ depth) (length path)))
-      (expect (= 7 (%edit-test-value result path))))))
+      (expect (= 7 (%edit-test-value result path)))))
+  (it "rejects deeply nested new values without a storage condition"
+    (let* ((source (%edit-test-bytes "value = 0"))
+           (value (let ((nested 0))
+                    (dotimes (index 100000 nested)
+                      (declare (ignore index))
+                      (setf nested (vector nested)))))
+           (condition
+             (handler-case
+                 (progn (edit-toml source "value" value) nil)
+               (storage-condition (condition) condition)
+               (toml-kit-error (condition) condition)
+               (error (condition) condition))))
+      (expect (and (typep condition (quote toml-kit-error))
+                   (typep condition (quote toml-encoding-error))
+                   (not (typep condition (quote storage-condition)))))
+      (expect (zerop (length (delete-toml source "value")))))))
