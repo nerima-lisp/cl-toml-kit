@@ -44,6 +44,14 @@
     (%write-value value stream (make-array 8 :adjustable t :fill-pointer 0))))
 
 (defun %edit-value-bytes-for-node (text node value)
+  (when (stringp value)
+    (let ((path (edit-node-path node)))
+      (%validate-toml-string
+       value
+       (make-array (length path)
+                   :adjustable t
+                   :fill-pointer t
+                   :initial-contents path))))
   (if (not (stringp value))
       (%edit-value-bytes value)
       (%edit-string-value-bytes-for-node text node value)))

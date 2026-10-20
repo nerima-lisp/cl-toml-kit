@@ -127,4 +127,10 @@
     (let ((source (%edit-test-bytes "name = \"old\"~%")))
       (expect (signals error (edit-toml source '("name"))))
       (expect (string= (%toml-test-format-text "name = \"old\"~%")
-                       (%edit-test-text source))))))
+                       (%edit-test-text source)))))
+  (it "rejects surrogate code points in literal-string replacements"
+    (let* ((source (%edit-test-bytes "a = 'old'"))
+           (surrogate (code-char #xD800))
+           (value (coerce (list #\n surrogate #\w) 'string)))
+      (expect (signals toml-encoding-error
+                (edit-toml source '("a") value))))))
