@@ -6,6 +6,7 @@
   source-name
   (position 0 :type fixnum)
   (length 0 :type fixnum)
+  (nesting-depth 0 :type fixnum)
   (root nil)
   (current nil)
   (table-states (make-hash-table :test #'eq))

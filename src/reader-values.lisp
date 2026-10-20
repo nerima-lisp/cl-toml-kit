@@ -42,26 +42,34 @@
            (t (%parse-integer-range state position end success failure))))))))
 
 (define-toml-rule toml-read-array (state position success failure)
-  (let ((index (1+ position))
-        (values '()))
-    (loop
-      (setf index (%skip-inline-space state index))
-      (when (eql (%source-char state index) #\])
-        (return-from toml-read-array
-          (funcall success (coerce (nreverse values) 'simple-vector)
-                   (1+ index))))
-      (flet ((accept-element (value next)
-               (push value values)
-               (setf index (%skip-inline-space state next))
-               (cond
-                 ((eql (%source-char state index) #\,)
-                  (incf index))
-                 ((eql (%source-char state index) #\])
-                  nil)
-                 (t
-                  (funcall failure index :comma-or-closing-bracket nil)))))
-        (declare (dynamic-extent #'accept-element))
-        (toml-read-value state index #'accept-element failure)))))
+  (multiple-value-bind (nesting-limit nesting-message)
+      (%toml-limit :nesting-depth)
+    (let ((depth (1+ (toml-reader-state-nesting-depth state))))
+      (when (> depth nesting-limit)
+        (%error-at-message state position nesting-message nil t))
+      (setf (toml-reader-state-nesting-depth state) depth)
+      (let ((index (1+ position))
+            (values '()))
+        (loop
+          (setf index (%skip-inline-space state index))
+          (when (eql (%source-char state index) #\])
+            (decf (toml-reader-state-nesting-depth state))
+            (return-from toml-read-array
+              (funcall success (coerce (nreverse values) 'simple-vector)
+                       (1+ index))))
+          (flet ((accept-element (value next)
+                   (push value values)
+                   (setf index (%skip-inline-space state next))
+                   (cond
+                     ((eql (%source-char state index) #\,)
+                      (incf index))
+                     ((eql (%source-char state index) #\])
+                      nil)
+                     (t
+                      (funcall failure index
+                               :comma-or-closing-bracket nil)))))
+            (declare (dynamic-extent #'accept-element))
+            (toml-read-value state index #'accept-element failure)))))))
 
 (defun %inline-table-target
     (state table keys created error-position success failure)
@@ -103,41 +111,52 @@
                           #'store-in-target failure)))
 
 (define-toml-rule toml-read-inline-table (state position success failure)
-  (let ((table (make-hash-table :test #'equal))
-        (index (1+ position))
-        (created (make-hash-table :test #'eq)))
-    (loop
-      (setf index (%skip-inline-space state index))
-      (when (eql (%source-char state index) #\})
-        (setf (gethash table (toml-reader-state-table-states state)) :inline)
-        (return-from toml-read-inline-table
-          (funcall success table (1+ index))))
-      (flet ((accept-inline-key (keys key-end)
-               (let ((equals-position (%skip-inline-space state key-end)))
-                 (unless (eql (%source-char state equals-position) #\=)
-                   (funcall failure equals-position :equals nil))
-                 (let ((value-position
-                         (%skip-inline-space state (1+ equals-position))))
-                   (flet ((accept-inline-value (value value-end)
-                            (flet ((inline-value-stored ()
-                                     (setf index (%skip-inline-space
-                                                  state value-end))
-                                     (cond
-                                       ((eql (%source-char state index) #\,)
-                                        (incf index))
-                                       ((eql (%source-char state index) #\})
-                                        nil)
-                                       (t
-                                        (funcall
-                                         failure index
-                                         :comma-or-closing-brace nil)))))
-                              (declare (dynamic-extent
-                                        #'inline-value-stored))
-                              (%store-inline-value
-                               state table keys created value value-end
-                               #'inline-value-stored failure))))
-                     (declare (dynamic-extent #'accept-inline-value))
-                     (toml-read-value state value-position
-                                      #'accept-inline-value failure))))))
-        (declare (dynamic-extent #'accept-inline-key))
-        (%read-key-path state index #'accept-inline-key failure)))))
+  (multiple-value-bind (nesting-limit nesting-message)
+      (%toml-limit :nesting-depth)
+    (let ((depth (1+ (toml-reader-state-nesting-depth state))))
+      (when (> depth nesting-limit)
+        (%error-at-message state position nesting-message nil t))
+      (setf (toml-reader-state-nesting-depth state) depth)
+      (let ((table (make-hash-table :test #'equal))
+            (index (1+ position))
+            (created (make-hash-table :test #'eq)))
+        (loop
+          (setf index (%skip-inline-space state index))
+          (when (eql (%source-char state index) #\})
+            (setf (gethash table
+                           (toml-reader-state-table-states state))
+                  :inline)
+            (decf (toml-reader-state-nesting-depth state))
+            (return-from toml-read-inline-table
+              (funcall success table (1+ index))))
+          (flet ((accept-inline-key (keys key-end)
+                   (let ((equals-position (%skip-inline-space state key-end)))
+                     (unless (eql (%source-char state equals-position) #\=)
+                       (funcall failure equals-position :equals nil))
+                     (let ((value-position
+                             (%skip-inline-space state (1+ equals-position))))
+                       (flet ((accept-inline-value (value value-end)
+                                (flet ((inline-value-stored ()
+                                         (setf index
+                                               (%skip-inline-space
+                                                state value-end))
+                                         (cond
+                                           ((eql (%source-char state index) #\,)
+                                            (incf index))
+                                           ((eql (%source-char state index) #\})
+                                            nil)
+                                           (t
+                                            (funcall
+                                             failure index
+                                             :comma-or-closing-brace nil)))))
+                                  (declare
+                                   (dynamic-extent #'inline-value-stored))
+                                  (%store-inline-value
+                                   state table keys created value value-end
+                                   #'inline-value-stored failure))))
+                         (declare (dynamic-extent #'accept-inline-value))
+                         (toml-read-value state value-position
+                                          #'accept-inline-value failure))))))
+            (declare (dynamic-extent #'accept-inline-key))
+            (%read-key-path state index
+                            #'accept-inline-key failure)))))))
