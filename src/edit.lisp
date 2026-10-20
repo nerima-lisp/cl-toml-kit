@@ -5,7 +5,6 @@
   (ftype function
     %edit-apply-edit-range
     %edit-existing-edit-range
-    %edit-ambiguous-parent-p
     %edit-addition-range))
 
 (defun %edit-validate-result (original path new-value delete-p result)
