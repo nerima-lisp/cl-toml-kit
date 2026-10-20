@@ -19,6 +19,7 @@
   children
   assignment
   key-start)
+
 (defun edit-node-path (node)
   (reverse (edit-node-path-reversed node)))
 
@@ -35,7 +36,7 @@
   (multiple-value-bind (component-limit limit-message)
       (%toml-limit :path-components)
     (let ((items (cond ((stringp path)
-                        (when (> 1 component-limit)
+                        (when (zerop component-limit)
                           (%edit-fail nil "~A" limit-message))
                         (list path))
                        ((listp path)
@@ -53,7 +54,7 @@
                        ((vectorp path)
                         (when (> (length path) component-limit)
                           (%edit-fail nil "~A" limit-message))
-                        (coerce path (quote list)))
+                        (coerce path 'list))
                        (t
                         (%edit-fail nil
                                     "Path must be a string, list, or vector")))))

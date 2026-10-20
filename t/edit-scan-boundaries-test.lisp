@@ -123,6 +123,14 @@
        (equal (multiple-value-list (funcall key-component "bare" 0 4))
               (list "bare" 4)))
       (expect (= 3 (funcall scan-string "\"x\"" 0 3)))))
+  (it "treats a missing value character as a scalar boundary"
+    (let ((scan-value
+            (symbol-function (find-symbol "%EDIT-SCAN-VALUE-NODE" "CL-TOML-KIT"))))
+      (expect
+       (eq :value
+           (cl-toml-kit::edit-node-kind
+            (funcall scan-value "" 0 0 nil nil 0 0
+                     "TOML nesting depth limit exceeded"))))))
   (it "checks triple-string scanning and comment trivia"
     (let* ((scan-string
              (symbol-function (find-symbol "%EDIT-SCAN-STRING" "CL-TOML-KIT")))

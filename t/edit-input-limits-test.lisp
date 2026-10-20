@@ -11,6 +11,16 @@
                    (string= "TOML input byte limit exceeded"
                             (toml-format-preservation-error-message
                              condition))))))
+  (it "checks vector length before validating bytes"
+    (let* ((*toml-max-input-bytes* 8)
+           (source (vector 1 1 1 1 1 1 1 1 "invalid"))
+           (condition
+             (handler-case
+                 (edit-toml source "name" 2)
+               (error (condition) condition))))
+      (expect (typep condition 'toml-format-preservation-error))
+      (expect (string= "TOML input byte limit exceeded"
+                       (toml-format-preservation-error-message condition)))))
   (it "checks the byte limit before decoding invalid UTF-8"
     (let* ((*toml-max-input-bytes* 7)
            (source (make-array 8 :element-type '(unsigned-byte 8)
