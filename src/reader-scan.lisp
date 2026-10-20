@@ -53,12 +53,12 @@
       (%advance-to state (1+ (toml-reader-state-position state))))))
 
 (defun %skip-line-ending-at (state position)
-  (setf (toml-reader-state-position state) position)
+  (%advance-to state position)
   (%skip-line-ending state)
   (toml-reader-state-position state))
 
 (defun %skip-space-and-comments-at (state position)
-  (setf (toml-reader-state-position state) position)
+  (%advance-to state position)
   (%skip-space-and-comments state)
   (toml-reader-state-position state))
 
