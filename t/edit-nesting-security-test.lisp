@@ -73,4 +73,15 @@
       (expect (and (typep condition (quote toml-kit-error))
                    (typep condition (quote toml-encoding-error))
                    (not (typep condition (quote storage-condition)))))
-      (expect (zerop (length (delete-toml source "value")))))))
+      (expect (zerop (length (delete-toml source "value"))))))
+  (it "edits a leaf at the default nesting depth"
+    (let* ((depth *toml-max-nesting-depth*)
+           (path (cons "value" (make-list depth :initial-element 0)))
+           (text (format nil "value = ~A" (%edit-test-nested-arrays depth)))
+           (source (%edit-test-bytes text))
+           (result (handler-case (edit-toml source path 7)
+                     (error () nil))))
+      (expect (and (= 256 depth)
+                   (= (1+ depth) (length path))
+                   result
+                   (= 7 (%edit-test-value result path)))))))
