@@ -144,6 +144,19 @@
       (expect
        (and (null (toml-parse-error-source-name empty-condition))
             (null (toml-parse-error-expected empty-condition))))))
+  (it "reports the full parser error with position and expected text"
+    (let* ((condition
+            (handler-case (progn
+                            (parse "a = @" :source-name "example.toml")
+                            nil)
+              (toml-parse-error (parse-error)
+                parse-error)))
+           (expected-report
+            (concatenate 'string
+                         "TOML parse error in example.toml at line 1, column 5 "
+                         "(position 4); expected integer digit")))
+      (expect condition)
+      (expect (string= expected-report (format nil "~A" condition)))))
   (it "constructs an encoding condition with bounded path values"
     (let ((condition (make-condition 'toml-encoding-error
                                      :message (make-string 256 :initial-element #\m)

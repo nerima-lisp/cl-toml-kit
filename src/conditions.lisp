@@ -185,8 +185,7 @@
              (let ((source-name (toml-parse-error-source-name condition))
                    (expected (toml-parse-error-expected condition)))
                (format stream
-                       "TOML parse error~@[ in ~A~] at line ~D, column ~D "
-                       "(position ~D)~@[ at ~A~]~@[; expected ~A~]"
+                       "TOML parse error~@[ in ~A~] at line ~D, column ~D (position ~D)~@[ at ~A~]~@[; expected ~A~]"
                        (and source-name (%diagnostic-string source-name))
                        (toml-parse-error-line condition)
                        (toml-parse-error-column condition)
