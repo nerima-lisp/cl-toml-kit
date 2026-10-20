@@ -32,9 +32,9 @@
            (with-label (edit-toml replaced '("values" 3) 4))
            (result (edit-toml with-label '("labels" 1) "new")))
       (expect (string= (%toml-test-format-text
-                       (concatenate 'string
-                                    "values = [1, 20, 3, 4]~%"
-                                    "labels = [\"old\", \"new\"]~%other = true~%"))
+                        (concatenate 'string
+                                     "values = [1, 20, 3, 4]~%"
+                                     "labels = [\"old\", \"new\"]~%other = true~%"))
                        (%edit-test-text result)))
       (expect (equalp #(1 20 3 4) (%edit-test-value result '("values"))))))
   (it "preserves labels and other keys after array edits"
@@ -76,9 +76,9 @@
                     "[[products]]~%name = \"A\"~%~%[[products]]~%name = \"B\"~%"))
            (result (edit-toml source '("products" 1 "name") "B2")))
       (expect (string= (%toml-test-format-text
-                       (concatenate 'string
-                                    "[[products]]~%name = \"A\"~%~%"
-                                    "[[products]]~%name = \"B2\"~%"))
+                        (concatenate 'string
+                                     "[[products]]~%name = \"A\"~%~%"
+                                     "[[products]]~%name = \"B2\"~%"))
                        (%edit-test-text result)))
       (let ((products (%edit-test-value result '("products"))))
         (expect (string= "A" (gethash "name" (aref products 0))))
@@ -108,9 +108,9 @@
                     "[server]~%name = \"x\"~%~%# section note~%[other]~%value = 1~%"))
            (result (edit-toml source '("server" "port") 8080)))
       (expect (string= (%toml-test-format-text
-                       (concatenate 'string
-                                    "[server]~%name = \"x\"~%port = 8080~%"
-                                    "~%# section note~%[other]~%value = 1~%"))
+                        (concatenate 'string
+                                     "[server]~%name = \"x\"~%port = 8080~%"
+                                     "~%# section note~%[other]~%value = 1~%"))
                        (%edit-test-text result)))
       (expect (= 8080 (%edit-test-value result '("server" "port"))))))
   (it "rejects array insertion after a trailing comment"
