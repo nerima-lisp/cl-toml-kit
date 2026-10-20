@@ -117,9 +117,10 @@
       (values (nreverse assignments) (nreverse sections)))))
 
 (defun %edit-collect-nodes (assignments path)
-  (let ((matches nil))
+  (let ((matches nil)
+        (path-reversed (reverse path)))
     (labels ((visit (node parent)
-               (when (equal path (edit-node-path node))
+               (when (equal path-reversed (edit-node-path-reversed node))
                  (push (cons node parent) matches))
                (dolist (child (edit-node-children node)) (visit child node))))
       (dolist (assignment assignments)

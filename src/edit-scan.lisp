@@ -124,86 +124,122 @@
 
 (declaim (ftype function %edit-scan-value-node))
 
-(defun %edit-scan-array-node (text position limit path assignment)
-  (let ((index (1+ position)) (children nil) (element-index 0))
-    (loop
-      (setf index (%edit-skip-comment-and-trivia text index limit))
-      (when (and (< index limit) (char= (char text index) #\]))
-        (return (%make-edit-node :path path
-                   :start position
-                   :end (1+ index)
-                   :kind :array
-                   :children (nreverse children)
-                   :assignment assignment)))
-      (let ((child (%edit-scan-value-node
-                    text index limit (append path (list element-index)) assignment)))
-        (push child children)
-        (incf element-index)
-        (setf index (edit-node-end child))
+(defun %edit-scan-array-node (text position limit path assignment
+                              &optional (depth 1) nesting-limit nesting-message
+                                path-reversed-p)
+  (let ((path-reversed (if path-reversed-p path (reverse path))))
+    (unless nesting-limit
+      (multiple-value-setq (nesting-limit nesting-message)
+        (%toml-limit :nesting-depth)))
+    (when (> depth nesting-limit)
+      (%edit-fail (reverse path-reversed) "~A" nesting-message))
+    (let ((index (1+ position)) (children nil) (element-index 0))
+      (loop
         (setf index (%edit-skip-comment-and-trivia text index limit))
-        (cond
-          ((and (< index limit) (char= (char text index) #\,))
-           (incf index))
-          ((and (< index limit) (char= (char text index) #\])))
-          (t (%edit-fail path "Array value has no closing bracket")))))))
-
-(defun %edit-scan-inline-node (text position limit path assignment)
-  (let ((index (1+ position)) (children nil))
-    (loop
-      (setf index (%edit-skip-comment-and-trivia text index limit))
-      (when (and (< index limit) (char= (char text index) #\}))
-        (return (%make-edit-node :path path
-                   :start position
-                   :end (1+ index)
-                   :kind :inline
-                   :children (nreverse children)
-                   :assignment assignment)))
-      (let ((key-start index))
-        (multiple-value-bind (keys next) (%edit-scan-key-path text index limit)
-          (setf index (%edit-horizontal-space text next limit))
-          (unless (and (< index limit) (char= (char text index) #\=))
-            (%edit-fail path "Inline table entry has no equals sign"))
-          (incf index)
-          (setf index (%edit-horizontal-space text index limit))
-          (let ((child (%edit-scan-value-node
-                        text index limit (append path keys) assignment)))
-            (setf (edit-node-key-start child) key-start)
-            (push child children)
-            (setf index (edit-node-end child)))
-          (setf index (%edit-horizontal-space text index limit))
+        (when (and (< index limit) (char= (char text index) #\]))
+          (return (%make-edit-node :path-reversed path-reversed
+                                   :start position
+                                   :end (1+ index)
+                                   :kind :array
+                                   :children (nreverse children)
+                                   :assignment assignment)))
+        (let ((child (%edit-scan-value-node
+                      text index limit (cons element-index path-reversed)
+                      assignment depth nesting-limit nesting-message t)))
+          (push child children)
+          (incf element-index)
+          (setf index (edit-node-end child))
+          (setf index (%edit-skip-comment-and-trivia text index limit))
           (cond
             ((and (< index limit) (char= (char text index) #\,))
              (incf index))
-            ((and (< index limit) (char= (char text index) #\})))
-            (t (%edit-fail path "Inline table has no closing brace"))))))))
+            ((and (< index limit) (char= (char text index) #\])))
+            (t (%edit-fail (reverse path-reversed)
+                           "Array value has no closing bracket"))))))))
 
-(defun %edit-scan-scalar-node (text position limit path assignment)
-  (let ((end position))
+(defun %edit-scan-inline-node (text position limit path assignment
+                               &optional (depth 1) nesting-limit nesting-message
+                                 path-reversed-p)
+  (let ((path-reversed (if path-reversed-p path (reverse path))))
+    (unless nesting-limit
+      (multiple-value-setq (nesting-limit nesting-message)
+        (%toml-limit :nesting-depth)))
+    (when (> depth nesting-limit)
+      (%edit-fail (reverse path-reversed) "~A" nesting-message))
+    (let ((index (1+ position)) (children nil))
+      (loop
+        (setf index (%edit-skip-comment-and-trivia text index limit))
+        (when (and (< index limit) (char= (char text index) #\}))
+          (return (%make-edit-node :path-reversed path-reversed
+                                   :start position
+                                   :end (1+ index)
+                                   :kind :inline
+                                   :children (nreverse children)
+                                   :assignment assignment)))
+        (let ((key-start index))
+          (multiple-value-bind (keys next) (%edit-scan-key-path text index limit)
+            (setf index (%edit-horizontal-space text next limit))
+            (unless (and (< index limit) (char= (char text index) #\=))
+              (%edit-fail (reverse path-reversed)
+                          "Inline table entry has no equals sign"))
+            (incf index)
+            (setf index (%edit-horizontal-space text index limit))
+            (let ((child-path path-reversed))
+              (dolist (key keys)
+                (push key child-path))
+              (let ((child (%edit-scan-value-node
+                            text index limit child-path assignment depth
+                            nesting-limit nesting-message t)))
+                (setf (edit-node-key-start child) key-start)
+                (push child children)
+                (setf index (edit-node-end child))))
+            (setf index (%edit-horizontal-space text index limit))
+            (cond
+              ((and (< index limit) (char= (char text index) #\,))
+               (incf index))
+              ((and (< index limit) (char= (char text index) #\})))
+              (t (%edit-fail (reverse path-reversed)
+                             "Inline table has no closing brace")))))))))
+
+(defun %edit-scan-scalar-node (text position limit path assignment
+                              &optional path-reversed-p)
+  (let ((path-reversed (if path-reversed-p path (reverse path)))
+        (end position))
     (loop while (and (< end limit)
                      (not (%toml-value-terminator-p (char text end))))
           do (incf end))
     (loop while (and (> end position)
                      (toml-space-character-p (char text (1- end))))
           do (decf end))
-    (%make-edit-node :path path
-                   :start position
-                   :end end
-                   :kind :value
-                   :children nil
-                   :assignment assignment)))
+    (%make-edit-node :path-reversed path-reversed
+                     :start position
+                     :end end
+                     :kind :value
+                     :children nil
+                     :assignment assignment)))
 
-(defun %edit-scan-value-node (text position limit path assignment)
-  (let ((character (%edit-char text position limit)))
+(defun %edit-scan-value-node
+    (text position limit path assignment
+     &optional (depth 0) nesting-limit nesting-message path-reversed-p)
+  (let ((character (%edit-char text position limit))
+        (path-reversed (if path-reversed-p path (reverse path))))
     (cond
-      ((member character '(#\" #\'))
-       (%make-edit-node :path path
+      ((and character
+            (member character +toml-quote-characters+ :test #'char=))
+       (%make-edit-node :path-reversed path-reversed
                         :start position
                         :end (%edit-scan-string text position limit)
                         :kind :value
                         :children nil
                         :assignment assignment))
       ((char= character #\[)
-       (%edit-scan-array-node text position limit path assignment))
+       (%edit-scan-array-node
+        text position limit path-reversed assignment (1+ depth)
+        nesting-limit nesting-message t))
       ((char= character #\{)
-       (%edit-scan-inline-node text position limit path assignment))
-      (t (%edit-scan-scalar-node text position limit path assignment)))))
+       (%edit-scan-inline-node
+        text position limit path-reversed assignment (1+ depth)
+        nesting-limit nesting-message t))
+      (t
+       (%edit-scan-scalar-node
+        text position limit path-reversed assignment t)))))

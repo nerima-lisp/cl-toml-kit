@@ -12,13 +12,15 @@
   path start end)
 
 (defstruct (edit-node (:constructor %make-edit-node))
-  path
+  path-reversed
   start
   end
   (kind :value :type edit-node-kind)
   children
   assignment
   key-start)
+(defun edit-node-path (node)
+  (reverse (edit-node-path-reversed node)))
 
 (defun %edit-fail (path format-control &rest arguments)
   (error (make-toml-format-preservation-error
