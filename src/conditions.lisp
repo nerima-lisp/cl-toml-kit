@@ -164,13 +164,11 @@
 (define-condition toml-kit-error (error) ())
 
 (define-condition toml-value-model-error (toml-kit-error)
-  ((message :initarg :message :reader toml-value-model-error-message))
+  ((message :initarg :message :initform "Invalid TOML value model"
+            :reader toml-value-model-error-message))
   (:report (lambda (condition stream)
              (let ((message (toml-value-model-error-message condition)))
-               (write-string (if (stringp message)
-                                 (%diagnostic-string message)
-                                 message)
-                             stream)))))
+               (write-string (%diagnostic-string message) stream)))))
 
 (define-condition toml-parse-error (toml-kit-error)
   ((source-name :initarg :source-name :initform nil

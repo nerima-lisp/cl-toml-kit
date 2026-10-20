@@ -15,6 +15,15 @@
       (expect (and (string= "bad" (toml-encoding-error-message encoding-error))
                    (equal '("root" "child")
                           (toml-encoding-error-path encoding-error))))))
+  (it "reports default and normalized value-model messages"
+    (let* ((default-error (make-condition 'toml-value-model-error))
+           (non-string-error (make-condition 'toml-value-model-error :message 42)))
+      (expect
+       (string= "Invalid TOML value model"
+                (format nil "~A" default-error)))
+      (expect
+       (string= "integer"
+                (format nil "~A" non-string-error)))))
   (it "constructs parse diagnostics"
     (let ((condition (make-condition 'toml-parse-error
                                      :source-name "input"
