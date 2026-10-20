@@ -18,7 +18,7 @@
            (source (%edit-test-bytes text))
            (condition
              (handler-case
-                 (edit-toml source '("value") 0)
+                 (progn (edit-toml source '("value") 0) nil)
                (toml-format-preservation-error (condition) condition))))
       (expect (and condition
                    (string= "TOML nesting depth limit exceeded"
@@ -31,7 +31,7 @@
            (source (%edit-test-bytes text))
            (condition
              (handler-case
-                 (edit-toml source '("value") 0)
+                 (progn (edit-toml source '("value") 0) nil)
                (toml-format-preservation-error (condition) condition))))
       (expect (and condition
                    (string= "TOML nesting depth limit exceeded"
