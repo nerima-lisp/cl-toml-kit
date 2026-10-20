@@ -14,7 +14,7 @@
   4096)
 
 (defconstant +toml-max-path-components-ceiling+
-  1024)
+  4096)
 
 (defvar *toml-max-nesting-depth*
   256
@@ -33,7 +33,7 @@
   "Maximum character length of one numeric token. Parsing rejects tokens longer than the effective limit.")
 
 (defvar *toml-max-path-components*
-  256
+  1024
   "Maximum number of components in an editor path. Editing rejects paths with more components.")
 
 (defmacro define-toml-limits (entries)
