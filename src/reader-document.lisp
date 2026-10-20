@@ -170,7 +170,6 @@
                     (declare (ignore value))
                     (flet ((header-table-defined (ignored)
                              (declare (ignore ignored))
-                             (setf (toml-reader-state-position state) end)
                              (funcall success nil end)))
                       (declare (dynamic-extent #'header-table-defined))
                       (%define-header-table state position path array-p

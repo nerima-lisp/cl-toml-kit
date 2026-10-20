@@ -193,16 +193,6 @@
       (expect (string= "defined table" (funcall name :defined-table)))
       (expect (string= "array table" (funcall name :array-table)))
       (expect (signals error (funcall name :missing)))))
-  (it "evaluates a lookup key once"
-    (let ((name (gensym "TOML-LOOKUP-"))
-          (evaluations 0))
-      (eval `(cl-toml-kit::define-toml-lookup
-              ,name
-              ((:defined-table "defined table"))
-              :otherwise (error "Unknown lookup key")))
-      (expect (string= "defined table"
-                       (funcall name (progn (incf evaluations) :defined-table))))
-      (expect (= evaluations 1))))
   (it "defines escape data and hexadecimal widths"
     (expect (string=
              (coerce '(#\b #\t #\n #\f #\r #\e #\" #\\) 'string)

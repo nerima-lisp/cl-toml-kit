@@ -24,20 +24,17 @@
     (loop
       (when (>= index (toml-reader-state-length state))
         (funcall failure index :closing-string-delimiter nil))
-      (flet ((accept-closer (closed value next)
-               (when closed
-                 (return-from %read-string-at
-                   (funcall success value next)))))
-        (declare (dynamic-extent #'accept-closer))
-        (%read-string-closer state index quote triple
-                             #'accept-closer failure))
+      (multiple-value-bind (closed value next)
+          (%read-string-closer state index quote triple failure)
+        (when closed
+          (return-from %read-string-at (funcall success value next))))
       (flet ((continue-string-at (next)
                (setf index next)))
         (declare (dynamic-extent #'continue-string-at))
         (%read-string-character state index quote triple
                                 #'continue-string-at failure)))))
 
-(defun %read-string-closer (state index quote triple success failure)
+(defun %read-string-closer (state index quote triple failure)
   (let ((char (%source-char state index)))
     (cond
       ((and triple (char= char quote)
@@ -51,11 +48,11 @@
              (progn
                (loop repeat (- count 3)
                      do (%buffer-char state quote))
-               (funcall success t (%finish-buffer state) (+ index count))))))
+               (values t (%finish-buffer state) (+ index count))))))
       ((and (not triple) (char= char quote))
-       (funcall success t (%finish-buffer state) (1+ index)))
+       (values t (%finish-buffer state) (1+ index)))
       (t
-       (funcall success nil nil index)))))
+       (values nil nil index)))))
 
 (defun %read-string-character (state index quote triple success failure)
   (let ((char (%source-char state index)))

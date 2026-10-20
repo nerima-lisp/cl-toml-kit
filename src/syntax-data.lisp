@@ -1,3 +1,4 @@
+;;;; src/syntax-data.lisp
 (in-package #:cl-toml-kit)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -74,6 +75,7 @@
          ,@(loop for (entry-key value) in entries
                  collect `(,entry-key ,value))
          (otherwise ,otherwise)))))
+
 ;; Keep writer call sites compatible with the generic lookup macro.
 (defmacro define-toml-error-messages (name entries &key (otherwise nil))
   `(define-toml-lookup ,name ,entries :otherwise ,otherwise))

@@ -125,7 +125,7 @@
           (incf index))
     (unless previous-digit
       (funcall failure end :exponent-digit nil))
-    (funcall success (if negative (- exponent) exponent) end)))
+    (funcall success (if negative (- exponent) exponent))))
 
 (defun %finish-float-range (start mantissa fraction exponent negative end
                                   success failure)
@@ -155,8 +155,7 @@
       (funcall failure (1+ index) :no-leading-zero nil))
     (flet ((accept-significand (mantissa fraction exponent-position)
              (if exponent-position
-                 (flet ((accept-exponent (exponent exponent-end)
-                          (declare (ignore exponent-end))
+                 (flet ((accept-exponent (exponent)
                           (%finish-float-range
                            start mantissa fraction exponent negative end
                            success failure)))
