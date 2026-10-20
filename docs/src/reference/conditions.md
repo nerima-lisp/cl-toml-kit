@@ -38,7 +38,7 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 
 | Reader | Meaning |
 | --- | --- |
-| `toml-parse-error-source-name` | Bounded, sanitized diagnostic label; `nil` if omitted. |
+| `toml-parse-error-source-name` | Bounded, sanitized diagnostic text derived from `source-name`; `nil` if omitted or supplied as `nil`. |
 | `toml-parse-error-position` | Zero-based character offset where parsing failed, or byte offset for a `parse-file` UTF-8 decoding error. Default `0`. |
 | `toml-parse-error-line` | One-based line number where parsing failed. Default `1`. |
 | `toml-parse-error-column` | One-based column number where parsing failed. Default `1`. |
@@ -47,7 +47,10 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 | `toml-parse-error-context` | The context label of the failure; defaults to `"TOML"`. |
 | `toml-parse-error-text` | A bounded, sanitized snippet of the input near the failure. Default `""`. |
 
-The `:report` method renders a non-`nil` source name with `~A`.
+`source-name` is normalized when the parse error is constructed. Pathnames are
+converted with `namestring`; other values become diagnostic text. Control
+characters in that text are escaped, then it is capped at 256 characters.
+`nil` remains `nil`. The report prints the normalized text with `~A`.
 
 ```lisp
 (handler-case

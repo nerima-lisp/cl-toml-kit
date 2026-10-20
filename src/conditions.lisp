@@ -5,6 +5,7 @@
 
 (defun %diagnostic-string (value &optional (limit +toml-diagnostic-limit+))
   (let ((text (cond ((stringp value) value)
+                    ((pathnamep value) (namestring value))
                     ((null value) "null")
                     ((integerp value) "integer")
                     ((characterp value) (string value))

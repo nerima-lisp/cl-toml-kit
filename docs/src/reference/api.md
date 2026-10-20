@@ -25,7 +25,7 @@ table.
 | Argument | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `source` | `string` or `stream` | n/a | The TOML document, as a string or a character input stream. |
-| `source-name` | any value | `nil` | Diagnostic label stored as a bounded, sanitized string on parse errors. |
+| `source-name` | any value | `nil` | Optional label for parse errors. Pathnames use `namestring`; other values become diagnostic text. The result is control-escaped and capped at 256 characters. |
 
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
@@ -42,7 +42,8 @@ See also: [Reader](../guide/reader.md), [Conditions](conditions.md#toml-parse-er
 ```
 
 Read the file at `pathname`, a pathname designator, and parse its contents as
-one TOML document.
+one TOML document. For parse errors, `parse-file` supplies the pathname's
+namestring as `source-name`.
 
 **Returns**: the top-level table, a hash table with `:test 'equal`.
 
@@ -419,8 +420,8 @@ See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-source-name`
 
-Return the bounded, sanitized diagnostic label supplied as `source-name`, or
-`nil` when it was omitted.
+Return `nil` when no source name is supplied. Otherwise, return bounded,
+sanitized diagnostic text derived from `source-name`.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-position`
