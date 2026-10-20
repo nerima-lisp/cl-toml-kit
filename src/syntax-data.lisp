@@ -46,7 +46,7 @@
                                                                              "\\"
                                                                              (string letter))))
            ,table))
-       (define-toml-error-messages %toml-hex-escape-width ,hex-widths))))
+       (define-toml-lookup %toml-hex-escape-width ,hex-widths))))
 
 (defmacro define-toml-integer-range (minimum-name minimum maximum-name maximum predicate-name)
   (let ((integer (gensym "INTEGER")))
@@ -67,13 +67,16 @@
     `(defun ,name (,character)
        (and (characterp ,character) (member ,character ',characters :test #'char=)))))
 
-(defmacro define-toml-error-messages (name entries &key (otherwise nil))
+(defmacro define-toml-lookup (name entries &key (otherwise nil))
   (let ((lookup-key (gensym "KEY")))
     `(defun ,name (,lookup-key)
        (case ,lookup-key
          ,@(loop for (entry-key value) in entries
                  collect `(,entry-key ,value))
          (otherwise ,otherwise)))))
+;; Keep writer call sites compatible with the generic lookup macro.
+(defmacro define-toml-error-messages (name entries &key (otherwise nil))
+  `(define-toml-lookup ,name ,entries :otherwise ,otherwise))
 
 (define-toml-ascii-table +toml-bare-key-table+
                          char
@@ -125,11 +128,10 @@
 
 (define-toml-byte-sequence +toml-utf8-bom+ (239 187 191))
 
-(defparameter +toml-carriage-return+
-  #\Return)
+(defconstant +toml-carriage-return+ #\Return)
 
-(defparameter +toml-double-quote+
-  #\")
+(defconstant +toml-double-quote+ #\")
+(defconstant +toml-underscore+ #\_)
 
 (defconstant +toml-unicode-scalar-max+
   #x10FFFF)
@@ -140,14 +142,16 @@
 (defconstant +toml-unicode-surrogate-end+
   #xDFFF)
 
-(defparameter +toml-line-feed+
-  #\Newline)
+(defconstant +toml-line-feed+ #\Newline)
 
 (defparameter +toml-newline-characters+
   (list +toml-carriage-return+ +toml-line-feed+))
 
-(defparameter +toml-single-quote+
-  #\')
+(define-toml-ascii-table +toml-value-terminator-table+ char
+  (or (member char +toml-newline-characters+ :test #'char=)
+      (member char '(#\, #\] #\} #\#) :test #'char=)))
+
+(defconstant +toml-single-quote+ #\')
 
 (defparameter +toml-quote-characters+
   (list +toml-double-quote+ +toml-single-quote+))

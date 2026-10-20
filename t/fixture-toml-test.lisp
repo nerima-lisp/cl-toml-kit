@@ -47,9 +47,17 @@
     ((string= expected "nan") (and (floatp actual) (sb-ext:float-nan-p actual)))
     ((string= expected "inf") (= actual sb-ext:double-float-positive-infinity))
     ((string= expected "-inf") (= actual sb-ext:double-float-negative-infinity))
-    (t (= actual (let ((*read-default-float-format* 'double-float))
-                   (let ((*read-eval* nil))
-                     (read-from-string expected)))))))
+    (t
+     (let* ((expected-value
+              (let ((*read-default-float-format* 'double-float)
+                    (*read-eval* nil))
+                (read-from-string expected)))
+            (expected-float (float expected-value 1.0d0)))
+       (and (= actual expected-float)
+            (or (not (zerop expected-float))
+                (eql (and (zerop expected-value)
+                          (char= #\- (char expected 0)))
+                     (minusp (float-sign actual)))))))))
 
 (defun %datetime-text= (expected actual)
   (handler-case

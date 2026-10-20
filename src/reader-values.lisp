@@ -42,35 +42,29 @@
            (t (%parse-integer-range state position end success failure))))))))
 
 (define-toml-rule toml-read-array (state position success failure)
-  (let ((index (1+ position)) (values '()))
+  (let ((index (1+ position))
+        (values '()))
     (loop
       (setf index (%skip-inline-space state index))
       (when (eql (%source-char state index) #\])
-        (funcall success (coerce (nreverse values) 'simple-vector)
-                 (1+ index))
-        (return-from toml-read-array nil))
-      (let ((element
-              (block parsed-element
-                (toml-read-value
-                 state index
-                 (lambda (value next)
-                   (return-from parsed-element (cons value next)))
-                 failure))))
-        (unless element (return-from toml-read-array nil))
-        (push (car element) values)
-        (setf index (cdr element))
-        (setf index (%skip-inline-space state index))
-        (cond
-          ((eql (%source-char state index) #\,)
-           (incf index))
-          ((eql (%source-char state index) #\])
-           nil)
-          (t
-           (funcall failure index :comma-or-closing-bracket nil)
-           (return-from toml-read-array nil)))))))
+        (return-from toml-read-array
+          (funcall success (coerce (nreverse values) 'simple-vector)
+                   (1+ index))))
+      (flet ((accept-element (value next)
+               (push value values)
+               (setf index (%skip-inline-space state next))
+               (cond
+                 ((eql (%source-char state index) #\,)
+                  (incf index))
+                 ((eql (%source-char state index) #\])
+                  nil)
+                 (t
+                  (funcall failure index :comma-or-closing-bracket nil)))))
+        (declare (dynamic-extent #'accept-element))
+        (toml-read-value state index #'accept-element failure)))))
 
-(defun %inline-table-target (state table keys created error-position failure)
-  (declare (dynamic-extent failure))
+(defun %inline-table-target
+    (state table keys created error-position success failure)
   (let ((target table)
         (components (%path-parent keys)))
     (loop while components
@@ -86,56 +80,27 @@
                           :inline
                           (gethash child created) t))
                    ((not (hash-table-p child))
-                    (funcall failure error-position :inline-table nil)
-                    (return-from %inline-table-target nil))
+                    (funcall failure error-position :inline-table nil))
                    ((and (eq (gethash
                               child
                               (toml-reader-state-table-states state))
                              :inline)
                          (not (gethash child created)))
-                    (funcall failure error-position :inline-table nil)
-                    (return-from %inline-table-target nil)))
+                    (funcall failure error-position :inline-table nil)))
                  (setf target child))))
-    target))
+    (funcall success target)))
 
-(defun %store-inline-value (state table keys created value error-position failure)
-  (declare (dynamic-extent failure))
-  (let ((target (%inline-table-target
-                 state table keys created error-position failure)))
-    (unless target (return-from %store-inline-value nil))
-    (let ((key (%path-last keys)))
-      (when (nth-value 1 (gethash key target))
-        (funcall failure error-position :unique-inline-key nil)
-        (return-from %store-inline-value nil))
-      (setf (gethash key target) value)
-      t)))
-
-(defun %read-inline-pair (state position table created success failure)
-  (declare (dynamic-extent success failure))
-  (let ((key-result
-         (block parsed-key
-           (%read-key-path
-            state position
-            (lambda (keys next)
-              (return-from parsed-key (cons keys next)))
-            failure))))
-    (unless key-result (return-from %read-inline-pair nil))
-    (let* ((keys (car key-result))
-           (equals-position
-            (%skip-inline-space state (cdr key-result))))
-      (unless (eql (%source-char state equals-position) #\=)
-        (funcall failure equals-position :equals nil)
-        (return-from %read-inline-pair nil))
-      (let ((value-position
-             (%skip-inline-space state (1+ equals-position))))
-        (toml-read-value
-         state value-position
-         (lambda (value value-end)
-           (unless (%store-inline-value
-                    state table keys created value value-end failure)
-             (return-from %read-inline-pair nil))
-           (funcall success value value-end))
-         failure)))))
+(defun %store-inline-value
+    (state table keys created value error-position success failure)
+  (flet ((store-in-target (target)
+           (let ((key (%path-last keys)))
+             (when (nth-value 1 (gethash key target))
+               (funcall failure error-position :unique-inline-key nil))
+             (setf (gethash key target) value)
+             (funcall success))))
+    (declare (dynamic-extent #'store-in-target))
+    (%inline-table-target state table keys created error-position
+                          #'store-in-target failure)))
 
 (define-toml-rule toml-read-inline-table (state position success failure)
   (let ((table (make-hash-table :test #'equal))
@@ -145,23 +110,34 @@
       (setf index (%skip-inline-space state index))
       (when (eql (%source-char state index) #\})
         (setf (gethash table (toml-reader-state-table-states state)) :inline)
-        (funcall success table (1+ index))
-        (return-from toml-read-inline-table nil))
-      (let ((next
-              (block next-pair
-                (%read-inline-pair
-                 state index table created
-                 (lambda (value value-end)
-                   (declare (ignore value))
-                   (return-from next-pair value-end))
-                 failure))))
-        (unless next (return-from toml-read-inline-table nil))
-        (setf index (%skip-inline-space state next))
-        (cond
-          ((eql (%source-char state index) #\,)
-           (incf index))
-          ((eql (%source-char state index) #\})
-           nil)
-          (t
-           (funcall failure index :comma-or-closing-brace nil)
-           (return-from toml-read-inline-table nil)))))))
+        (return-from toml-read-inline-table
+          (funcall success table (1+ index))))
+      (flet ((accept-inline-key (keys key-end)
+               (let ((equals-position (%skip-inline-space state key-end)))
+                 (unless (eql (%source-char state equals-position) #\=)
+                   (funcall failure equals-position :equals nil))
+                 (let ((value-position
+                         (%skip-inline-space state (1+ equals-position))))
+                   (flet ((accept-inline-value (value value-end)
+                            (flet ((inline-value-stored ()
+                                     (setf index (%skip-inline-space
+                                                  state value-end))
+                                     (cond
+                                       ((eql (%source-char state index) #\,)
+                                        (incf index))
+                                       ((eql (%source-char state index) #\})
+                                        nil)
+                                       (t
+                                        (funcall
+                                         failure index
+                                         :comma-or-closing-brace nil)))))
+                              (declare (dynamic-extent
+                                        #'inline-value-stored))
+                              (%store-inline-value
+                               state table keys created value value-end
+                               #'inline-value-stored failure))))
+                     (declare (dynamic-extent #'accept-inline-value))
+                     (toml-read-value state value-position
+                                      #'accept-inline-value failure))))))
+        (declare (dynamic-extent #'accept-inline-key))
+        (%read-key-path state index #'accept-inline-key failure)))))

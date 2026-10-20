@@ -24,8 +24,6 @@
 
 (defun %error-at (state position expected-key &optional (path nil))
   (let ((expected (%toml-reader-error-message expected-key)))
-    (unless (and (keywordp expected-key) (stringp expected))
-      (error "Unknown TOML reader error key ~S" expected-key))
     (let* ((source (toml-reader-state-source state))
            (end (min (length source) (+ position 40)))
            (span (cl-parser-kit:make-span :source source :start position :end end))
@@ -57,6 +55,11 @@
 (defun %skip-line-ending-at (state position)
   (setf (toml-reader-state-position state) position)
   (%skip-line-ending state)
+  (toml-reader-state-position state))
+
+(defun %skip-space-and-comments-at (state position)
+  (setf (toml-reader-state-position state) position)
+  (%skip-space-and-comments state)
   (toml-reader-state-position state))
 
 (defun %scan-bare-key-end (state position)

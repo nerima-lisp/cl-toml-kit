@@ -11,6 +11,7 @@
 
 (defun parse (source &key source-name)
   (let* ((text (%source-string source))
+         (allowed-control-characters (cons #\Tab +toml-newline-characters+))
          (root (make-hash-table :test #'equal))
          (state (%make-reader-state :source text :source-name source-name
                                     :length (length text) :root root)))
@@ -22,15 +23,15 @@
                          (not (char= (char text (1+ index)) +toml-line-feed+))))
                 (%error-at state index :lf-after-cr))
                ((and (or (< (char-code char) #x20) (= (char-code char) #x7F))
-                     (not (member char (cons #\Tab +toml-newline-characters+)
-                                  :test #'char=)))
+                     (not (member char allowed-control-characters :test #'char=)))
                 (%error-at state index :printable-character))))
-    (toml-read-document state 0
-                        (lambda (value position)
-                          (declare (ignore position))
-                          (%finalize-value value))
-                        (lambda (position expected path)
-                          (%error-at state position expected path)))))
+    (flet ((finish-document (value position)
+             (declare (ignore position))
+             (%finalize-value value))
+           (fail-document (position expected path)
+             (%error-at state position expected path)))
+      (declare (dynamic-extent #'finish-document #'fail-document))
+      (toml-read-document state 0 #'finish-document #'fail-document))))
 
 (defun %byte-position-line-column (bytes position &optional (start 0))
   (let ((text (cl-codec-kit:octets-to-string bytes
@@ -55,6 +56,7 @@
                   (setf column 1))
                  (t (incf column)))))
     (values line column)))
+
 (defun %utf8-bom-length (bytes)
   (let ((bom-length (length +toml-utf8-bom+)))
     (if (and (>= (length bytes) bom-length)
@@ -75,6 +77,7 @@
               :source-name (namestring pathname)
               :position position :line line :column column
               :expected "UTF-8"))))))))
+
 (defun parse-file (pathname)
   (with-open-file (stream pathname :direction :input :element-type '(unsigned-byte 8))
     (let ((bytes (make-array (file-length stream) :element-type '(unsigned-byte 8))))

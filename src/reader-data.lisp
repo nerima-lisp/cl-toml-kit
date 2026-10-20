@@ -22,12 +22,12 @@
 
 (define-toml-character-class %toml-numeric-sign-p (#\+ #\-))
 
-(define-toml-error-messages %toml-date-separator-kind
-                    ((#\- :date) (#\: :time) (#\. :fraction)))
+(define-toml-lookup %toml-date-separator-kind
+  ((#\- :date) (#\: :time) (#\. :fraction)))
 
-(define-toml-error-messages %toml-integer-base ((#\x 16) (#\o 8) (#\b 2)))
+(define-toml-lookup %toml-integer-base ((#\x 16) (#\o 8) (#\b 2)))
 
-(define-toml-error-messages %toml-reader-error-message
+(define-toml-lookup %toml-reader-error-message
   ((:array-table "array table")
    (:closing-array-table-delimiter "]]")
    (:closing-bracket "]")
@@ -65,7 +65,3 @@
    (:valid-date-or-time "valid date or time")
    (:valid-escape-sequence "valid escape sequence"))
   :otherwise (error "Unknown TOML reader error key"))
-
-(defun %toml-value-terminator-p (character)
-  (or (member character +toml-newline-characters+ :test #'char=)
-      (member character '(#\, #\] #\} #\#) :test #'char=)))

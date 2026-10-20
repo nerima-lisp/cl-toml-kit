@@ -121,15 +121,15 @@
       "reads inline table case ~A"
       (case-name source expected-count expected-answer)
     (let ((table (gethash "value" (parse source))))
-      (expect (and (= expected-count (hash-table-count table))
-                   (or (null expected-answer)
-                       (toml-test-value= expected-answer
-                                         (gethash "answer" table)))))))
+      (expect (= expected-count (hash-table-count table)))
+      (expect (if expected-answer
+                  (toml-test-value= expected-answer (gethash "answer" table))
+                  (not (nth-value 1 (gethash "answer" table)))))))
   (it "accepts CRLF between document lines"
     (let ((table (parse (format nil "a = 1~C~Cb = 2~C~C"
                                 #\Return #\Newline #\Return #\Newline))))
-      (expect (and (toml-test-value= 1 (gethash "a" table))
-                   (toml-test-value= 2 (gethash "b" table))))))
+      (expect (toml-test-value= 1 (gethash "a" table)))
+      (expect (toml-test-value= 2 (gethash "b" table)))))
   (it "reads dotted keys and nested table values"
     (let ((table (parse (format nil
                                "fruit.name = \"apple\"~%[fruit.physical]~%color = \"red\"~%"))))
@@ -185,7 +185,7 @@
       (expect (= evaluations 1))))
   (it "maps lookup entries and signals on an unknown key"
     (let ((name (gensym "TOML-LOOKUP-")))
-      (eval `(cl-toml-kit::define-toml-error-messages
+      (eval `(cl-toml-kit::define-toml-lookup
               ,name
               ((:defined-table "defined table")
                (:array-table "array table"))
@@ -193,6 +193,16 @@
       (expect (string= "defined table" (funcall name :defined-table)))
       (expect (string= "array table" (funcall name :array-table)))
       (expect (signals error (funcall name :missing)))))
+  (it "evaluates a lookup key once"
+    (let ((name (gensym "TOML-LOOKUP-"))
+          (evaluations 0))
+      (eval `(cl-toml-kit::define-toml-lookup
+              ,name
+              ((:defined-table "defined table"))
+              :otherwise (error "Unknown lookup key")))
+      (expect (string= "defined table"
+                       (funcall name (progn (incf evaluations) :defined-table))))
+      (expect (= evaluations 1))))
   (it "defines escape data and hexadecimal widths"
     (expect (string=
              (coerce '(#\b #\t #\n #\f #\r #\e #\" #\\) 'string)
