@@ -374,10 +374,10 @@ condition.
 
 | Variable | Default | Hard ceiling | Current enforcement |
 | --- | ---: | ---: | --- |
-| `*toml-max-nesting-depth*` | `256` | `1024` | Maximum nested array or inline table depth accepted by `parse` and checked during `edit-toml`. |
+| `*toml-max-nesting-depth*` | `256` | `1024` | `parse` and `edit-toml` array/inline-table depth; `encode` and `write-toml` nested table/array values. |
 | `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. |
-| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, and for decoded `parse-file` text; streams stop after reading the first character over the limit. |
-| `*toml-max-number-token-length*` | `256` | `4096` | Character length of one numeric token. |
+| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. |
+| `*toml-max-number-token-length*` | `256` | `4096` | Length of one numeric token parsed by `parse`. |
 | `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
 
 ## Conditions
