@@ -24,7 +24,7 @@
 
 (defun %edit-build-result
     (source text positions assignments sections path new-value delete-p
-     path-prefix-p)
+     &key (path-prefix-p #'%edit-path-prefix-p))
   (let ((matches (%edit-collect-nodes assignments path)))
     (when (> (length matches) 1)
       (%edit-fail path "The path identifies more than one source value"))
@@ -41,7 +41,8 @@
        (%edit-apply-edit-range
         source positions
         (%edit-addition-range
-         text assignments sections path new-value path-prefix-p))))))
+         text assignments sections path new-value
+         :path-prefix-p path-prefix-p))))))
 
 (defun %edit-toml
     (source path new-value new-value-p delete-p
@@ -62,7 +63,7 @@
                  (result
                    (%edit-build-result
                     source text positions assignments sections normalized-path
-                    new-value delete-p path-prefix-p)))
+                    new-value delete-p :path-prefix-p path-prefix-p)))
             (%edit-validate-result
              original normalized-path new-value delete-p result)))))))
 
@@ -95,7 +96,8 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
     range))
 
 (defun %edit-ambiguous-parent-p
-    (assignments sections parent-path path-prefix-p)
+    (assignments sections parent-path
+     &key (path-prefix-p #'%edit-path-prefix-p))
   (or (some #'integerp parent-path)
       (some (lambda (assignment)
               (let ((path (edit-assignment-path assignment)))
@@ -119,17 +121,16 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
        parent-match
        (eq (edit-node-kind (car parent-match)) :inline)))
 
-(defun %edit-section-addition-p (last-component section)
-  (and (stringp last-component) section))
-
 (defun %edit-unambiguous-root-addition-p
-    (last-component assignments sections parent-path path-prefix-p)
+    (last-component assignments sections parent-path
+     &key (path-prefix-p #'%edit-path-prefix-p))
   (and (stringp last-component)
        (not (%edit-ambiguous-parent-p
-             assignments sections parent-path path-prefix-p))))
+             assignments sections parent-path :path-prefix-p path-prefix-p))))
 
 (defun %edit-addition-range
-    (text assignments sections path new-value path-prefix-p)
+    (text assignments sections path new-value
+     &key (path-prefix-p #'%edit-path-prefix-p))
   (let* ((last-component (car (last path)))
          (parent-path (butlast path))
          (value (%edit-value-bytes new-value))
@@ -141,10 +142,11 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
        (%edit-insert-array text parent-node value))
       ((%edit-inline-addition-p last-component parent-match)
        (%edit-insert-inline text parent-node last-component value))
-      ((%edit-section-addition-p last-component section)
+      ((and (stringp last-component) section)
        (%edit-insert-line text section (list last-component) value))
       ((%edit-unambiguous-root-addition-p
-        last-component assignments sections parent-path path-prefix-p)
+        last-component assignments sections parent-path
+        :path-prefix-p path-prefix-p)
        (%edit-insert-line text (or (%edit-section-for-path sections nil)
                                    (first sections))
                           path value))

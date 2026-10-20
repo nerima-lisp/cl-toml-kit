@@ -18,7 +18,10 @@
 
 (defun %edit-delete-range (text node parent)
   (if (null parent)
-      (%edit-root-delete-range node)
+      (let ((assignment (edit-node-assignment node)))
+        (list (edit-assignment-line-start assignment)
+              (edit-assignment-line-end assignment)
+              (make-array 0 :element-type '(unsigned-byte 8))))
       (let* ((children (edit-node-children parent))
              (position (position node children :test #'eq))
              (previous (and (plusp position) (nth (1- position) children)))
@@ -167,12 +170,6 @@
           (setf cursor end)))
       (replace result source :start1 output :start2 cursor :end2 size)
       result)))
-
-(defun %edit-root-delete-range (node)
-  (let ((assignment (edit-node-assignment node)))
-    (list (edit-assignment-line-start assignment)
-          (edit-assignment-line-end assignment)
-          (make-array 0 :element-type '(unsigned-byte 8)))))
 
 (defun %edit-inline-delete-range (node previous next)
   (cond

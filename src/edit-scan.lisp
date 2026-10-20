@@ -121,18 +121,20 @@
       (if (and (< index limit) (char= (char text index) #\.))
           (incf index)
           (return (values (nreverse keys) index))))))
+
 (declaim (ftype function %edit-scan-value-node))
+
 (defun %edit-scan-array-node (text position limit path assignment)
   (let ((index (1+ position)) (children nil) (element-index 0))
     (loop
       (setf index (%edit-skip-comment-and-trivia text index limit))
       (when (and (< index limit) (char= (char text index) #\]))
         (return (%make-edit-node :path path
-                 :start position
-                 :end (1+ index)
-                 :kind :array
-                 :children (nreverse children)
-                 :assignment assignment)))
+                   :start position
+                   :end (1+ index)
+                   :kind :array
+                   :children (nreverse children)
+                   :assignment assignment)))
       (let ((child (%edit-scan-value-node
                     text index limit (append path (list element-index)) assignment)))
         (push child children)
@@ -144,17 +146,18 @@
            (incf index))
           ((and (< index limit) (char= (char text index) #\])))
           (t (%edit-fail path "Array value has no closing bracket")))))))
+
 (defun %edit-scan-inline-node (text position limit path assignment)
   (let ((index (1+ position)) (children nil))
     (loop
       (setf index (%edit-skip-comment-and-trivia text index limit))
       (when (and (< index limit) (char= (char text index) #\}))
         (return (%make-edit-node :path path
-                 :start position
-                 :end (1+ index)
-                 :kind :inline
-                 :children (nreverse children)
-                 :assignment assignment)))
+                   :start position
+                   :end (1+ index)
+                   :kind :inline
+                   :children (nreverse children)
+                   :assignment assignment)))
       (let ((key-start index))
         (multiple-value-bind (keys next) (%edit-scan-key-path text index limit)
           (setf index (%edit-horizontal-space text next limit))
@@ -173,6 +176,7 @@
              (incf index))
             ((and (< index limit) (char= (char text index) #\})))
             (t (%edit-fail path "Inline table has no closing brace"))))))))
+
 (defun %edit-scan-scalar-node (text position limit path assignment)
   (let ((end position))
     (loop while (and (< end limit)

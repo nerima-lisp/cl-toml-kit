@@ -9,17 +9,21 @@
         (setf result (append result (list component)))
         (when index (setf result (append result (list index)))))
       (setf prefix (reverse prefix)))))
+
 (defun %edit-array-table-counter-path (header latest)
   (append (%edit-header-context (butlast header) latest)
           (last header)))
-(defun %edit-array-table-context (header latest counts
-                                  array-table-counter-path)
+
+(defun %edit-array-table-context
+    (header latest counts
+     &key (array-table-counter-path #'%edit-array-table-counter-path))
   (let* ((counter-path
            (funcall array-table-counter-path header latest))
          (index (gethash counter-path counts 0)))
     (setf (gethash counter-path counts) (1+ index)
           (gethash header latest) index)
     (%edit-header-context header latest)))
+
 (defun %edit-scan-header-line
     (text line-start first length latest counts
      &key (array-table-counter-path #'%edit-array-table-counter-path))
@@ -37,9 +41,11 @@
         (%edit-fail header "Invalid table header"))
       (values (if array-p
                   (%edit-array-table-context
-                   header latest counts array-table-counter-path)
+                   header latest counts
+                   :array-table-counter-path array-table-counter-path)
                   (%edit-header-context header latest))
               (%edit-line-end text line-start)))))
+
 (defun %edit-scan-assignment-line (text line-start first length current-section)
   (multiple-value-bind (keys next) (%edit-scan-key-path text first length)
     (setf next (%edit-horizontal-space text next length))
@@ -55,6 +61,7 @@
             (edit-assignment-line-end assignment)
             (%edit-line-end text (edit-node-end node)))
       (values assignment (edit-assignment-line-end assignment)))))
+
 (defun %edit-trivia-or-comment-line-p (text first length)
   (or (= first length)
       (member (char text first) '(#\Newline #\Return #\#))))

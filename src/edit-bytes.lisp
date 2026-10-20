@@ -5,7 +5,6 @@
     %edit-string-value-bytes-for-node
     %edit-triple-string-p
     %edit-reject-invalid-literal-string
-    %edit-literal-string-value
     %edit-basic-string-value))
 
 (defun %edit-octets-to-string (bytes)
@@ -50,7 +49,9 @@
     (if (char= delimiter #\')
         (progn
           (%edit-reject-invalid-literal-string node value triple)
-          (%edit-literal-string-value value triple))
+          (if triple
+              (format nil "'''~A'''" value)
+              (format nil "'~A'" value)))
         (%edit-basic-string-value value triple))))
 
 (defun %edit-triple-string-p (text start node delimiter)
@@ -66,11 +67,6 @@
             (and triple (search "'''" value)))
     (%edit-fail (edit-node-path node)
                 "The replacement cannot retain the literal-string delimiter")))
-
-(defun %edit-literal-string-value (value triple)
-  (if triple
-      (format nil "'''~A'''" value)
-      (format nil "'~A'" value)))
 
 (defun %edit-basic-string-value (value triple)
   (let* ((encoded (%edit-value-bytes value))

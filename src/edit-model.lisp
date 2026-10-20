@@ -1,12 +1,24 @@
 (in-package #:cl-toml-kit)
 
-(defstruct (edit-assignment (:constructor %make-edit-assignment)) path node line-start line-end)
+(defstruct (edit-assignment (:constructor %make-edit-assignment))
+  path
+  node
+  line-start
+  line-end)
+
 (deftype edit-node-kind () '(member :value :array :inline))
+
 (defstruct (edit-section (:constructor %make-edit-section))
   path start end)
 
 (defstruct (edit-node (:constructor %make-edit-node))
-  path start end (kind :value :type edit-node-kind) children assignment key-start)
+  path
+  start
+  end
+  (kind :value :type edit-node-kind)
+  children
+  assignment
+  key-start)
 
 (defun %edit-fail (path format-control &rest arguments)
   (error (make-toml-format-preservation-error
