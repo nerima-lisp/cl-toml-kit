@@ -42,7 +42,7 @@
         (value (gensym "VALUE"))
         (ceiling (gensym "CEILING")))
     `(progn
-       (define-toml-error-messages
+       (define-toml-lookup
            %toml-limit-error-message
            ,(loop for entry in entries
                   collect `(,(first entry) ,(fourth entry)))

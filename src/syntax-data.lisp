@@ -77,9 +77,6 @@
          (otherwise ,otherwise)))))
 
 ;; Keep writer call sites compatible with the generic lookup macro.
-(defmacro define-toml-error-messages (name entries &key (otherwise nil))
-  `(define-toml-lookup ,name ,entries :otherwise ,otherwise))
-
 (define-toml-ascii-table +toml-bare-key-table+
                          char
                          (or (alpha-char-p char)
