@@ -60,6 +60,10 @@ dotted keys use a temporary list. This removes the per-assignment key-path list
 for the generated benchmark while preserving the result and diagnostic
 behavior.
 
+The allocation values below come from a separate before-and-after comparison
+of this Reader change. They are not medians from the broader measurement
+table above.
+
 | Measurement | Before | After | Change |
 | --- | ---: | ---: | ---: |
 | `reader/parse`, 4,096 assignments, bytes/call | 1,160,966 | 1,087,392 | -6.3% |
@@ -68,8 +72,10 @@ behavior.
 | 16,384 assignments, bytes/assignment | 246 | 230 | -16 bytes |
 
 For single-line strings without escapes, the Reader returns one `subseq`
-of the source instead of filling and coercing the shared character buffer. In
-the competitor harness correctness input, this changed kit allocation from
+of the source instead of filling and coercing the shared character buffer. The
+optional comparison first checks a fixed document containing `title`, `count`,
+`active`, `ports`, and a `[server]` table before adding generated keys to its
+measurement inputs. On that check document, this changed kit allocation from
 134,848 to 129,088 bytes per call.
 
 ### Reader allocation classification

@@ -4,8 +4,9 @@
 TOML documents to a native Lisp value model: `equal` hash tables for tables,
 simple vectors for arrays, signed 64-bit integers and double floats for
 numbers, an opaque sentinel for `false`, and the four cl-date-kit types for
-dates and times. Failures signal typed conditions that carry source
-coordinates and a path into the document.
+dates and times. Failures signal typed conditions: parse errors carry source
+coordinates and optional expected-input and path details, while encoding
+errors carry a message and optional value path.
 
 ```lisp
 (cl-toml-kit:encode (cl-toml-kit:parse "title = \"TOML\""))

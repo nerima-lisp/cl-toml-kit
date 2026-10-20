@@ -50,8 +50,10 @@ source revisions ([ASDF manual](https://asdf.common-lisp.dev/asdf.html)). Nix
 builds use the input revisions recorded in this project's
 [`flake.lock`](https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-flake.html#lock-files).
 
-Everything a caller needs is exported from the single `cl-toml-kit` package.
-Every example on this site references symbols with the `cl-toml-kit:` prefix.
+`cl-toml-kit` exports its reader and writer entry points, value-model types and
+predicates, processing limits, and conditions. TOML date and time values use
+types from `cl-date-kit`, which `cl-toml-kit` does not re-export. Examples use
+the `cl-toml-kit:` prefix for library symbols and `cl-date-kit:` for date types.
 
 ## Supported versions
 

@@ -46,8 +46,8 @@ between digits. The reader supports `0x`, `0o`, and `0b` integers, decimal
 floats, `inf`, `-inf`, and `nan`. Date and time values are parsed with
 cl-date-kit's `:profile :rfc3339`.
 
-Basic strings support `\\b`, `\\t`, `\\n`, `\\f`, `\\r`, `\\e`, `\\"`,
-`\\\\`, `\\xHH`, `\\uHHHH`, and `\\UHHHHHHHH`. Literal and multiline strings,
+Basic strings support `\b`, `\t`, `\n`, `\f`, `\r`, `\e`, `\"`,
+`\\`, `\xHH`, `\uHHHH`, and `\UHHHHHHHH`. Literal and multiline strings,
 CRLF, comments, dotted keys, tables, array tables, and inline tables are
 supported.
 

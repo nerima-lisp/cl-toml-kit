@@ -1,21 +1,23 @@
 # Conditions
 
 `cl-toml-kit` signals typed conditions with structured, machine-readable
-slots. Diagnostic strings are bounded and sanitized when the condition is
-constructed, so logging a condition cannot echo unbounded input. The error
-path is limited to 32 components; each component that is neither a string nor
-an integer is printed with a 64-character bound. `expected` is truncated to
-128 characters, and `context` and `text` are truncated to 256 characters.
-Newlines, carriage returns, tabs, and backspaces are escaped as `\n`, `\r`,
-`\t`, and `\b`.
+slots. Parse, encoding, and format-preservation conditions store bounded,
+sanitized diagnostics. Paths retain up to 32 source components and append
+`:...` when truncated; each rendered component is bounded to 64 characters,
+and the rendered path to 256 characters. For parse errors, `expected` is
+truncated to 128 characters, and `context` and `text` are truncated to 256
+characters. Newlines, carriage returns, tabs, and backspaces are escaped as
+`\n`, `\r`, `\t`, and `\b`.
 
 ## The shared base condition
 
-`toml-kit-error` is a subtype of `error` and the base of every condition this
-library signals. It carries no slots. Catch it when you want to react to any
-failure from `cl-toml-kit` without distinguishing parse from encoding
-failures; the concrete types below add the readers you can use once you
-catch one.
+`toml-kit-error` is a subtype of `error` and the base of the library-defined
+error conditions. It carries no slots. Catch it when you want to react to a
+library-defined parse, encoding, or format-preservation failure without
+distinguishing among them; the concrete types below add the readers you can
+use once you catch one. Some operations can also signal ordinary Common Lisp
+conditions. For example, `write-toml` signals `type-error` for a non-stream,
+and `parse-file` can propagate file conditions.
 
 See also: [`toml-kit-error`](api.md#toml-kit-error).
 
@@ -24,7 +26,8 @@ See also: [`toml-kit-error`](api.md#toml-kit-error).
 `toml-value-model-error` is a subtype of `toml-kit-error`. The
 `toml-value-typecase` macro signals it during macro expansion when a clause
 uses an unknown TOML kind keyword. Read `toml-value-model-error-message` for
-the explanation.
+the explanation. The reader returns the stored message; the condition's
+report method sanitizes it only when printing the condition.
 
 See also: [`toml-value-model-error`](api.md#toml-value-model-error).
 
@@ -77,7 +80,7 @@ values that cannot be represented in TOML. Its public readers are:
 | Reader | Meaning |
 | --- | --- |
 | `toml-encoding-error-message` | A bounded description of the failure. Defaults to `"TOML encoding failed"`. |
-| `toml-encoding-error-path` | The path from the root table to the offending value; `nil` when the failure is at the top level. String components are table keys and nonnegative integers are vector indices. |
+| `toml-encoding-error-path` | The path from the root table to the offending value; `nil` when the failure is at the top level. String components normally identify table keys, and integer components normally identify vector indices. Rejected table keys may be normalized for display; for example, a symbol becomes its name and an oversized integer may become `"integer"`. A final `:...` marks truncation. |
 
 Encoding an integer outside the signed 64-bit range triggers it:
 
@@ -134,10 +137,10 @@ human-readable line. The wording is not a stable contract:
 programs should read the accessors in the tables above instead of parsing
 report text.
 
-## Catching all failures
+## Catching library conditions
 
-To handle any library failure through the ordinary `handler-case` machinery,
-catch `toml-kit-error`:
+To handle library-defined error conditions through the ordinary
+`handler-case` machinery, catch `toml-kit-error`:
 
 ```lisp
 (handler-case

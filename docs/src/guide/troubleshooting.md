@@ -112,18 +112,16 @@ tables are initialized once and only read afterwards.
 
 What you must synchronize yourself:
 
-- A stream shared across threads. `write-toml` writes to whatever stream you
-  pass it; concurrent writes to one stream are your responsibility, as with
-  any other library.
+- A stream shared across threads. `parse` consumes an input stream, and
+  `write-toml` writes to an output stream; coordinate concurrent access to a
+  shared stream.
 - A hash table shared across threads. The writer adds no locking around your
   data; if two threads mutate or encode the same table concurrently, ordinary
   Common Lisp concurrency rules apply.
 
-The reader is covered by the same contract: `parse` and `parse-file` are plain
-functions that return a value or signal a condition, with parser state
-confined to the call. The reader implementation is developed separately, and
-this page does not inspect its internals, so treat that statement as the
-documented contract rather than a verified one.
+The reader creates parser state per `parse` call. `parse-file` decodes its
+input locally and delegates to `parse`, so independent calls do not share
+reader state.
 
 ## SBCL only
 

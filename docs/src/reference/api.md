@@ -1,9 +1,9 @@
 # API Reference
 
-Everything a caller needs is exported from the single `cl-toml-kit` package:
-the reader and writer entry points, the native value types and predicates,
-the shared processing limits, and the structured conditions. Nothing else is
-exported.
+`cl-toml-kit` exports its reader and writer entry points, value-model types and
+predicates, shared processing limits, and structured conditions. TOML date
+and time values use types from `cl-date-kit`, which this package does not
+re-export. These are all the `cl-toml-kit` exports.
 
 Symbols are grouped as they are exported in `src/package.lisp`. The
 [data model](../guide/data-model.md) defines the value mapping shared by
@@ -269,10 +269,11 @@ Dispatch `value` by its TOML kind. Clause keys are the kind keywords of
 single Common Lisp `typecase`.
 
 Unknown kind keywords signal `toml-value-model-error` during macro expansion.
-At runtime, a `:table` clause checks that its hash table uses the `equal` test;
-otherwise it signals `toml-encoding-error` with the message `Invalid TOML table`.
-When no clause matches and there is no `t` clause, it signals
-`toml-encoding-error` with the message `Not a TOML value`.
+At runtime, a `:table` clause checks that its hash table uses the `equal` test.
+If it does not, the `t` clause runs when present; without one, the macro
+signals `toml-encoding-error` with the message `Invalid TOML table`. For any
+other unmatched kind, the `t` clause also runs when present; without one, the
+macro signals `toml-encoding-error` with the message `Not a TOML value`.
 
 **Example**:
 

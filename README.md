@@ -84,9 +84,9 @@ TOML values, so a date never makes a round trip through a string.
 **`false` is distinct.** `+toml-false+` is an opaque sentinel, kept separate
 from Lisp `nil` and from `t`.
 
-**Structured diagnostics.** Parse and encode failures signal typed conditions
-that carry source coordinates, an expected-token description, and a path into
-the document.
+**Structured diagnostics.** Parse failures signal `toml-parse-error` with
+source coordinates and optional expected-input and path details. Encoding
+failures signal `toml-encoding-error` with a message and optional value path.
 
 | TOML | Reader result | Writer input |
 | --- | --- | --- |

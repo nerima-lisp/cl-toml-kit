@@ -73,7 +73,8 @@ the exported accessors.
 `parse` accepts a string or a character input stream and returns the top-level
 table, or signals `toml-parse-error`. `parse-file` decodes UTF-8 bytes and
 reports the byte position, line, and column of decoding failures. Reader rules
-scan a normalized `simple-string` by character index.
+scan the input as a `simple-string` by character index; the coercion preserves
+the input characters.
 
 `define-toml-rule` gives each rule a reader state, starting character index,
 success continuation, and failure continuation. On success, a rule calls its

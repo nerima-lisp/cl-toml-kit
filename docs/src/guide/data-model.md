@@ -76,11 +76,9 @@ accepts those same objects; there are no adapter structs in between.
 TOML has no zoned date-time and no offset-time value. The other cl-date-kit
 types therefore never appear in a TOML document.
 
-`cl-toml-kit` imports the four type names from cl-date-kit for its own use.
-That does not make the names available unqualified in your package: if you
-want to write `offset-date-time` without the prefix, your own package must
-import that symbol from cl-date-kit. The examples on this site always use the
-`cl-date-kit:` prefix instead.
+`cl-toml-kit` does not re-export these type names. Use the `cl-date-kit:`
+prefix to refer to them, or import them from `cl-date-kit` into your package.
+The examples on this site use the prefix.
 
 For construction and arithmetic, see the
 [cl-date-kit documentation](https://nerima-lisp.github.io/cl-date-kit/).
