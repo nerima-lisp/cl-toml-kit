@@ -378,7 +378,7 @@ limit signals the operation's existing error condition.
 | `*toml-max-input-bytes*` | `16777216` | `1073741824` | Byte input, including `parse-file` and the octet vector passed to `edit-toml`, checked before decoding. |
 | `*toml-max-input-characters*` | `16777216` | `1073741824` | Character input from strings and character streams. |
 | `*toml-max-number-token-length*` | `256` | `4096` | Character length of one numeric token. |
-| `*toml-max-path-components*` | `1024` | `4096` | Dotted keys and table headers can make an editor path longer than its nesting depth. |
+| `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
 
 ## Conditions
 
