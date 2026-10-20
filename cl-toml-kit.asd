@@ -16,7 +16,7 @@
   :depends-on (;; Source spans and formatted diagnostics for TOML parse errors.
                (:version "cl-parser-kit" "1.1.1")
                ;; TOML date and time values, parsing, and formatting.
-               (:version "cl-date-kit" "1.1.1")
+               (:version "cl-date-kit" "1.2.0")
                ;; UTF-8 decoding and encoding.
                (:version "cl-codec-kit" "0.6.0"))
   :components ((:file "package")
@@ -51,7 +51,9 @@
   :maintainer "takeokunn <bararararatty@gmail.com>"
   :license "MIT"
   :version "0.3.0"
-  :depends-on ("cl-toml-kit" "cl-weave" "cl-json-kit")
+  :depends-on ("cl-toml-kit"
+               (:version "cl-weave" "1.4.0")
+               (:version "cl-json-kit" "1.2.0"))
   :pathname "t"
   :serial t
   :components ((:file "package")
