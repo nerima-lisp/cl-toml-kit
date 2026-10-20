@@ -61,10 +61,30 @@
                   (t :other))))
     (expect (eq :fallback
                 (toml-value-typecase nil
-                  (t :fallback)))))
+                  (t :fallback))))
+    (let ((table (make-hash-table :test 'eql)))
+      (expect (eq :fallback
+                  (toml-value-typecase table
+                    (:table :table)
+                    (t :fallback))))))
   (it "rejects an unknown typecase kind during macro expansion"
     (expect (signals error
               (macroexpand-1 '(toml-value-typecase value (:unknown t))))))
+  (it "emits otherwise forms once in macro expansion"
+    (let* ((fallback-form (gensym "FALLBACK-FORM-"))
+           (expansion
+             (macroexpand-1
+              (list 'toml-value-typecase
+                    'value
+                    (list :table :table)
+                    (list t fallback-form))))
+           (fallback-name (symbol-name fallback-form))
+           (expansion-text (prin1-to-string expansion))
+           (fallback-position (search fallback-name expansion-text)))
+      (expect (and fallback-position
+                   (not (search fallback-name expansion-text
+                                :start2 (+ fallback-position
+                                           (length fallback-name))))))))
   (it "keeps false sentinel identity across source reload"
     (let ((sentinel +toml-false+))
       (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
