@@ -144,8 +144,12 @@
            (scan-inline
              (symbol-function (find-symbol "%EDIT-SCAN-INLINE-NODE" "CL-TOML-KIT"))))
       (expect (signals error (funcall key-component "?" 0 1)))
-      (expect (signals error (funcall scan-array "[1" 0 2 nil nil)))
-      (expect (signals error (funcall scan-inline "{a=1" 0 4 nil nil)))))
+      (expect (signals error
+                (funcall scan-array "[1" 0 2 nil nil 1 4
+                         "TOML nesting depth limit exceeded")))
+      (expect (signals error
+                (funcall scan-inline "{a=1" 0 4 nil nil 1 4
+                         "TOML nesting depth limit exceeded")))))
   (it "uses adjacent CRLF and LF boundaries"
     (let* ((line-ending
              (symbol-function (find-symbol "%EDIT-LINE-ENDING" "CL-TOML-KIT")))
@@ -165,4 +169,14 @@
                 (funcall line-ending next-crlf 0)))
       (expect
        (string= (string #\Newline)
-                (funcall line-ending "abc" 0))))))
+                (funcall line-ending "abc" 0)))))
+  (it "shares a parent's reversed path with its child"
+    (let* ((assignments
+             (first
+              (multiple-value-list
+               (cl-toml-kit::%edit-scan-document "value = [1]"))))
+           (parent (cl-toml-kit::edit-assignment-node (first assignments)))
+           (child (first (cl-toml-kit::edit-node-children parent))))
+      (expect
+       (eq (cdr (cl-toml-kit::edit-node-path-reversed child))
+           (cl-toml-kit::edit-node-path-reversed parent))))))

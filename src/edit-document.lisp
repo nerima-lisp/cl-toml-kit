@@ -53,14 +53,18 @@
       (%edit-fail keys "Assignment has no equals sign"))
     (incf next)
     (setf next (%edit-horizontal-space text next length))
-    (let* ((path (append (edit-section-path current-section) keys))
-           (assignment
-             (%make-edit-assignment :path path :line-start line-start :line-end nil))
-           (node (%edit-scan-value-node text next length path assignment)))
-      (setf (edit-assignment-node assignment) node
-            (edit-assignment-line-end assignment)
-            (%edit-line-end text (edit-node-end node)))
-      (values assignment (edit-assignment-line-end assignment)))))
+    (multiple-value-bind (nesting-limit nesting-message)
+        (%toml-limit :nesting-depth)
+      (let* ((path (append (edit-section-path current-section) keys))
+             (path-reversed (reverse path))
+             (assignment
+               (%make-edit-assignment :path path :line-start line-start :line-end nil))
+             (node (%edit-scan-value-node text next length path-reversed assignment
+                                          0 nesting-limit nesting-message)))
+        (setf (edit-assignment-node assignment) node
+              (edit-assignment-line-end assignment)
+              (%edit-line-end text (edit-node-end node)))
+        (values assignment (edit-assignment-line-end assignment))))))
 
 (defun %edit-trivia-or-comment-line-p (text first length)
   (or (= first length)
