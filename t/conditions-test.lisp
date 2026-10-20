@@ -281,4 +281,22 @@
        (string= "TOML encode error: NIL" (format nil "~A" nil-encoding-error)))
       (expect
        (string= "TOML format-preserving edit error: NIL"
-                (format nil "~A" nil-format-error))))))
+                (format nil "~A" nil-format-error)))))
+  (it "escapes raw surrogates in diagnostic reports"
+    (let* ((surrogates (coerce (list (code-char #xD800)
+                                    (code-char #xDFFF))
+                               'string))
+           (text-condition
+             (make-condition 'toml-value-model-error
+                             :message (concatenate 'string "bad" surrogates)))
+           (path-condition
+             (cl-toml-kit::make-toml-encoding-error
+              :message "bad"
+              :path (list (concatenate 'string "key" surrogates)))))
+      (expect
+       (string= "bad\\uD800\\uDFFF"
+                (format nil "~A" text-condition)))
+      (expect
+       (string=
+        "TOML encode error at (\"key\\\\uD800\\\\uDFFF\"): bad"
+        (format nil "~A" path-condition))))))
