@@ -11,31 +11,40 @@
   (loop while (< (toml-reader-state-position state) position)
         do (let ((char (%source-char state (toml-reader-state-position state))))
              (incf (toml-reader-state-position state))
-             (cond ((char= char +toml-carriage-return+)
-                    (when (eql (%source-char state (toml-reader-state-position state))
-                               +toml-line-feed+)
-                      (incf (toml-reader-state-position state)))
-                    (incf (toml-reader-state-line state))
-                    (setf (toml-reader-state-column state) 1))
-                   ((char= char +toml-line-feed+)
-                    (incf (toml-reader-state-line state))
-                    (setf (toml-reader-state-column state) 1))
-                   (t (incf (toml-reader-state-column state)))))))
+             (when (and (char= char +toml-carriage-return+)
+                        (eql (%source-char state (toml-reader-state-position state))
+                             +toml-line-feed+))
+               (incf (toml-reader-state-position state))))))
 
 (defun %error-at (state position expected-key &optional (path nil))
-  (let ((expected (%toml-reader-error-message expected-key)))
-    (let* ((source (toml-reader-state-source state))
-           (end (min (length source) (+ position 40)))
-           (span (cl-parser-kit:make-span :source source :start position :end end))
-           (diagnostic (cl-parser-kit:make-diagnostic
-                        :message expected :span span))
-           (text (cl-parser-kit:diagnostic->string diagnostic)))
-      (%advance-to state position)
-      (error (make-toml-parse-error
-              :source-name (toml-reader-state-source-name state)
-              :position position :line (toml-reader-state-line state)
-              :column (toml-reader-state-column state) :path path
-              :expected expected :context "TOML" :text text)))))
+  (let* ((expected (%toml-reader-error-message expected-key))
+         (source (toml-reader-state-source state))
+         (end (min (length source) (+ position 40)))
+         (span (cl-parser-kit:make-span :source source :start position :end end))
+         (diagnostic (cl-parser-kit:make-diagnostic :message expected :span span))
+         (text (cl-parser-kit:diagnostic->string diagnostic))
+         (line 1)
+         (column 1))
+    (loop with index = 0
+          while (< index position)
+          do (let ((char (char source index)))
+               (incf index)
+               (cond
+                 ((char= char +toml-carriage-return+)
+                  (when (and (< index position)
+                             (char= (char source index) +toml-line-feed+))
+                    (incf index))
+                  (incf line)
+                  (setf column 1))
+                 ((char= char +toml-line-feed+)
+                  (incf line)
+                  (setf column 1))
+                 (t
+                  (incf column)))))
+    (error (make-toml-parse-error
+            :source-name (toml-reader-state-source-name state)
+            :position position :line line :column column :path path
+            :expected expected :context "TOML" :text text))))
 
 (defun %skip-space-and-comments (state)
   (loop

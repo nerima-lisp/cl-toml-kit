@@ -5,8 +5,6 @@
   (source "" :type simple-string)
   source-name
   (position 0 :type fixnum)
-  (line 1 :type fixnum)
-  (column 1 :type fixnum)
   (length 0 :type fixnum)
   (root nil)
   (current nil)
