@@ -47,6 +47,15 @@
       (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 4 (toml-parse-error-position condition)))))
+  (it "honors the configured number-token limit for floats"
+    (let* ((*toml-max-number-token-length* 4)
+           (condition (%reader-error "v = 1.234"))
+           (expected
+             (nth-value 1
+                        (cl-toml-kit::%toml-limit :number-token-length))))
+      (expect (typep condition (quote toml-parse-error)))
+      (expect (string= expected (toml-parse-error-expected condition)))
+      (expect (= 4 (toml-parse-error-position condition)))))
   (it-each (("value = 1e999999999999999999")
             ("value = 1e-999999999999999999"))
       "rejects out-of-range exponents in ~S"
