@@ -147,12 +147,15 @@ t/helpers-edit-test.lisp
 t/conditions-test.lisp
 t/data-test.lisp
 t/writer-test.lisp
+t/writer-property-test.lisp
 t/fixture-toml-test.lisp
 t/reader-values-test.lisp
 t/comment-scan-test.lisp
 t/reader-document-test.lisp
 t/reader-errors-test.lisp
+t/reader-property-test.lisp
 t/roundtrip-test.lisp
+t/roundtrip-property-test.lisp
 t/reader-conformance-test.lisp
 t/edit-replacement-test.lisp
 t/edit-path-security-test.lisp
