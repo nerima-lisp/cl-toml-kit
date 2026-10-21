@@ -92,10 +92,20 @@
                    (not (search fallback-name expansion-text
                                 :start2 (+ fallback-position
                                            (length fallback-name))))))))
-  (it "keeps false sentinel identity across source reload"
-    (let ((sentinel +toml-false+))
-      (load (asdf:system-relative-pathname "cl-toml-kit" "src/data.lisp"))
-      (expect (eq sentinel +toml-false+)))))
+  (cl-weave:it-isolated "keeps false sentinel identity across source reload"
+    (:systems ("cl-date-kit") :package "CL-USER" :timeout 180)
+    (load "src/package.lisp")
+    (load "src/data.lisp")
+    (let* ((cl-user::package (find-package "CL-TOML-KIT"))
+           (cl-user::sentinel-symbol (find-symbol "+TOML-FALSE+" cl-user::package))
+           (cl-user::sentinel (symbol-value cl-user::sentinel-symbol)))
+      (handler-bind
+          ((sb-kernel:redefinition-warning
+             (lambda (cl-user::condition)
+               (muffle-warning cl-user::condition))))
+        (load "src/data.lisp"))
+      (assert (eq cl-user::sentinel
+                  (symbol-value cl-user::sentinel-symbol))))))
 
 (describe "unsupported native values"
   (it-each ((nil) ((quote (1 2))) (:symbol))
