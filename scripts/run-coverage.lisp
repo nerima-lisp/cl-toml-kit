@@ -28,7 +28,7 @@
                   ("conditions.lisp" (468 475) (92 92))
                   ("data.lisp" (57 115) (6 6))
                   ("edit-bytes.lisp" (197 199) (16 16))
-                  ("edit-document.lisp" (326 327) (30 30))
+                  ("edit-document.lisp" (325 326) (30 30))
                   ("edit-model.lisp" (107 112) (26 28))
                   ("edit-scan.lisp" (606 608) (108 108))
                   ("edit-semantic.lisp" (229 231) (38 38))
@@ -48,7 +48,7 @@
                   ("syntax-data.lisp" (45 145) (4 4))
                   ("writer-data.lisp" (1 4) :not-applicable)
                   ("writer-macros.lisp" (4 5) :not-applicable)
-                  ("writer.lisp" (434 448) (64 64)))))
+                  ("writer.lisp" (432 446) (64 64)))))
 
 (defparameter *source-directory* (merge-pathnames #P"src/" *default-pathname-defaults*))
 
