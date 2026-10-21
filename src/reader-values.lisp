@@ -131,7 +131,9 @@
       (when (> depth nesting-limit)
         (%error-at-message state position nesting-message))
       (setf (toml-reader-state-nesting-depth state) depth)
-      (let ((table (make-hash-table :test #'equal))
+      (let ((table (let ((inline-table (make-hash-table :test (function equal))))
+                    (setf (gethash inline-table (toml-reader-state-table-depths state)) depth)
+                    inline-table))
             (index (1+ position))
             (created (make-hash-table :test #'eq)))
         (loop
