@@ -17,6 +17,25 @@
                   end)))
       (t
        (funcall failure position :key nil)))))
+(defun %reader-path-depth-step (state table depth key)
+  (if (null table)
+      (values nil (1+ depth))
+      (multiple-value-bind (child present) (gethash key table)
+        (cond
+          ((and present (hash-table-p child))
+           (values child
+                   (gethash child
+                            (toml-reader-state-table-depths state)
+                            (1+ depth))))
+          ((and present (vectorp child) (plusp (length child))
+                (hash-table-p (aref child (1- (length child)))))
+           (let ((child-table (aref child (1- (length child)))))
+             (values child-table
+                     (gethash child-table
+                              (toml-reader-state-table-depths state)
+                              (+ depth 2)))))
+          (t
+           (values nil (1+ depth)))))))
 
 (defun %read-key-path (state position success failure
                        &key depth-table (terminal-depth 0))
@@ -24,7 +43,8 @@
       (%toml-limit :nesting-depth)
     (let ((keys nil)
           (keys-tail nil)
-          (component-depth 0)
+          (table-cursor depth-table)
+          (component-depth (%reader-path-depth state depth-table nil))
           (component-position position)
           (index position))
       (labels ((accept-key (key next)
@@ -39,7 +59,13 @@
                        (setf (cdr keys-tail) cell)
                        (setf keys cell))
                    (setf keys-tail cell
-                         index next)))
+                         index next))
+                 (when (eql (%source-char
+                             state (%skip-space-and-comments-at state next))
+                            #\.)
+                   (multiple-value-setq (table-cursor component-depth)
+                     (%reader-path-depth-step state table-cursor
+                                              component-depth key))))
                (component-followed-by-dot-p (position)
                  (let ((reader-position (toml-reader-state-position state)))
                    (unwind-protect
@@ -53,7 +79,7 @@
                                      (%skip-space-and-comments-at state end))
                                     #\.)))
                             ((and char
-                                  (member char +toml-quote-characters+ :test #'char=))
+                                  (member char +toml-quote-characters+ :test (function char=)))
                              (unless (and (eql (%source-char state (1+ position)) char)
                                           (eql (%source-char state (+ position 2)) char))
                                (let ((end (%simple-string-end state position char)))
@@ -67,18 +93,17 @@
                      (setf (toml-reader-state-position state) reader-position))))
                (read-key ()
                  (setf component-position
-                       (%skip-space-and-comments-at state index)
-                       component-depth
-                       (%reader-path-depth state depth-table keys))
+                       (%skip-space-and-comments-at state index))
                  (when (> (+ component-depth terminal-depth) limit)
                    (%error-at-message state component-position message keys))
                  (when (and (> (1+ component-depth) limit)
                             (component-followed-by-dot-p component-position))
                    (%error-at-message state component-position message keys))
                  (%read-key-component state component-position
-                                      #'accept-key failure)))
-        (declare (dynamic-extent #'accept-key #'component-followed-by-dot-p
-                                 #'read-key))
+                                      (function accept-key) failure)))
+        (declare (dynamic-extent (function accept-key)
+                                 (function component-followed-by-dot-p)
+                                 (function read-key)))
         (read-key)
         (loop
           (setf index (%skip-space-and-comments-at state index))
@@ -133,26 +158,8 @@
     (loop while components
           do (multiple-value-bind (key rest) (%path-next components)
                (setf components rest)
-               (if table
-                   (multiple-value-bind (child present) (gethash key table)
-                     (cond
-                       ((and present (hash-table-p child))
-                        (setf table child
-                              depth
-                              (gethash child
-                                       (toml-reader-state-table-depths state)
-                                       (1+ depth))))
-                       ((and present (vectorp child) (plusp (length child))
-                             (hash-table-p (aref child (1- (length child)))))
-                        (setf table (aref child (1- (length child)))
-                              depth
-                              (gethash table
-                                       (toml-reader-state-table-depths state)
-                                       (+ depth 2))))
-                       (t
-                        (incf depth)
-                        (setf table nil))))
-                 (incf depth))))
+               (multiple-value-setq (table depth)
+                 (%reader-path-depth-step state table depth key))))
     depth))
 
 (defun %table-for-path (state path success failure
@@ -315,7 +322,7 @@
                                (unless (let ((char (%source-char state end)))
                                          (or (null char)
                                              (member char +toml-newline-characters+
-                                                     :test #'char=)))
+                                                     :test (function char=))))
                                  (funcall failure end :line-end path))
                                (funcall success nil
                                         (%skip-line-ending-at state end)))))
