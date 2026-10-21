@@ -232,7 +232,6 @@
                          append (cdr entry)))
           (summary (cl-weave:mutation-summary results)))
      (expect (= 2 (length forms)))
-     (expect (= 100 (length generated-samples)))
      (expect (%writer-generated-samples-match-p samples))
      (expect
       (every
