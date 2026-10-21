@@ -294,6 +294,3 @@
                            :alphabet (toml-test-string-alphabet))
       (cl-weave:gen-integer :min -999999 :max 999999))
      :min-length 1 :max-length 3))))
-
-(defun toml-test-parser-document-generator ()
-  (toml-test-source-document-generator))
