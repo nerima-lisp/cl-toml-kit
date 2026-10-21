@@ -73,6 +73,7 @@
                (:file "reader-document-test")
                (:file "reader-errors-test")
                (:file "reader-property-test")
+               (:file "parser-property-test")
                (:file "roundtrip-test")
                (:file "roundtrip-property-test")
                (:file "reader-conformance-test")

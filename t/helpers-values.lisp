@@ -90,3 +90,85 @@
        (setf (gethash key document) value)
        document))
    value-generator))
+(defun %toml-test-table (&rest entries)
+  (let ((table (make-hash-table :test (function equal))))
+    (loop for (key value) on entries by (function cddr)
+          do (setf (gethash key table) value))
+    table))
+(defun toml-test-parser-document-generator ()
+  (cl-weave:gen-map
+   (lambda (numbers)
+     (let* ((inline
+             (%toml-test-table
+              "enabled" t
+              "count" (aref numbers 1)
+              "nested" (%toml-test-table "label" "inline")))
+            (servers
+             (vector
+              (%toml-test-table
+               "name" "alpha" "port" (aref numbers 2))
+              (%toml-test-table
+               "name" "beta" "port" (aref numbers 3))))
+            (expected
+             (%toml-test-table
+              "positive" (aref numbers 0)
+              "hex" #xDEADBEEF
+              "octal" #o12345
+              "binary" #b10101111
+              "underscored" 1234567
+              "escaped-quote"
+              (concatenate 'string "quote: " (string #\"))
+              "escaped-backslash"
+              (concatenate 'string "slash: " (string #\\))
+              "escaped-bmp" "あ"
+              "escaped-scalar" "🧪"
+              "positive-infinity" sb-ext:double-float-positive-infinity
+              "nan" (sb-kernel:make-double-float #x7ff80000 0)
+              "negative-zero" -0.0d0
+              "date" (cl-date-kit:local-date-of 2026 1 2)
+              "time" (cl-date-kit:local-time-of 3 4 5)
+              "local-datetime"
+              (cl-date-kit:local-date-time-of 2026 1 2 3 4 5)
+              "offset-datetime"
+              (cl-date-kit:offset-date-time-of
+               2026 1 2 3 4 5 0 (cl-date-kit:zone-offset-utc))
+              "inline" inline
+              "servers" servers))
+            (source
+             (let ((quote-mark (string #\"))
+                   (backslash-mark (string #\\)))
+               (with-output-to-string (stream)
+                 (format stream
+                         "positive = +~D~%hex = 0xDEAD_BEEF~%octal = 0o12_345~%binary = 0b1010_1111~%underscored = 1_234_567~%"
+                         (aref numbers 0))
+                 (write-line
+                  (concatenate 'string
+                               "escaped-quote = " quote-mark "quote: "
+                               backslash-mark quote-mark quote-mark)
+                  stream)
+                 (write-line
+                  (concatenate 'string
+                               "escaped-backslash = " quote-mark "slash: "
+                               backslash-mark backslash-mark quote-mark)
+                  stream)
+                 (write-line
+                  (concatenate 'string "escaped-bmp = " quote-mark
+                               backslash-mark "u3042" quote-mark)
+                  stream)
+                 (write-line
+                  (concatenate 'string "escaped-scalar = " quote-mark
+                               backslash-mark "U0001F9EA" quote-mark)
+                  stream)
+                 (format stream
+                         "positive-infinity = inf~%nan = nan~%negative-zero = -0.0~%date = 2026-01-02~%time = 03:04:05~%local-datetime = 2026-01-02T03:04:05~%offset-datetime = 2026-01-02T03:04:05Z~%")
+                 (format stream
+                         "inline = { enabled = true, count = ~D, nested = { label = \"inline\" } }~%"
+                         (aref numbers 1))
+                 (format stream "[[servers]]~%name = \"alpha\"~%port = ~D~%~%"
+                         (aref numbers 2))
+                 (format stream "[[servers]]~%name = \"beta\"~%port = ~D~%"
+                         (aref numbers 3))))))
+       (list source expected)))
+   (cl-weave:gen-vector
+    (cl-weave:gen-integer :min 1 :max 999999)
+    :min-length 4 :max-length 4)))
