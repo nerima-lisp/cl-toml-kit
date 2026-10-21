@@ -1,9 +1,10 @@
 # API Reference
 
-`cl-toml-kit` exports its reader and writer entry points, value-model types and
-predicates, shared processing limits, and structured conditions. TOML date
-and time values use types from `cl-date-kit`, which this package does not
-re-export. These are all the `cl-toml-kit` exports.
+`cl-toml-kit` exports reader and writer entry points, format-preserving byte
+editing and source-scanning functions, native values and value-model
+operations, shared processing limits, and structured conditions with their
+readers. TOML date and time values use types from `cl-date-kit`, which this
+package does not re-export. These are all the `cl-toml-kit` exports.
 
 Symbols are grouped as they are exported in `src/package.lisp`. The
 [data model](../guide/data-model.md) defines the value mapping shared by
@@ -54,7 +55,6 @@ namestring as `source-name`.
 
 ```lisp
 (cl-toml-kit:parse-file #p"config.toml")
-;; => #<HASH-TABLE :TEST EQUAL :COUNT 3>
 ```
 
 See also: [Reader](../guide/reader.md).
@@ -68,8 +68,6 @@ See also: [Reader](../guide/reader.md).
 
 Serialize `value` to a TOML document and return it as a string. `value` is
 the top-level table, an `equal` hash table whose keys are strings.
-
-**Returns**: the TOML text.
 
 **Signals**: `toml-encoding-error` for an invalid top level, non-string keys,
 out-of-range integers, or unsupported values.
@@ -96,8 +94,6 @@ See also: [Writer](../guide/writer.md), [Conditions](conditions.md#toml-encoding
 
 Write `value` as TOML text to the character `stream` and return the original
 `value`. The stream is left open.
-
-**Returns**: `value`.
 
 **Signals**: `type-error` if `stream` is not a stream (`check-type`), and
 `toml-encoding-error` for invalid values.
@@ -137,6 +133,10 @@ signaled. Bytes outside the edited span, including the BOM, comments, key
 order, whitespace, line endings, and string delimiters, are retained.
 
 ```lisp
+(cl-toml-kit:edit-toml source path nil :delete t)
+```
+
+```lisp
 (cl-toml-kit:edit-toml
  (make-array 22 :element-type '(unsigned-byte 8)
                  :initial-contents
@@ -158,9 +158,14 @@ Adding `("server" "port")` when the source already has
 `server.host = "example"` is also rejected because it would extend a parent
 created by a dotted-key assignment.
 
-After an edit, the result is parsed and compared with the original parsed
-document after the same path change; a mismatch signals
-`toml-format-preservation-error`.
+After an edit, `edit-toml` parses the edited bytes and compares the resulting
+document with a copy of the original parsed document after applying the
+requested replacement, insertion, or deletion to that copy at `path`; a
+mismatch signals `toml-format-preservation-error`.
+`edit-toml` signals `toml-encoding-error` when a replacement or added value
+contains surrogate code points or exceeds `*toml-max-nesting-depth*`. When
+adding a table entry, a key containing a surrogate code point also signals
+`toml-encoding-error`.
 
 Deletion is rejected when the removed span contains `#` or the immediately
 preceding line is a comment, because the comment ownership cannot be retained.
@@ -217,10 +222,10 @@ A type: the union of every native TOML value type.
     cl-date-kit:local-date-time cl-date-kit:local-date cl-date-kit:local-time)
 ```
 
-`toml-false-sentinel` is the unexported type of `+toml-false+`. As a type,
-`toml-value` matches any `hash-table`, regardless of its test. `toml-value-p`
-and `toml-value-kind` are stricter: they also require the `equal` hash-table
-test (see `toml-table-p`).
+`toml-false-sentinel` is the unexported type of `+toml-false+`. The
+`toml-value` type includes any `hash-table`, regardless of its test, but
+`toml-value-p` and `toml-value-kind` recognize a table as a native TOML value
+only when its hash-table test is `equal` (see `toml-table-p`).
 
 See also: [Data model](../guide/data-model.md).
 
@@ -376,13 +381,16 @@ it does not modify the binding. An invalid binding signals `type-error`, and
 an input exceeding the effective limit signals that operation's error
 condition.
 
-| Variable | Default | Hard ceiling | Current enforcement |
-| --- | ---: | ---: | --- |
-| `*toml-max-nesting-depth*` | `256` | `1024` | `parse` and `edit-toml` array/inline-table depth; `encode` and `write-toml` nested table/array values. |
-| `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. |
-| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. |
-| `*toml-max-number-token-length*` | `256` | `4096` | Length of integer and floating-point tokens parsed by `parse`, `parse-file`, or `edit-toml`; fixed infinity (`inf`, `+inf`, `-inf`) and NaN (`nan`, `+nan`, `-nan`) tokens bypass the limit. |
-| `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
+| Variable | Default | Hard ceiling | Current enforcement | Condition when exceeded |
+| --- | ---: | ---: | --- | --- |
+| `*toml-max-nesting-depth*` | `256` | `1024` | `parse`, `parse-file`, and `edit-toml` source array/inline-table depth; `encode`, `write-toml`, and `edit-toml` replacement or added values. | The source nesting-limit condition is a subtype of both `toml-parse-error` and `toml-format-preservation-error`; encoding values signals `toml-encoding-error`. |
+| `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. | `toml-parse-error` for `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
+| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. | `toml-parse-error` for `parse` and `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
+| `*toml-max-number-token-length*` | `256` | `4096` | Length of integer and floating-point tokens parsed by `parse`, `parse-file`, or `edit-toml`; fixed infinity (`inf`, `+inf`, `-inf`) and NaN (`nan`, `+nan`, `-nan`) tokens bypass the limit. | `toml-parse-error` while parsing. |
+| `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. | `toml-format-preservation-error` while editing. |
+
+For `edit-toml`, replacement values and array or inline-table additions start
+at their parent depth; table-entry additions start at depth zero.
 
 ## Conditions
 
