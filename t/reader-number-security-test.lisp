@@ -46,8 +46,7 @@
               (concatenate 'string "value = "
                            (make-string 10000 :initial-element #\9))))
            (expected
-             (nth-value 1
-                        (cl-toml-kit::%toml-limit :number-token-length))))
+             "TOML number token length limit exceeded"))
       (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 8 (toml-parse-error-position condition)))))
@@ -55,8 +54,7 @@
     (let* ((*toml-max-number-token-length* 4)
            (condition (%reader-number-error "v = 12345"))
            (expected
-             (nth-value 1
-                        (cl-toml-kit::%toml-limit :number-token-length))))
+             "TOML number token length limit exceeded"))
       (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 4 (toml-parse-error-position condition)))))
@@ -64,8 +62,7 @@
     (let* ((*toml-max-number-token-length* 4)
            (condition (%reader-number-error "v = 1.234"))
            (expected
-             (nth-value 1
-                        (cl-toml-kit::%toml-limit :number-token-length))))
+             "TOML number token length limit exceeded"))
       (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 4 (toml-parse-error-position condition)))))
@@ -76,7 +73,7 @@
       (text)
     (let* ((condition (%reader-number-error text))
            (expected
-             (cl-toml-kit::%toml-reader-error-message :representable-finite-float)))
+             "representable finite floating-point value"))
       (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 8 (toml-parse-error-position condition)))))
@@ -100,7 +97,7 @@
         (expect (= 9 (toml-parse-error-column condition)))
         (expect
          (string=
-          (cl-toml-kit::%toml-reader-error-message :valid-date-or-time)
+          "valid date or time"
           (toml-parse-error-expected condition)))))
     (flet ((expect-position (source expected-position expected-line expected-column)
              (let ((condition (%reader-number-error source)))
