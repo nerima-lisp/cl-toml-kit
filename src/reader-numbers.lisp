@@ -145,14 +145,7 @@
                 (let* ((scale-factor
                          (if (zerop mantissa)
                              1
-                             (loop with factor = 1
-                                   with remaining = scale
-                                   while (< remaining -308)
-                                   do (setf factor (* factor (expt 10 -308))
-                                            remaining (+ remaining 308))
-                                   finally
-                                     (return
-                                       (* factor (expt 10 remaining))))))
+                             (expt 10 scale)))
                        (value
                          (coerce (* mantissa scale-factor) 'double-float)))
                   (when (and negative (zerop mantissa))

@@ -53,7 +53,7 @@
            (expected
              (nth-value 1
                         (cl-toml-kit::%toml-limit :number-token-length))))
-      (expect (typep condition (quote toml-parse-error)))
+      (expect (typep condition 'toml-parse-error))
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 4 (toml-parse-error-position condition)))))
   (it-each (("value = 1e999999999999999999")
@@ -74,5 +74,5 @@
                           "e-400"))
            (compensated (gethash "value" (parse source))))
       (expect (= least-positive-double-float subnormal))
-      (expect (and (toml-float-p compensated) (plusp compensated)))))
-)
+      (expect (toml-float-p compensated))
+      (expect (plusp compensated)))))
