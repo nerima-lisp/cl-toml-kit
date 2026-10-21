@@ -138,7 +138,10 @@ order, whitespace, line endings, and string delimiters, are retained.
 
 ```lisp
 (cl-toml-kit:edit-toml
- #(110 97 109 101 32 61 32 34 111 108 100 34 32 32 35 32 107 101 101 112 13 10)
+ (make-array 22 :element-type '(unsigned-byte 8)
+                 :initial-contents
+                 '(110 97 109 101 32 61 32 34 111 108 100 34 32 32
+                   35 32 107 101 101 112 13 10))
  '("name")
  "new")
 ;; Result: UTF-8 bytes for this TOML line, ending with CRLF:
@@ -378,7 +381,7 @@ condition.
 | `*toml-max-nesting-depth*` | `256` | `1024` | `parse` and `edit-toml` array/inline-table depth; `encode` and `write-toml` nested table/array values. |
 | `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. |
 | `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. |
-| `*toml-max-number-token-length*` | `256` | `4096` | Length of one numeric token parsed by `parse`. |
+| `*toml-max-number-token-length*` | `256` | `4096` | Length of integer and floating-point tokens parsed by `parse`, `parse-file`, or `edit-toml`; fixed infinity (`inf`, `+inf`, `-inf`) and NaN (`nan`, `+nan`, `-nan`) tokens bypass the limit. |
 | `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. |
 
 ## Conditions
