@@ -203,9 +203,18 @@
           (lambda (pathname)
             (expect (toml-table-p (parse-file pathname)))))))))
   (cl-weave:it-fuzz
-   "edits valid UTF-8 TOML byte inputs after mutation"
-      ((octets (%reader-property-valid-mutated-octets-generator)))
+   "edits valid UTF-8 TOML byte inputs and reparses expected values"
+      ((value (cl-weave:gen-integer :min 1 :max 999)))
     (:trials 16 :timeout-per-trial 8)
-    (let ((edited (edit-toml octets (list "value") 0)))
+    (let* ((source
+             (%edit-test-bytes
+              (format nil "value = ~D~%text = \"水\"~%" value)))
+           (edited (edit-toml source (list "value") 0)))
       (expect (typep edited
-                     (quote (vector (unsigned-byte 8))))))))
+                     (quote (vector (unsigned-byte 8)))))
+      (let ((parsed
+              (%reader-property-with-byte-file
+               edited
+               (lambda (pathname) (parse-file pathname)))))
+        (expect (toml-test-value= 0 (gethash "value" parsed)))
+        (expect (toml-test-value= "水" (gethash "text" parsed)))))))
