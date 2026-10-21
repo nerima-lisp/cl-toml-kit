@@ -116,13 +116,10 @@
           (read-key))))))
 
 (defun %table-for-path-component
-    (state table key path create dotted success failure)
+    (state table key path dotted success failure)
   (multiple-value-bind (value present) (gethash key table)
     (cond
       ((not present)
-       (unless create
-         (funcall failure (toml-reader-state-position state)
-                  :defined-table path))
        (setf value (%reader-make-table state)
              (gethash key table) value
              (gethash value (toml-reader-state-table-states state))
@@ -163,7 +160,7 @@
     depth))
 
 (defun %table-for-path (state path success failure
-                         &key (create nil) (dotted nil) base)
+                         &key (dotted nil) base)
   (let ((table (or base (toml-reader-state-root state)))
         (components path))
     (flet ((accept-component (next-table)
@@ -173,7 +170,7 @@
             do (multiple-value-bind (key rest) (%path-next components)
                  (setf components rest)
                  (%table-for-path-component
-                  state table key path create dotted
+                  state table key path dotted
                   #'accept-component failure))))
     (funcall success table)))
 
@@ -193,7 +190,7 @@
                (funcall success nil))))
       (declare (dynamic-extent #'store-in-parent))
       (%table-for-path state (%path-parent path) #'store-in-parent failure
-                       :create t :dotted (> (%path-length path) 1)
+                       :dotted (> (%path-length path) 1)
                        :base base))))
 
 (defun %read-header-end (state position array-p path success failure)
@@ -269,8 +266,7 @@
                      (setf (toml-reader-state-current state) table)))
                (funcall success nil))))
       (declare (dynamic-extent #'define-in-parent))
-      (%table-for-path state parent-path #'define-in-parent failure
-                       :create t))))
+      (%table-for-path state parent-path #'define-in-parent failure))))
 
 (defun %read-header (state position array-p success failure)
   (flet ((accept-key-path (path next)

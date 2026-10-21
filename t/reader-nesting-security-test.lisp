@@ -202,6 +202,83 @@
       (expect (simple-vector-p table))
       (expect (simple-vector-p nested))
       (expect (equalp #(#(1)) table))))
+          (it "keeps direct reader depth guards fail closed"
+            (let ((expected-message "TOML nesting depth limit exceeded")
+                  (helper-called nil))
+              (let* ((*toml-max-nesting-depth* 1)
+                     (root (make-hash-table :test (function equal)))
+                     (state
+                       (cl-toml-kit::%make-reader-state
+                        :source "[a.b]" :length 5 :root root))
+                     (condition
+                       (handler-case
+                           (progn
+                             (cl-toml-kit::%define-header-table
+                              state 0 (list "a" "b") nil
+                              (lambda (value)
+                                (declare (ignore value)))
+                              (lambda (position expected path)
+                                (declare (ignore position expected path))))
+                             nil)
+                         (toml-parse-error (condition) condition))))
+                (expect
+                 (equal (list (find-symbol "TOML-PARSE-ERROR" "CL-TOML-KIT")
+                              0
+                              expected-message)
+                        (%reader-test-condition-report condition))))
+              (let* ((*toml-max-nesting-depth* 0)
+                     (root (make-hash-table :test (function equal)))
+                     (state
+                       (cl-toml-kit::%make-reader-state
+                        :source "a.b = 1" :length 7 :root root))
+                     (condition
+                       (handler-case
+                           (progn
+                             (cl-toml-kit::%read-document-assignment-value
+                              state (list "a" "b") 6
+                              (lambda (value position)
+                                (declare (ignore value position)))
+                              (lambda (position expected path)
+                                (declare (ignore position expected path))))
+                             nil)
+                         (toml-parse-error (condition) condition))))
+                (expect
+                 (equal (list (find-symbol "TOML-PARSE-ERROR" "CL-TOML-KIT")
+                              6
+                              expected-message)
+                        (%reader-test-condition-report condition))))
+              (let* ((*toml-max-nesting-depth* 1)
+                     (state
+                       (cl-toml-kit::%make-reader-state
+                        :source "{}" :length 2 :nesting-depth 1))
+                     (condition
+                       (handler-case
+                           (cl-toml-kit::%call-with-reader-nesting-depth
+                            state 0 nil 2
+                            (lambda () (setf helper-called t)))
+                         (toml-parse-error (condition) condition))))
+                (expect
+                 (equal (list (find-symbol "TOML-PARSE-ERROR" "CL-TOML-KIT")
+                              0
+                              expected-message)
+                        (%reader-test-condition-report condition)))
+                (expect (not helper-called))
+                (expect (= 1 (cl-toml-kit::toml-reader-state-nesting-depth
+                              state))))))
+          (it "finalizes nested arrays of tables"
+            (let* ((document
+                     (parse
+                      (format nil
+                              "[[fruit]]~%name = \"apple\"~%[[fruit.variety]]~%name = \"red\"~%[[fruit.variety]]~%name = \"green\"~%")))
+                   (fruits (gethash "fruit" document))
+                   (fruit (aref fruits 0))
+                   (varieties (gethash "variety" fruit)))
+              (expect (simple-vector-p fruits))
+              (expect (simple-vector-p varieties))
+              (expect (= 2 (length varieties)))
+              (expect (equal "apple" (gethash "name" fruit)))
+              (expect (equal "red" (gethash "name" (aref varieties 0))))
+              (expect (equal "green" (gethash "name" (aref varieties 1))))))
           (it "accepts inline dotted keys at depth one below the limit"
     (let* ((*toml-max-nesting-depth* 6)
            (result (parse "x = {a.b.c.d.p = 1, a.b.c.d.q = 1}"))
@@ -437,18 +514,16 @@
                 (expect source-name-within-limit)
                 (expect source-name-has-no-c0-controls)
                 (expect source-name-has-no-c1-controls)))
-          (it "rejects over-limit quoted dotted keys with and without escapes"
+          (it "rejects an over-limit quoted dotted key"
             (let* ((*toml-max-nesting-depth* 1)
-                   (expected-message
-                     (nth-value 1 (cl-toml-kit::%toml-limit :nesting-depth)))
                    (expected-error-report
-                     (list (quote toml-parse-error) 2 expected-message))
-                   (simple-condition
-                     (%reader-test-nesting-error "a.\"b\".c = 1"))
-                   (escaped-condition
-                     (%reader-test-nesting-error "a.\"b\\u0063\".c = 1")))
+                     (list (find-symbol "TOML-PARSE-ERROR" "CL-TOML-KIT")
+                           2
+                           "TOML nesting depth limit exceeded"))
+                   (condition (%reader-test-nesting-error "a.\"b\".c = 1"))
+                   (escaped-condition (%reader-test-nesting-error "a.\"b\\u0063\".c = 1")))
               (expect (equal expected-error-report
-                             (%reader-test-condition-report simple-condition)))
+                             (%reader-test-condition-report condition)))
               (expect (equal expected-error-report
                              (%reader-test-condition-report escaped-condition)))))
           (it "rejects triple-quoted keys before dotted-key lookahead"
