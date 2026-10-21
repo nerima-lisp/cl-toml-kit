@@ -90,7 +90,7 @@
         (when (fboundp name)
           (fmakunbound name))
         (unintern name package))))
-  (it "signals a value model error for an unknown emitter kind"
+  (it "signals a value model error when expanding an unknown toml-value-typecase clause"
     (expect
      (signals toml-value-model-error
        (macroexpand-1
