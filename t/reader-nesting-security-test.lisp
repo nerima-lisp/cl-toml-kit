@@ -16,9 +16,9 @@
     (loop repeat depth
           do (write-char #\} stream))))
 
-(defun %reader-test-nesting-error (text)
+(defun %reader-test-nesting-error (text &optional source-name)
   (handler-case (progn
-                  (parse text)
+                  (parse text :source-name source-name)
                   nil)
     (toml-parse-error (condition)
       condition)))
@@ -117,7 +117,71 @@
                          (edit-toml array-source '("value") 0))))
                      (inline-result
                       (%reader-test-nesting-result
-                       (lambda ()
-                         (edit-toml inline-source '("value") 0)))))
-                (expect (eq :toml-parse-error array-result))
-                (expect (eq :toml-parse-error inline-result)))))
+                       (lambda () (edit-toml inline-source '("value") 0)))))
+                (expect
+                 (eq :toml-format-preservation-error array-result))
+                (expect
+                 (eq :toml-format-preservation-error inline-result))))
+          (it "normalizes source names on nesting-limit errors"
+              (let* ((*toml-max-nesting-depth* 1)
+                     (pathname #p"reader-nesting-security.toml")
+                     (expected-message
+                       (nth-value 1 (cl-toml-kit::%toml-limit :nesting-depth)))
+                     (text (format nil "value = ~A" (%reader-test-nested-arrays 2)))
+                     (pathname-condition
+                       (%reader-test-nesting-error text pathname))
+                     (controls
+                       (coerce (list (code-char 0)
+                                     (code-char #x1B)
+                                     (code-char #x80)
+                                     (code-char #x9F)
+                                     (code-char #x7F))
+                               'string))
+                     (source-name
+                       (concatenate 'string "nesting-" controls
+                                    (make-string 300 :initial-element #\x)))
+                     (escaped-condition
+                       (%reader-test-nesting-error text source-name))
+                     (escaped-source-name
+                       (and (typep escaped-condition 'toml-parse-error)
+                            (toml-parse-error-source-name escaped-condition)))
+                     (escape-sequence "\\u0000\\u001B\\u0080\\u009F\\u007F")
+                     (escaped-expected
+                       (and (typep escaped-condition 'toml-parse-error)
+                            (toml-parse-error-expected escaped-condition)))
+                     (escape-sequence-present
+                       (and (stringp escaped-source-name)
+                            (search escape-sequence escaped-source-name)))
+                     (source-name-within-limit
+                       (and (stringp escaped-source-name)
+                            (<= (length escaped-source-name)
+                                cl-toml-kit::+toml-diagnostic-limit+)))
+                     (source-name-has-no-c0-controls
+                       (and (stringp escaped-source-name)
+                            (notany (lambda (character)
+                                      (< (char-code character) 32))
+                                    escaped-source-name)))
+                     (source-name-has-no-c1-controls
+                       (and (stringp escaped-source-name)
+                            (notany (lambda (character)
+                                      (<= #x7F (char-code character) #x9F))
+                                    escaped-source-name))))
+                (expect
+                 (equal (list 'toml-parse-error
+                              (namestring pathname)
+                              expected-message)
+                        (list (type-of pathname-condition)
+                              (and (typep pathname-condition 'toml-parse-error)
+                                   (toml-parse-error-source-name pathname-condition))
+                              (and (typep pathname-condition 'toml-parse-error)
+                                   (toml-parse-error-expected pathname-condition)))))
+                (expect (typep escaped-condition 'toml-parse-error))
+                (expect (stringp escaped-source-name))
+                (expect (equal expected-message escaped-expected))
+                (expect escape-sequence-present)
+                (expect source-name-within-limit)
+                (expect source-name-has-no-c0-controls)
+                (expect source-name-has-no-c1-controls)))
+
+
+)

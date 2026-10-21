@@ -64,7 +64,17 @@
           (%toml-limit :input-characters)
         (when (> (length text) character-limit)
           (%edit-fail nil "~A" character-message)))
-      (let ((original (parse text)))
+      (let ((original
+              (handler-case
+                  (parse text)
+                (toml-parse-error (condition)
+                  (multiple-value-bind (limit message)
+                      (%toml-limit :nesting-depth)
+                    (declare (ignore limit))
+                    (when (string= (toml-parse-error-expected condition)
+                                   message)
+                      (%edit-fail normalized-path "~A" message))
+                    (error condition))))))
         (multiple-value-bind (assignments sections)
             (%edit-scan-document
              text :array-table-counter-path array-table-counter-path)

@@ -1,9 +1,5 @@
 ;;;; src/reader-scan.lisp
 (in-package #:cl-toml-kit)
-(define-condition toml-reader-nesting-limit-error
-    (toml-parse-error toml-format-preservation-error)
-  ())
-
 (defun %source-char (state position)
   (declare (type toml-reader-state state) (type fixnum position))
   (when (< position (toml-reader-state-length state))
@@ -19,8 +15,7 @@
                              +toml-line-feed+))
                (incf (toml-reader-state-position state))))))
 
-(defun %error-at-message (state position message
-                          &optional path nesting-limit-p)
+(defun %error-at-message (state position message &optional path)
   (let* ((source (toml-reader-state-source state))
          (end (min (length source) (+ position 40)))
          (span (cl-parser-kit:make-span :source source :start position :end end))
@@ -45,16 +40,10 @@
                  (t
                   (incf column)))))
     (error
-     (if nesting-limit-p
-         (make-condition
-          (quote toml-reader-nesting-limit-error)
-          :source-name (toml-reader-state-source-name state)
-          :position position :line line :column column :path path
-          :expected message :context "TOML" :text text :message message)
-         (make-toml-parse-error
-          :source-name (toml-reader-state-source-name state)
-          :position position :line line :column column :path path
-          :expected message :context "TOML" :text text)))))
+     (make-toml-parse-error
+      :source-name (toml-reader-state-source-name state)
+      :position position :line line :column column :path path
+      :expected message :context "TOML" :text text))))
 
 (defun %error-at (state position expected-key &optional (path nil))
   (%error-at-message state position
