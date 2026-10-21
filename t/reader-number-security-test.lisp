@@ -1,55 +1,44 @@
 (in-package #:cl-toml-kit/test)
 
-(defun %reader-number-error (text)
-  (handler-case (progn (parse text) nil)
+(defun %reader-number-error (text &key source-name)
+  (handler-case (progn (parse text :source-name source-name) nil)
     (toml-parse-error (condition) condition)))
 
 (describe "reader number security"
-  (it "preserves custom numeric diagnostic text and offset"
-    (let ((condition
-            (handler-case
-                (cl-toml-kit::%error-at-message
-                 (cl-toml-kit::%make-reader-state
-                  :source (format nil "a~C~Cx = 1" #\Return #\Newline)
-                  :length 8
-                  :source-name "numbers.toml")
-                 3
-                 "custom numeric diagnostic"
-                 '("items" "0"))
-              (toml-parse-error (error) error))))
-      (expect (string= "custom numeric diagnostic"
+  (it "reports numeric diagnostic text and token offset through parse"
+    (let ((condition (%reader-number-error "items = [1__0]")))
+      (expect (string= "digit between underscores"
                        (toml-parse-error-expected condition)))
-      (expect (= 3 (toml-parse-error-position condition)))))
-  (it "preserves CRLF line and column in numeric diagnostics"
+      (expect (= 11 (toml-parse-error-position condition)))))
+  (it "reports CRLF coordinates and source name for numeric parse errors"
     (let ((condition
-            (handler-case
-                (cl-toml-kit::%error-at-message
-                 (cl-toml-kit::%make-reader-state
-                  :source (format nil "a~C~Cx = 1" #\Return #\Newline)
-                  :length 8
-                  :source-name "numbers.toml")
-                 3
-                 "custom numeric diagnostic"
-                 '("items" "0"))
-              (toml-parse-error (error) error))))
+            (%reader-number-error
+             (format nil "a = 1~C~Citems = [0x]" #\Return #\Newline)
+             :source-name "numbers.toml")))
+      (expect (string= "integer digit"
+                       (toml-parse-error-expected condition)))
+      (expect (= 18 (toml-parse-error-position condition)))
       (expect (= 2 (toml-parse-error-line condition)))
-      (expect (= 1 (toml-parse-error-column condition)))))
-  (it "preserves the path and source metadata for numeric diagnostics"
-    (let ((condition
-            (handler-case
-                (cl-toml-kit::%error-at-message
-                 (cl-toml-kit::%make-reader-state
-                  :source (format nil "a~C~Cx = 1" #\Return #\Newline)
-                  :length 8
-                  :source-name "numbers.toml")
-                 3
-                 "custom numeric diagnostic"
-                 '("items" "0"))
-              (toml-parse-error (error) error))))
-      (expect (equal '("items" "0") (toml-parse-error-path condition)))
+      (expect (= 12 (toml-parse-error-column condition)))
       (expect (string= "numbers.toml"
                        (toml-parse-error-source-name condition)))
-      (expect (search "custom numeric diagnostic"
+      (expect (search "integer digit"
+                      (toml-parse-error-text condition)))))
+  (it "reports nested path and source metadata through parse"
+    (let* ((*toml-max-nesting-depth* 1)
+           (condition
+             (handler-case
+                 (progn
+                   (parse "[a.b.c]" :source-name "numbers.toml")
+                   nil)
+               (toml-parse-error (error) error))))
+      (expect (typep condition 'toml-parse-error))
+      (expect (equal '("a") (toml-parse-error-path condition)))
+      (expect (string= "TOML nesting depth limit exceeded"
+                       (toml-parse-error-expected condition)))
+      (expect (string= "numbers.toml"
+                       (toml-parse-error-source-name condition)))
+      (expect (search "TOML nesting depth limit exceeded"
                       (toml-parse-error-text condition)))))
   (it "rejects a ten-thousand-digit integer at the token limit"
     (let* ((condition

@@ -18,7 +18,7 @@
             (:print-function %writer-unbounded-value-printer)))
 
 (defun %writer-nan ()
-  (gethash "x" (cl-toml-kit:parse "x = nan")))
+  (%toml-test-nan))
 
 (defun %writer-float-value (text)
   (cond ((string= text "inf") sb-ext:double-float-positive-infinity)
