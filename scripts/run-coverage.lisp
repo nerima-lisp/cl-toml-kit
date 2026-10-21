@@ -1,11 +1,11 @@
 ;;;; Coverage gate for checks.coverage.
 ;;;;
-;;;; Run it through `nix build .#checks.<system>.coverage`, not directly:
+;;;; Run it through `nix build .#checks.aarch64-darwin.coverage` or
+;;;; `nix build .#checks.x86_64-linux.coverage`, not directly:
 ;;;; cl-nix-forge's mkCoverageReport compiles cl-toml-kit with sb-cover
-;;;; instrumentation before loading this file, and afterwards writes the HTML
-;;;; report that becomes the check's output (result/cover-index.html). The
-;;;; script fails when expression or branch coverage of src/ is below 90%, the
-;;;; floor in the nerima-lisp organization's TEST_STANDARD.md.
+;;;; instrumentation before loading this file, then writes the HTML report to
+;;;; the check output (result/cover-index.html). The gate requires at least 90%
+;;;; aggregate expression and branch coverage across src/.
 
 (require :asdf)
 
