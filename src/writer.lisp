@@ -39,7 +39,7 @@
          (progn ,@body)
        (decf (fill-pointer ,path)))))
 
-(defmacro %with-writer-context (&optional (initial-depth 0) &body body)
+(defmacro %with-writer-context (initial-depth &body body)
   `(if *toml-writer-active-containers*
        (progn ,@body)
      (multiple-value-bind (limit message)
@@ -126,6 +126,7 @@
       (princ value stream)
       (%signal-encoding-error "Integer is outside TOML's signed 64-bit range"
                               value path)))
+
 (defun %write-fallback-value (value stream path)
   (cond ((hash-table-p value)
          (%validate-writer-table value path))
