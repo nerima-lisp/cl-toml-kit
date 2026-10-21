@@ -20,18 +20,28 @@ hierarchy in full.
   => hash-table
 ```
 
-Parse a TOML document and return its top-level table as an `equal` hash
-table.
+Parse a TOML document.
 
 | Argument | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `source` | `string` or `stream` | n/a | The TOML document, as a string or a character input stream. |
-| `source-name` | any value | `nil` | Optional label for parse errors. Pathnames use `namestring`; other values become diagnostic text. The result is control-escaped and capped at 256 characters. |
+| `source` | `string` or `character input stream` | n/a | The TOML document, as a string or a character input stream. |
+| `source-name` | any value | `nil` | Optional label for parse errors. Pathnames use namestring; other values become diagnostic text. The result is control-escaped and capped at 256 characters. |
 
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
 
 **Signals**: `toml-parse-error` for malformed TOML.
+
+**Example**:
+
+```lisp
+(let ((table (cl-toml-kit:parse
+              "title = \"TOML\"
+count = 2")))
+  (list (gethash "title" table)
+        (gethash "count" table)))
+;; => ("TOML" 2)
+```
 
 See also: [Reader](../guide/reader.md), [Conditions](conditions.md#toml-parse-error).
 
