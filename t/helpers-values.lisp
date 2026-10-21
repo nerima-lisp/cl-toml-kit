@@ -196,8 +196,9 @@
 (defun %toml-test-source-document (components)
   (destructuring-bind
       (positive negative hexadecimal octal binary underscored group-size
-       infinity-sign nan-sign negative-zero suffix escape-characters date
-       inline-amount records)
+       use-underscores infinity-sign nan-sign negative-zero suffix
+       escape-characters date inline-amount records presence field-priorities
+       nested-widths)
       components
     (let* ((escaped-value
              (%toml-test-escaped-string suffix escape-characters))
@@ -211,58 +212,110 @@
                   (lambda (record)
                     (destructuring-bind (name rank) record
                       (%toml-test-table "name" name "rank" rank)))
-                  records))
-           (expected
-             (apply #'%toml-test-table
-                    (append
-                     (list "plus" positive
-                           "negative" (- negative)
-                           "hex" hexadecimal
-                           "octal" octal
-                           "binary" binary
-                           "underscored" underscored
-                           "positive-infinity" sb-ext:double-float-positive-infinity
-                           "negative-infinity" sb-ext:double-float-negative-infinity
-                           "nan" (%toml-test-nan)
-                           "negative-zero" (- 0d0)
-                           "escaped" escaped-value
-                           dynamic-key escaped-value
-                           "date" date
-                           "inline" (%toml-test-table
-                                     "amount" inline-amount
-                                     "label" inline-value)
-                           "records" expected-records))))
-           (source
-             (with-output-to-string (stream)
-               (flet ((grouped (value base)
-                        (%toml-test-group-digits
+                  records)))
+      (labels ((build-nested-table (level)
+                 (let ((table (%toml-test-table))
+                       (entries nil))
+                   (loop for index below (aref nested-widths level)
+                         for key = (format nil "key-~D" index)
+                         for value = (+ (* level 100) index)
+                         do (setf (gethash key table) value)
+                            (push (format nil "~A = ~D" key value) entries))
+                   (when (< (1+ level) (length nested-widths))
+                     (multiple-value-bind (child child-token)
+                         (build-nested-table (1+ level))
+                       (setf (gethash "child" table) child)
+                       (push (format nil "child = ~A" child-token) entries)))
+                   (values table
+                           (format nil "{ ~{~A~^, ~} }" (nreverse entries)))))
+               (grouped (value base)
+                 (let ((digits
                          (string-downcase
-                          (write-to-string value :base base :radix nil))
-                         group-size)))
-                 (format stream "plus = +~A~%" (grouped positive 10))
-                 (format stream "negative = -~A~%" (grouped negative 10))
-                 (format stream "hex = 0x~A~%" (grouped hexadecimal 16))
-                 (format stream "octal = 0o~A~%" (grouped octal 8))
-                 (format stream "binary = 0b~A~%" (grouped binary 2))
-                 (format stream "underscored = ~A~%" (grouped underscored 10))
-                 (format stream
-                         "positive-infinity = ~Ainf~%negative-infinity = -inf~%nan = ~Anan~%negative-zero = ~A~%"
-                         infinity-sign nan-sign negative-zero)
-                 (format stream "escaped = ~A~%~A = ~A~%"
-                         (%toml-test-basic-string-token escaped-value)
-                         (%toml-test-basic-string-token dynamic-key)
-                         (%toml-test-basic-string-token escaped-value))
-                 (format stream "date = ~A~%"
-                         (%toml-test-date-token date))
-                 (format stream "inline = { amount = ~A, label = ~A }~%"
-                         (grouped inline-amount 10)
-                         (%toml-test-basic-string-token inline-value))
-                 (loop for record across records
-                       do (destructuring-bind (name rank) record
-                            (format stream
-                                    "~%[[records]]~%name = ~A~%rank = ~D~%"
-                                    (%toml-test-basic-string-token name) rank)))))))
-      (list source expected))))
+                          (write-to-string value :base base :radix nil))))
+                   (if use-underscores
+                       (%toml-test-group-digits digits group-size)
+                       digits))))
+        (let* ((optional-fields
+                 (list
+                  (list "plus" "plus" (format nil "+~A" (grouped positive 10))
+                        positive)
+                  (list "negative" "negative"
+                        (format nil "-~A" (grouped negative 10)) (- negative))
+                  (list "hex" "hex" (format nil "0x~A" (grouped hexadecimal 16))
+                        hexadecimal)
+                  (list "octal" "octal" (format nil "0o~A" (grouped octal 8))
+                        octal)
+                  (list "binary" "binary" (format nil "0b~A" (grouped binary 2))
+                        binary)
+                  (list "underscored" "underscored"
+                        (grouped underscored 10) underscored)
+                  (list "positive-infinity" "positive-infinity"
+                        (format nil "~Ainf" infinity-sign)
+                        sb-ext:double-float-positive-infinity)
+                  (list "negative-infinity" "negative-infinity" "-inf"
+                        sb-ext:double-float-negative-infinity)
+                  (list "nan" "nan" (format nil "~Anan" nan-sign)
+                        (%toml-test-nan))
+                  (list "negative-zero" "negative-zero" negative-zero (- 0d0))
+                  (list "escaped" "escaped"
+                        (%toml-test-basic-string-token escaped-value)
+                        escaped-value)
+                  (list dynamic-key (%toml-test-basic-string-token dynamic-key)
+                        (%toml-test-basic-string-token escaped-value)
+                        escaped-value)
+                  (list "inline" "inline"
+                        (format nil "{ amount = ~A, label = ~A }"
+                                (grouped inline-amount 10)
+                                (%toml-test-basic-string-token inline-value))
+                        (%toml-test-table "amount" inline-amount
+                                          "label" inline-value))))
+               (selected-fields
+                 (loop for field in optional-fields
+                       for include across presence
+                       when include collect field))
+               (nested-table
+                 (when (plusp (length nested-widths))
+                   (multiple-value-list (build-nested-table 0)))))
+          (let ((nested-value (first nested-table))
+                (nested-token (second nested-table)))
+              (let* ((fields
+                     (append
+                      selected-fields
+                      (list (list "decimal" "decimal" "1.5" 1.5d0)
+                            (list "exponent-positive" "exponent-positive"
+                                  "1e10" 1d10)
+                            (list "exponent-negative" "exponent-negative"
+                                  "-2.5E-3" -2.5d-3)
+                            (list "date" "date" (%toml-test-date-token date) date))
+                      (when nested-value
+                        (list (list "nested" "nested" nested-token nested-value)))))
+                   (ordered-fields
+                     (mapcar #'cdr
+                             (stable-sort
+                              (loop for field in fields
+                                    for priority across field-priorities
+                                    collect (cons priority field))
+                              #'< :key #'car)))
+                   (records-present (aref presence 13))
+                   (expected
+                     (apply #'%toml-test-table
+                            (append
+                             (loop for (key source-key token value) in ordered-fields
+                                   append (list key value))
+                             (when records-present
+                               (list "records" expected-records)))))
+                   (source
+                     (with-output-to-string (stream)
+                       (loop for (key source-key token value) in ordered-fields
+                             do (format stream "~A = ~A~%" source-key token))
+                       (when records-present
+                         (loop for record across records
+                               do (destructuring-bind (name rank) record
+                                    (format stream
+                                            "~%[[records]]~%name = ~A~%rank = ~D~%"
+                                            (%toml-test-basic-string-token name)
+                                            rank)))))))
+              (list source expected))))))))
 
 (defun toml-test-source-document-generator ()
   (cl-weave:gen-map
@@ -275,6 +328,7 @@
     (cl-weave:gen-integer :min #b1000000000 :max #b1111111111111111)
     (cl-weave:gen-integer :min 10000 :max 9999999999)
     (cl-weave:gen-integer :min 2 :max 4)
+    (cl-weave:gen-member '(nil t))
     (cl-weave:gen-member '("" "+"))
     (cl-weave:gen-member '("" "+" "-"))
     (cl-weave:gen-member '("-0.0" "-0.00" "-0e0" "-0.0_0"))
@@ -286,11 +340,42 @@
             (code-char 0) (code-char 127) #\" #\\
             (char "あ" 0) (char "🧪" 0)))
      :min-length 1 :max-length 8)
-    (toml-test-date-generator)
+    (cl-weave:gen-map
+     (lambda (components)
+       (destructuring-bind
+           (year month day hour minute second nanosecond
+            offset-sign offset-hour offset-minute)
+           components
+         (cl-date-kit:offset-date-time-of
+          year month day hour minute second nanosecond
+          (cl-date-kit:zone-offset-of-hms
+           (* offset-sign offset-hour)
+           (* offset-sign offset-minute)
+           0))))
+     (cl-weave:gen-tuple
+      (cl-weave:gen-integer :min 2000 :max 2030)
+      (cl-weave:gen-integer :min 1 :max 12)
+      (cl-weave:gen-integer :min 1 :max 28)
+      (cl-weave:gen-integer :min 0 :max 23)
+      (cl-weave:gen-integer :min 0 :max 59)
+      (cl-weave:gen-integer :min 0 :max 59)
+      (cl-weave:gen-integer :min 1 :max 999999999)
+      (cl-weave:gen-member '(-1 1))
+      (cl-weave:gen-integer :min 1 :max 12)
+      (cl-weave:gen-integer :min 0 :max 59)))
     (cl-weave:gen-integer :min 1 :max 9999999)
     (cl-weave:gen-vector
      (cl-weave:gen-tuple
       (cl-weave:gen-string :min-length 1 :max-length 8
                            :alphabet (toml-test-string-alphabet))
       (cl-weave:gen-integer :min -999999 :max 999999))
-     :min-length 1 :max-length 3))))
+     :min-length 1 :max-length 3)
+    (cl-weave:gen-vector
+     (cl-weave:gen-member '(nil t))
+     :min-length 14 :max-length 14)
+    (cl-weave:gen-vector
+     (cl-weave:gen-integer :min 0 :max 1000000)
+     :min-length 18 :max-length 18)
+    (cl-weave:gen-vector
+     (cl-weave:gen-integer :min 1 :max 3)
+     :min-length 0 :max-length 3))))
