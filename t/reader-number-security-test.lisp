@@ -1,6 +1,6 @@
 (in-package #:cl-toml-kit/test)
 
-(defun %reader-error (text)
+(defun %reader-number-error (text)
   (handler-case (progn (parse text) nil)
     (toml-parse-error (condition) condition)))
 
@@ -53,7 +53,7 @@
                       (toml-parse-error-text condition)))))
   (it "rejects a ten-thousand-digit integer at the token limit"
     (let* ((condition
-             (%reader-error
+             (%reader-number-error
               (concatenate 'string "value = "
                            (make-string 10000 :initial-element #\9))))
            (expected
@@ -64,7 +64,7 @@
       (expect (= 8 (toml-parse-error-position condition)))))
   (it "honors the configured number-token limit"
     (let* ((*toml-max-number-token-length* 4)
-           (condition (%reader-error "v = 12345"))
+           (condition (%reader-number-error "v = 12345"))
            (expected
              (nth-value 1
                         (cl-toml-kit::%toml-limit :number-token-length))))
@@ -73,7 +73,7 @@
       (expect (= 4 (toml-parse-error-position condition)))))
   (it "honors the configured number-token limit for floats"
     (let* ((*toml-max-number-token-length* 4)
-           (condition (%reader-error "v = 1.234"))
+           (condition (%reader-number-error "v = 1.234"))
            (expected
              (nth-value 1
                         (cl-toml-kit::%toml-limit :number-token-length))))
@@ -84,7 +84,7 @@
             ("value = 1e-999999999999999999"))
       "rejects out-of-range exponents in ~S"
       (text)
-    (let* ((condition (%reader-error text))
+    (let* ((condition (%reader-number-error text))
            (expected
              (cl-toml-kit::%toml-reader-error-message :representable-finite-float)))
       (expect (typep condition 'toml-parse-error))
