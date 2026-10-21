@@ -50,17 +50,7 @@
   (%error-at-message state position
                      (%toml-reader-error-message expected-key)
                      path))
-(defun %toml-limit-error-message (key)
-  (if (eq key :table-count)
-      "TOML table count limit exceeded"
-      (%toml-limit-base-error-message key)))
-(defun %toml-limit (key)
-  (if (eq key :table-count)
-      (let ((value *toml-max-tables*))
-        (check-type value (integer 0 *))
-        (values (min value +toml-max-tables-ceiling+)
-                (%toml-limit-error-message key)))
-      (%toml-limit-base key)))
+
 (defun %reader-make-table
     (state &optional (position (toml-reader-state-position state)))
   (multiple-value-bind (limit message) (%toml-limit :table-count)

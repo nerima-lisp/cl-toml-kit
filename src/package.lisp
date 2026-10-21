@@ -30,10 +30,3 @@
    #:toml-comment-spans))
 
 (in-package #:cl-toml-kit)
-
-(defconstant +toml-max-tables-ceiling+
-  32768)
-
-(defvar *toml-max-tables*
-  16384
-  "Maximum number of tables created while parsing one TOML document.")
