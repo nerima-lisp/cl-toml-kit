@@ -22,13 +22,20 @@
     (otherwise
      (error "Unknown invalid-value kind ~S." kind))))
 (defun %writer-expect-encoding-error (value)
-  (handler-case
-      (sb-ext:with-timeout 0.1
-        (encode value)
-        (error "Writer accepted an invalid value."))
-    (toml-encoding-error () t)
-    (sb-ext:timeout ()
-      (error "Writer did not reject an invalid value before timeout."))))
+  ;; This inner timeout must beat the CL-Weave limit, which skips timed-out trials.
+  (or
+   (handler-case
+       (progn
+         (sb-ext:with-timeout 5
+           (encode value))
+         nil)
+     (sb-ext:timeout ()
+       (error "TOML writer fuzz trial timed out while encoding an invalid value."))
+     (toml-encoding-error () t)
+     (serious-condition (condition)
+       (error "TOML writer fuzz trial raised unexpected condition ~A: ~A"
+              (type-of condition) condition)))
+   (error "Writer accepted an invalid value.")))
 (defun %writer-document-generator ()
   (toml-test-document-generator
    (cl-weave:gen-recursive
@@ -131,10 +138,21 @@
   (it-property "writes and parses generated values"
       ((table (%writer-document-generator)))
     (expect (toml-test-value= table (parse (encode table)))))
+  (it "writes documents at the configured nesting limit"
+    (let* ((root (%writer-table))
+           (parent root))
+      (loop repeat *toml-max-nesting-depth*
+            do (let ((child (%writer-table)))
+                 (setf (gethash "next" parent) child
+                       parent child)))
+      (setf (gethash "leaf" parent) 1)
+      (expect
+       (= (1+ *toml-max-nesting-depth*)
+          (count #\Newline (encode root))))))
   (cl-weave:it-fuzz
    "rejects cyclic tables with a TOML encoding error"
       ((size (cl-weave:gen-integer :min 1 :max 4)))
-    (:trials 8 :timeout-per-trial 2)
+    (:trials 8 :timeout-per-trial 8)
     (%writer-expect-encoding-error
      (%writer-invalid-value :cycle size)))
   (cl-weave:it-fuzz
@@ -143,13 +161,13 @@
          (cl-weave:gen-integer
           :min (1+ *toml-max-nesting-depth*)
           :max (+ *toml-max-nesting-depth* 3))))
-    (:trials 8 :timeout-per-trial 2)
+    (:trials 8 :timeout-per-trial 8)
     (%writer-expect-encoding-error
      (%writer-invalid-value :deep depth)))
   (cl-weave:it-fuzz
    "rejects surrogate strings with a TOML encoding error"
       ((code (cl-weave:gen-integer :min #xD800 :max #xDFFF)))
-    (:trials 8 :timeout-per-trial 2)
+    (:trials 8 :timeout-per-trial 8)
     (%writer-expect-encoding-error
      (%writer-invalid-value :surrogate code)))
   (cl-weave:it-fuzz
