@@ -105,43 +105,51 @@
               :position position :line line :column column
               :expected "UTF-8"))))))))
 
-(defun parse-file (pathname)
-  (let ((source-name (namestring pathname)))
-    (with-open-file (stream pathname :direction :input
-                            :element-type '(unsigned-byte 8))
-      (multiple-value-bind (byte-limit byte-message)
-          (%toml-limit :input-bytes)
-        (labels ((input-limit-error ()
-                   (error
-                    (make-toml-parse-error
-                     :source-name source-name
-                     :position 0
-                     :line nil
-                     :column nil
-                     :expected byte-message))))
-          (let ((byte-length (file-length stream)))
-            (when (and (integerp byte-length) (> byte-length byte-limit))
-              (input-limit-error))
-            (let ((bytes
-                   (make-array (min 65536 (1+ byte-limit))
-                               :element-type '(unsigned-byte 8)
-                               :adjustable t :fill-pointer 0)))
-              (loop
-                for start = (fill-pointer bytes)
-                for read-end = (min (1+ byte-limit) (+ start 65536))
-                do (when (> read-end (array-total-size bytes))
-                     (adjust-array
-                      bytes
-                      (min (1+ byte-limit)
-                           (max read-end (* 2 (array-total-size bytes))))
-                      :fill-pointer start))
-                   (setf (fill-pointer bytes) read-end)
-                   (let ((end (read-sequence bytes stream
-                                             :start start :end read-end)))
-                     (setf (fill-pointer bytes) end)
-                     (when (> end byte-limit)
-                       (input-limit-error))
-                     (when (< end read-end)
-                       (return))))
-              (parse (%decode-utf8 bytes pathname)
-                     :source-name source-name))))))))
+(progn
+  (defun %read-bounded-octets (stream byte-limit)
+    (let ((bytes (make-array (min 65536 (1+ byte-limit))
+                             :element-type '(unsigned-byte 8)
+                             :adjustable t :fill-pointer 0)))
+      (loop
+        for start = (fill-pointer bytes)
+        for read-end = (min (1+ byte-limit) (+ start 65536))
+        do (when (> read-end (array-total-size bytes))
+             (adjust-array
+              bytes
+              (min (1+ byte-limit)
+                   (max read-end (* 2 (array-total-size bytes))))
+              :fill-pointer start))
+           (setf (fill-pointer bytes) read-end)
+           (let ((end (read-sequence bytes stream
+                                     :start start :end read-end)))
+             (setf (fill-pointer bytes) end)
+             (when (> end byte-limit)
+               (return-from %read-bounded-octets (values bytes t)))
+             (when (< end read-end)
+               (return-from %read-bounded-octets (values bytes nil)))))))
+  (progn
+  (defun %parse-file-stream (stream pathname source-name byte-length)
+    (multiple-value-bind (byte-limit byte-message)
+        (%toml-limit :input-bytes)
+      (labels ((input-limit-error ()
+                 (error
+                  (make-toml-parse-error
+                   :source-name source-name
+                   :position 0
+                   :line nil
+                   :column nil
+                   :expected byte-message))))
+        (when (and (integerp byte-length) (> byte-length byte-limit))
+          (input-limit-error))
+        (multiple-value-bind (bytes limit-exceeded-p)
+            (%read-bounded-octets stream byte-limit)
+          (when limit-exceeded-p
+            (input-limit-error))
+          (parse (%decode-utf8 bytes pathname)
+                 :source-name source-name)))))
+  (defun parse-file (pathname)
+    (let ((source-name (namestring pathname)))
+      (with-open-file (stream pathname :direction :input
+                              :element-type '(unsigned-byte 8))
+        (%parse-file-stream stream pathname source-name
+                            (file-length stream)))))))

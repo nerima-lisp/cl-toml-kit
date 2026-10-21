@@ -21,14 +21,38 @@
       (:comment
        (concatenate 'string "# " surrogate)))))
 
-(defun %reader-input-with-byte-file (bytes thunk)
-  (uiop:with-temporary-file (:stream stream :pathname pathname
-                             :directory (uiop:temporary-directory)
-                             :prefix "cl-toml-kit-reader-"
-                             :element-type '(unsigned-byte 8))
-    (write-sequence bytes stream)
-    :close-stream
-    (funcall thunk pathname)))
+(progn
+  (defun %reader-input-with-byte-file (bytes thunk)
+    (uiop:with-temporary-file (:stream stream :pathname pathname
+                               :directory (uiop:temporary-directory)
+                               :prefix "cl-toml-kit-reader-"
+                               :element-type '(unsigned-byte 8))
+      (write-sequence bytes stream)
+      :close-stream
+      (funcall thunk pathname)))
+  #+sbcl
+  (defclass %reader-counting-byte-stream
+      (sb-gray:fundamental-binary-input-stream)
+    ((available-bytes :initarg :available-bytes
+                      :reader %reader-counting-byte-stream-available-bytes)
+     (position :initform 0
+               :accessor %reader-counting-byte-stream-position)
+     (read-sizes :initform nil
+                 :accessor %reader-counting-byte-stream-read-sizes)))
+  #+sbcl
+  (defmethod sb-gray:stream-read-sequence
+      ((stream %reader-counting-byte-stream) sequence
+       &optional (start 0) (end (length sequence)))
+    (let* ((position (%reader-counting-byte-stream-position stream))
+           (count (min (- end start)
+                       (- (%reader-counting-byte-stream-available-bytes stream)
+                          position)))
+           (next (+ start count)))
+      (loop for index from start below next
+            do (setf (elt sequence index) 0))
+      (setf (%reader-counting-byte-stream-position stream) (+ position count))
+      (push count (%reader-counting-byte-stream-read-sizes stream))
+      next)))
 
 (describe "reader input security"
   (it-each ((:basic-string)
@@ -97,6 +121,40 @@
                  (lambda () (parse-file pathname)))))))
       (expect (string= "TOML input byte limit exceeded"
                        (toml-parse-error-expected condition)))))
+  (it "reads incrementally when the reported file length is zero"
+    (let* ((*toml-max-input-bytes* 4)
+           (reported-length
+             (with-open-file (stream #P"/dev/zero"
+                             :direction :input
+                             :element-type (quote (unsigned-byte 8)))
+               (file-length stream)))
+           (condition
+             (%reader-input-error
+              (lambda () (parse-file #P"/dev/zero")))))
+      (expect (zerop reported-length))
+      (expect condition)
+      (expect (string= "TOML input byte limit exceeded"
+                       (toml-parse-error-expected condition)))
+      (expect (zerop (toml-parse-error-position condition)))
+      (expect (string= "" (toml-parse-error-text condition)))))
+  (it "parse-file reads unknown-length byte streams incrementally up to the byte limit"
+    (when (find-package :sb-gray)
+      (let* ((*toml-max-input-bytes* 70000)
+             (stream (make-instance
+                                  '%reader-counting-byte-stream
+                                  :available-bytes 200000)))
+        (let ((condition
+                (%reader-input-error
+                 (lambda ()
+                   (cl-toml-kit::%parse-file-stream
+                    stream nil "unknown-length" nil)))))
+          (expect (string= "TOML input byte limit exceeded"
+                     (toml-parse-error-expected condition)))
+          (expect (= (1+ *toml-max-input-bytes*)
+                     (%reader-counting-byte-stream-position stream)))
+          (expect (equal '(65536 4465)
+                         (reverse
+                          (%reader-counting-byte-stream-read-sizes stream))))))))
   (it "checks decoded file characters before parsing invalid TOML"
       (let* ((text "value = [")
              (bytes (map '(vector (unsigned-byte 8)) #'char-code text))

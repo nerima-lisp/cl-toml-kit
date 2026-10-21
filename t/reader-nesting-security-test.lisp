@@ -186,6 +186,22 @@
                 (expect (eq :returned parse-result))
                 (expect (eq :returned file-result))
                 (expect (eq :returned edit-result))))
+          (it "accepts repeated dotted keys in an inline table below the nesting limit"
+    (let* ((*toml-max-nesting-depth* 6)
+           (result (parse "x = {a.b.c.p = 1, a.b.c.q = 1}"))
+           (table (gethash "x" result))
+           (nested (gethash "c" (gethash "b" (gethash "a" table)))))
+      (expect (hash-table-p table))
+      (expect (= 1 (gethash "p" nested)))
+      (expect (= 1 (gethash "q" nested)))))
+          (it "accepts inline dotted keys at depth one below the limit"
+    (let* ((*toml-max-nesting-depth* 6)
+           (result (parse "x = {a.b.c.d.p = 1, a.b.c.d.q = 1}"))
+           (table (gethash "x" result))
+           (nested (gethash "d" (gethash "c" (gethash "b" (gethash "a" table))))))
+      (expect (hash-table-p table))
+      (expect (= 1 (gethash "p" nested)))
+      (expect (= 1 (gethash "q" nested)))))
           (it "counts current table depth when rejecting dotted keys above the limit through parse, parse-file, and edit-toml"
               (let* ((*toml-max-nesting-depth* 4)
                      (source (format nil "[root]~%a.b.c.d.value = 0~%"))
@@ -413,6 +429,20 @@
                 (expect source-name-within-limit)
                 (expect source-name-has-no-c0-controls)
                 (expect source-name-has-no-c1-controls)))
+          (it "rejects over-limit quoted dotted keys with and without escapes"
+            (let* ((*toml-max-nesting-depth* 1)
+                   (expected-message
+                     (nth-value 1 (cl-toml-kit::%toml-limit :nesting-depth)))
+                   (expected-error-report
+                     (list (quote toml-parse-error) 2 expected-message))
+                   (simple-condition
+                     (%reader-test-nesting-error "a.\"b\".c = 1"))
+                   (escaped-condition
+                     (%reader-test-nesting-error "a.\"b\\u0063\".c = 1")))
+              (expect (equal expected-error-report
+                             (%reader-test-condition-report simple-condition)))
+              (expect (equal expected-error-report
+                             (%reader-test-condition-report escaped-condition)))))
 
 
 )

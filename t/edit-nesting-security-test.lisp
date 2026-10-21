@@ -24,6 +24,19 @@
                    (string= "TOML nesting depth limit exceeded"
                             (toml-format-preservation-error-message
                              condition))))))
+  (it "rejects array nesting one above the hard ceiling via edit-toml"
+    (let* ((*toml-max-nesting-depth* 1024)
+           (text (format nil "value = ~A"
+                         (%edit-test-nested-arrays 1025)))
+           (source (%edit-test-bytes text))
+           (condition
+             (handler-case
+                 (progn (edit-toml source (quote ("value")) 0) nil)
+               (toml-format-preservation-error (condition) condition))))
+      (expect condition)
+      (expect
+        (string= "TOML nesting depth limit exceeded"
+                 (toml-format-preservation-error-message condition)))))
   (it "rejects inline-table nesting above the configured depth via edit-toml"
     (let* ((*toml-max-nesting-depth* 1024)
            (text (format nil "value = ~A"
