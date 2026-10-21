@@ -25,10 +25,11 @@ or an element of an array of tables, is a hash table whose test is `equal`.
 Every TOML array is a `simple-vector`, with no distinction between arrays of
 values and arrays of tables. The writer rejects Lisp types outside this model.
 
-The union of these types is the `toml-value` type. `toml-value-p`,
-`toml-value-kind`, and the per-kind predicates are all derived from one
-specification table in `src/data.lisp`; see the
-[API reference](../reference/api.md) for them.
+The value specification table in `src/data.lisp` defines the `toml-value`
+type, `toml-value-p`, `toml-value-kind`, and the exported per-kind types and
+predicates. `toml-value-typecase` uses the same table to expand a `typecase`
+and rejects unknown kind keywords at macro expansion. See the
+[API reference](../reference/api.md) for the exported symbols.
 
 ## Opaque TOML false
 
@@ -52,8 +53,7 @@ The printed form of `+toml-false+` is unspecified. Do not match on how it
 prints, and do not round-trip it through `prin1` and a reader; use
 `toml-false-p`.
 
-There is no TOML null. A key that has no value is simply absent from the hash
-table.
+There is no TOML null. To represent no value, omit the key from the table.
 
 ## Table key order
 
@@ -68,13 +68,8 @@ ordering. If your code depends on key order, keep this scope in mind.
 
 ## Date and time values
 
-The four TOML temporal kinds use cl-date-kit types directly. The reader
-returns `cl-date-kit:offset-date-time`, `cl-date-kit:local-date-time`,
-`cl-date-kit:local-date`, and `cl-date-kit:local-time` objects, and the writer
-accepts those same objects; there are no adapter structs in between.
-
-TOML has no zoned date-time and no offset-time value. The other cl-date-kit
-types therefore never appear in a TOML document.
+TOML has no date-time value with a named time zone and no standalone offset-time
+value. The other cl-date-kit types therefore never appear in a TOML document.
 
 `cl-toml-kit` does not re-export these type names. Use the `cl-date-kit:`
 prefix to refer to them, or import them from `cl-date-kit` into your package.
@@ -102,9 +97,3 @@ values, recognizable with `sb-ext:float-infinity-p` and
 `sb-ext:float-nan-p`, and the writer prints them as `inf`, `-inf`, and `nan`.
 
 Negative zero is preserved: `-0.0d0` encodes as `-0.0`, not `0.0`.
-
-The value specification table in `src/data.lisp` is the single source of truth
-for everything on this page. `define-toml-value-model` expands it into the
-`toml-value` type, the value predicates, `toml-value-kind`, and the
-`toml-value-typecase` macro. That macro expands to a single `typecase` over the
-table, and it rejects unknown kind keywords at macroexpansion time.
