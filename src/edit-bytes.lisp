@@ -39,35 +39,39 @@
 (defun %edit-string-to-bytes (text)
   (cl-codec-kit:string-to-octets text :encoding :utf-8))
 
-(defun %edit-value-bytes (value &optional (initial-depth 0))
+(defun %edit-value-bytes (value &optional (initial-depth 0) path)
   (with-output-to-string (stream)
     (%with-writer-context initial-depth
-      (%write-value value stream (make-array 8 :adjustable t :fill-pointer 0)))))
-
-(defun %edit-value-bytes-for-node (text node value)
-  (when (stringp value)
-    (let ((path (edit-node-path node)))
-      (%validate-toml-string
-       value
+      (%write-value
+       value stream
        (make-array (length path)
                    :adjustable t
                    :fill-pointer t
-                   :initial-contents path))))
-  (if (not (stringp value))
-      (%edit-value-bytes value (edit-node-parent-depth node))
-      (%edit-string-value-bytes-for-node text node value)))
+                   :initial-contents path)))))
 
-(defun %edit-string-value-bytes-for-node (text node value)
+(defun %edit-value-bytes-for-node (text node value)
+  (let ((path (edit-node-path node)))
+    (if (stringp value)
+        (%edit-string-value-bytes-for-node text node value path)
+        (%edit-value-bytes value (edit-node-parent-depth node) path))))
+
+(defun %edit-string-value-bytes-for-node (text node value path)
   (let* ((start (edit-node-start node))
          (delimiter (char text start))
          (triple (%edit-triple-string-p text start node delimiter)))
     (if (char= delimiter #\')
         (progn
+          (%validate-toml-string
+           value
+           (make-array (length path)
+                       :adjustable t
+                       :fill-pointer t
+                       :initial-contents path))
           (%edit-reject-invalid-literal-string node value triple)
           (if triple
               (format nil "'''~A'''" value)
               (format nil "'~A'" value)))
-        (%edit-basic-string-value value triple))))
+        (%edit-basic-string-value value triple path))))
 
 (defun %edit-triple-string-p (text start node delimiter)
   (and (<= (+ start 2) (1- (edit-node-end node)))
@@ -83,8 +87,8 @@
     (%edit-fail (edit-node-path node)
                 "The replacement cannot retain the literal-string delimiter")))
 
-(defun %edit-basic-string-value (value triple)
-  (let* ((encoded (%edit-value-bytes value))
+(defun %edit-basic-string-value (value triple path)
+  (let* ((encoded (%edit-value-bytes value 0 path))
          (length (length encoded)))
     (if triple
         (format nil "\"\"\"~A\"\"\""

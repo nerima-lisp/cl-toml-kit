@@ -135,8 +135,14 @@
       (expect (signals toml-encoding-error
                 (edit-toml source '("a") value)))))
   (it "rejects edit replacements that exceed the document nesting limit"
-    (let ((cl-toml-kit:*toml-max-nesting-depth* 2)
-          (source (%edit-test-bytes "a = [1]")))
-      (expect (signals toml-encoding-error
-                (edit-toml source '("a" 0) #(#(1)))))
+    (let* ((cl-toml-kit:*toml-max-nesting-depth* 2)
+           (source (%edit-test-bytes "a = [1]"))
+           (condition
+             (handler-case
+                 (progn (edit-toml source (list "a" 0) #(#(1))) nil)
+               (error (condition) condition))))
+      (expect (typep condition 'toml-encoding-error))
+      (when (typep condition 'toml-encoding-error)
+        (expect (equal (list "a" 0 0)
+                       (toml-encoding-error-path condition))))
       (expect (string= "a = [1]" (%edit-test-text source))))))
