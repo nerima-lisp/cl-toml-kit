@@ -167,3 +167,13 @@
                            (toml-parse-error-column condition))))
       (expect (search "at position 64" report))
       (expect (not (search "null" report))))))
+(describe "TOML reader input types"
+  (it "reports the datum and allowed types for a numeric source"
+    (let ((condition
+            (handler-case (progn (parse 42) nil)
+              (type-error (error) error))))
+      (expect
+       (and (typep condition (quote type-error))
+            (= 42 (type-error-datum condition))
+            (equal (list (quote or) (quote string) (quote stream))
+                   (type-error-expected-type condition)))))))

@@ -43,4 +43,25 @@
                                  (parse
                                   (cl-codec-kit:octets-to-string
                                    edited :encoding :utf-8 :start 3))))))
+        (when (probe-file pathname) (delete-file pathname)))))
+  (it-each (("cr-lf" #(97 32 61 32 49 13 255 10) 6 2 1)
+            ("cr-followed-by-text" #(97 32 61 32 49 13 88 255) 7 2 2))
+      "reports invalid UTF-8 coordinates after CR case ~A"
+      (case-name bytes expected-position expected-line expected-column)
+    (let ((pathname
+            (merge-pathnames
+             (format nil "cl-toml-kit-reader-invalid-~A.toml" case-name)
+             (uiop:temporary-directory))))
+      (unwind-protect
+           (progn
+             (%reader-write-bytes pathname bytes)
+             (let ((condition
+                     (handler-case (progn (parse-file pathname) nil)
+                       (toml-parse-error (error) error))))
+               (expect
+                (and (typep condition (quote toml-parse-error))
+                     (equal (list expected-position expected-line expected-column)
+                            (list (toml-parse-error-position condition)
+                                  (toml-parse-error-line condition)
+                                  (toml-parse-error-column condition)))))))
         (when (probe-file pathname) (delete-file pathname))))))

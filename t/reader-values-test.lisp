@@ -204,3 +204,41 @@
              '(2 4 8 nil)
              (mapcar #'cl-toml-kit::%toml-hex-escape-width
                      '(#\x #\u #\U #\a))))))
+(describe "TOML reader reachable values"
+  (it "reports coordinates for missing inline-table equals"
+    (let ((condition
+            (handler-case (progn (parse "value = { answer 42 }") nil)
+              (toml-parse-error (error) error))))
+      (expect
+       (and (typep condition (quote toml-parse-error))
+            (equal (list 17 1 18 "=" nil)
+                   (list (toml-parse-error-position condition)
+                         (toml-parse-error-line condition)
+                         (toml-parse-error-column condition)
+                         (toml-parse-error-expected condition)
+                         (toml-parse-error-path condition)))))))
+  (it "preserves a raw tab in a basic string through parse"
+    (let ((value
+            (gethash "value"
+                     (parse (format nil "value = \"left~Cright\"" #\Tab)))))
+      (expect (string= (format nil "left~Cright" #\Tab) value))))
+  (it "reports the literal string character at a multiline CRLF"
+    (let* ((quote-character (code-char 39))
+           (condition
+             (handler-case
+                 (progn
+                   (parse
+                    (format nil "value = ~C~C~Cfirst~C~Csecond~C~C~C"
+                            quote-character quote-character quote-character
+                            #\Return #\Newline
+                            quote-character quote-character quote-character))
+                   nil)
+               (toml-parse-error (error) error))))
+      (expect
+       (and (typep condition (quote toml-parse-error))
+            (equal (list 16 1 17 "literal string character" nil)
+                   (list (toml-parse-error-position condition)
+                         (toml-parse-error-line condition)
+                         (toml-parse-error-column condition)
+                         (toml-parse-error-expected condition)
+                         (toml-parse-error-path condition))))))))

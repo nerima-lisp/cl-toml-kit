@@ -70,8 +70,9 @@
       (expect (string= expected (toml-parse-error-expected condition)))
       (expect (= 4 (toml-parse-error-position condition)))))
   (it-each (("value = 1e999999999999999999")
-            ("value = 1e-999999999999999999"))
-      "rejects out-of-range exponents in ~S"
+            ("value = 1e-999999999999999999")
+            ("value = 1.7976931348623159e308"))
+      "rejects non-representable finite floats in ~S"
       (text)
     (let* ((condition (%reader-number-error text))
            (expected
@@ -88,4 +89,26 @@
            (compensated (gethash "value" (parse source))))
       (expect (= least-positive-double-float subnormal))
       (expect (toml-float-p compensated))
-      (expect (plusp compensated)))))
+      (expect (plusp compensated))))
+  (it "reports malformed date fields and positions across CRLF and CRXLF"
+    (dolist (text '("value = 1979-xx-27"
+                    "value = 1979-05-xx"))
+      (let ((condition (%reader-number-error text)))
+        (expect (typep condition 'toml-parse-error))
+        (expect (= 8 (toml-parse-error-position condition)))
+        (expect (= 1 (toml-parse-error-line condition)))
+        (expect (= 9 (toml-parse-error-column condition)))
+        (expect
+         (string=
+          (cl-toml-kit::%toml-reader-error-message :valid-date-or-time)
+          (toml-parse-error-expected condition)))))
+    (flet ((expect-position (source expected-position expected-line expected-column)
+             (let ((condition (%reader-number-error source)))
+               (expect (typep condition 'toml-parse-error))
+               (expect (= expected-position
+                          (toml-parse-error-position condition)))
+               (expect (= expected-line (toml-parse-error-line condition)))
+               (expect (= expected-column
+                          (toml-parse-error-column condition))))))
+      (expect-position (format nil "# comment~C~Cvalue = 1__2" #\Return #\Newline) 21 2 11)
+      (expect-position (format nil "# first~CX~Cvalue = 1__2" #\Return #\Newline) 7 1 8))))

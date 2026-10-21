@@ -247,18 +247,20 @@
                 touch "$out"
               '';
           # SB-COVER hashes absolute source pathnames into report page names.
-          checks.coverage = (ctx.cl.mkCoverageReport {
-            drv = ctx.package;
-            systems = [ "cl-toml-kit" ];
-            entryPoint = "scripts/run-coverage.lisp";
-            timeoutSeconds = 900;
-            killAfterSeconds = 30;
-          }).overrideAttrs (old: {
-            nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.python3 ];
-            postInstall = (old.postInstall or "") + ''
-              ${ctx.pkgs.python3}/bin/python3 ${normalizeCoverageReport} "$out"
-            '';
-          });
+          checks.coverage =
+            (ctx.cl.mkCoverageReport {
+              drv = ctx.package;
+              systems = [ "cl-toml-kit" ];
+              entryPoint = "scripts/run-coverage.lisp";
+              timeoutSeconds = 900;
+              killAfterSeconds = 30;
+            }).overrideAttrs
+              (old: {
+                nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ ctx.pkgs.python3 ];
+                postInstall = (old.postInstall or "") + ''
+                  ${ctx.pkgs.python3}/bin/python3 ${normalizeCoverageReport} "$out"
+                '';
+              });
         };
 
       # mkPackageFlake generates the docs site and the formatting check without

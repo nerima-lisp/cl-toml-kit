@@ -32,7 +32,20 @@ x = 1 # outside"
 x = 1 # inside" nil)
             ("CRLF line endings"
              #.(format nil "a = 1 # note~C~Cb = 2 # end" #\Return #\Newline)
-             ((6 . 12) (20 . 25))))
+             ((6 . 12) (20 . 25)))
+            ("escaped quote does not end a basic string"
+             "value = \"a\\\"#b\" # outside"
+             ((16 . 25)))
+            ("trailing backslash at EOF" "value = \"unfinished\\" nil)
+            ("partial multiline delimiter at EOF"
+             "value = \"\"\"unfinished # inside\"\""
+             nil)
+            ("multiline delimiter closed at EOF"
+             "value = \"\"\"inside # text\"\"\""
+             nil)
+            ("closed multiline delimiter exposes an EOF comment"
+             "value = \"\"\"inside # text\"\"\"# outside"
+             ((27 . 36))))
       "finds comment spans for ~A"
       (case-name source expected)
     (expect (equal expected (toml-comment-spans source)))))
