@@ -319,9 +319,12 @@
                                  (funcall failure end :line-end path))
                                (funcall success nil
                                         (%skip-line-ending-at state end)))))
+                      (declare (dynamic-extent (function assignment-defined)))
                       (%define-assignment state path value
-                                          #'assignment-defined failure))))
-             (toml-read-value state value-position #'accept-value failure))
+                                          (function assignment-defined) failure))))
+             (declare (dynamic-extent (function accept-value)))
+             (toml-read-value state value-position
+                              (function accept-value) failure))
         (setf (toml-reader-state-nesting-depth state) previous-depth)))))
 
 (define-toml-rule toml-read-document (state position success failure)
@@ -352,14 +355,28 @@
 
 (defun %finalize-value (value)
   (let ((result value)
-        (pending (list (list value nil nil))))
-    (loop while pending
-          do (destructuring-bind (item parent key) (pop pending)
-               (let* ((adjustable-vector-p
+        (pending (make-array 48 :adjustable t :fill-pointer 0)))
+    (flet ((push-frame (item parent key)
+             (vector-push-extend item pending)
+             (vector-push-extend parent pending)
+             (vector-push-extend key pending))
+           (pop-frame ()
+             (let ((frame (vector-pop pending)))
+               (setf (aref pending (fill-pointer pending)) nil)
+               frame)))
+      (declare (dynamic-extent (function push-frame)
+                               (function pop-frame)))
+      (push-frame value nil nil)
+      (loop while (plusp (fill-pointer pending))
+            do (let* ((key (pop-frame))
+                      (parent (pop-frame))
+                      (item (pop-frame))
+                      (adjustable-vector-p
                         (and (vectorp item) (adjustable-array-p item)))
                       (finalized
                         (if adjustable-vector-p
-                            (map 'simple-vector #'identity item)
+                            (map (quote simple-vector)
+                                 (function identity) item)
                             item)))
                  (cond
                    ((null parent)
@@ -370,12 +387,18 @@
                     (setf (aref parent key) finalized)))
                  (cond
                    ((hash-table-p finalized)
-                    (maphash
-                     (lambda (child-key child)
-                       (push (list child finalized child-key) pending))
-                     finalized))
+                    (flet ((queue-child (child-key child)
+                             (when (or (hash-table-p child)
+                                       (and (vectorp child)
+                                            (adjustable-array-p child)))
+                               (push-frame child finalized child-key))))
+                      (declare (dynamic-extent (function queue-child)))
+                      (maphash (function queue-child) finalized)))
                    (adjustable-vector-p
                     (loop for index downfrom (1- (length item)) to 0
-                          do (push (list (aref item index) finalized index)
-                                   pending)))))))
+                          for child = (aref item index)
+                          when (or (hash-table-p child)
+                                   (and (vectorp child)
+                                        (adjustable-array-p child)))
+                            do (push-frame child finalized index)))))))
     result))
