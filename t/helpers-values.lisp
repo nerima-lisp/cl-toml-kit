@@ -45,6 +45,47 @@
         (cl-date-kit:local-date-time-of 2026 1 2 3 4 5)
         (cl-date-kit:local-date-of 2026 1 2)
         (cl-date-kit:local-time-of 3 4 5)))
+(defun toml-test-string-alphabet ()
+  (coerce
+   (append
+    (loop for code from 0 to 127
+          unless (member code '(9 34 92))
+            collect (code-char code))
+    (list #\" #\\ #\Tab #\あ #\🧪))
+   'string))
+(defun toml-test-key-generator ()
+  (cl-weave:gen-one-of
+   (cl-weave:gen-string
+    :min-length 1
+    :max-length 12
+    :alphabet (toml-test-string-alphabet))
+   (cl-weave:gen-member
+    '("plain" "key with spaces" "quoted\"key" "back\\slash" "日本語" "emoji 🧪"))))
+(defun %toml-test-date-components-generator ()
+  (cl-weave:gen-tuple
+   (cl-weave:gen-member '(:offset-date-time :local-date-time :local-date :local-time))
+   (cl-weave:gen-integer :min 2000 :max 2030)
+   (cl-weave:gen-integer :min 1 :max 12)
+   (cl-weave:gen-integer :min 1 :max 28)
+   (cl-weave:gen-integer :min 0 :max 23)
+   (cl-weave:gen-integer :min 0 :max 59)
+   (cl-weave:gen-integer :min 0 :max 59)))
+(defun toml-test-date-generator ()
+  (cl-weave:gen-map
+   (lambda (components)
+     (destructuring-bind (kind year month day hour minute second) components
+       (ecase kind
+         (:offset-date-time
+          (cl-date-kit:offset-date-time-of
+           year month day hour minute second 0 (cl-date-kit:zone-offset-utc)))
+         (:local-date-time
+          (cl-date-kit:local-date-time-of
+           year month day hour minute second))
+         (:local-date
+          (cl-date-kit:local-date-of year month day))
+         (:local-time
+          (cl-date-kit:local-time-of hour minute second)))))
+   (%toml-test-date-components-generator)))
 
 (defun toml-test-value-generator
     (self
@@ -58,38 +99,44 @@
   (cl-weave:gen-one-of
    (cl-weave:gen-one-of
     (cl-weave:gen-integer :min integer-min :max integer-max)
-    (cl-weave:gen-string :max-length string-max-length)
+    (cl-weave:gen-string
+     :max-length string-max-length
+     :alphabet (toml-test-string-alphabet))
     (cl-weave:gen-member strings)
     (cl-weave:gen-member
      (append (list t +toml-false+ 1.5d0 -0.0d0)
              additional-scalars)))
-   (cl-weave:gen-member (toml-test-date-values))
+   (toml-test-date-generator)
    (cl-weave:gen-map
-    (lambda (item)
-      (let ((table (make-hash-table :test (function equal))))
-        (setf (gethash "child" table) item)
-        table))
-    self)
+    (lambda (pair)
+      (destructuring-bind (key item) pair
+        (let ((table (make-hash-table :test (function equal))))
+          (setf (gethash key table) item)
+          table)))
+    (cl-weave:gen-tuple (toml-test-key-generator) self))
    (cl-weave:gen-vector self :min-length 0 :max-length array-max-length)
    (cl-weave:gen-map
     (lambda (items)
       (make-array (length items) :initial-contents items))
     (cl-weave:gen-vector
      (cl-weave:gen-map
-      (lambda (item)
-        (let ((table (make-hash-table :test (function equal))))
-          (setf (gethash "item" table) item)
-          table))
-      self)
+      (lambda (pair)
+        (destructuring-bind (key item) pair
+          (let ((table (make-hash-table :test (function equal))))
+            (setf (gethash key table) item)
+            table)))
+      (cl-weave:gen-tuple (toml-test-key-generator) self))
      :min-length 1 :max-length array-max-length))))
 
-(defun toml-test-document-generator (value-generator &optional (key "value"))
+(defun toml-test-document-generator
+    (value-generator &key (key-generator (toml-test-key-generator)))
   (cl-weave:gen-map
-   (lambda (value)
-     (let ((document (make-hash-table :test (function equal))))
-       (setf (gethash key document) value)
-       document))
-   value-generator))
+   (lambda (pair)
+     (destructuring-bind (key value) pair
+       (let ((document (make-hash-table :test (function equal))))
+         (setf (gethash key document) value)
+         document)))
+   (cl-weave:gen-tuple key-generator value-generator)))
 (defun %toml-test-table (&rest entries)
   (let ((table (make-hash-table :test (function equal))))
     (loop for (key value) on entries by (function cddr)

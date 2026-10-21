@@ -91,7 +91,7 @@
           (cl-weave:gen-recursive
            (cl-weave:gen-one-of
             (cl-weave:gen-integer :min -1000 :max 1000)
-            (cl-weave:gen-string :max-length 16)
+            (cl-weave:gen-string :max-length 16 :alphabet (toml-test-string-alphabet))
             (cl-weave:gen-member
              (list t +toml-false+ -0.0d0 1.5d0)))
            #'%writer-generated-values
