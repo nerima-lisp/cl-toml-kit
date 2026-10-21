@@ -30,7 +30,7 @@ Parse a TOML document.
 **Returns**: the top-level table, a hash table with `:test 'equal`. Keys and
 values use the [native value mapping](../guide/data-model.md).
 
-**Signals**: `toml-parse-error` for malformed TOML.
+**Signals**: `toml-parse-error` for malformed TOML or an input-limit error.
 
 **Example**:
 
@@ -58,8 +58,9 @@ namestring as `source-name`.
 
 **Returns**: the top-level table, a hash table with `:test 'equal`.
 
-**Signals**: `toml-parse-error` for malformed TOML. The usual file conditions
-(for example `file-error`) apply when the file cannot be read.
+**Signals**: `toml-parse-error` for malformed TOML, an input-limit error, or
+invalid UTF-8. The usual file conditions (for example `file-error`) apply when
+the file cannot be read.
 
 **Example**:
 
@@ -393,10 +394,10 @@ condition.
 
 | Variable | Default | Hard ceiling | Current enforcement | Condition when exceeded |
 | --- | ---: | ---: | --- | --- |
-| `*toml-max-nesting-depth*` | `256` | `1024` | `parse`, `parse-file`, and `edit-toml` source array/inline-table depth; `encode`, `write-toml`, and `edit-toml` replacement or added values. | The source nesting-limit condition is a subtype of both `toml-parse-error` and `toml-format-preservation-error`; encoding values signals `toml-encoding-error`. |
-| `*toml-max-input-bytes*` | `16777216` | `1073741824` | File bytes read by `parse-file`, checked before byte-vector allocation or UTF-8 decoding; also applies to octet vectors passed to `edit-toml`. | `toml-parse-error` for `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
-| `*toml-max-input-characters*` | `16777216` | `1073741824` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. | `toml-parse-error` for `parse` and `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
-| `*toml-max-number-token-length*` | `256` | `4096` | Length of integer and floating-point tokens parsed by `parse`, `parse-file`, or `edit-toml`; infinity (`inf`, `+inf`, `-inf`) and NaN (`nan`, `+nan`, `-nan`) tokens bypass the limit. | `toml-parse-error` while parsing. |
+| `*toml-max-nesting-depth*` | `256` | `1024` | `parse` and `parse-file` limit array and inline-table nesting plus dotted-key and table-header paths, including array-of-tables headers. `edit-toml` applies the limit to its source and replacement or added values. `encode` and `write-toml` limit nested tables and arrays. | `toml-parse-error` for `parse` and `parse-file`; `toml-format-preservation-error` for edit source or result limits; `toml-encoding-error` when encoding values. |
+| `*toml-max-input-bytes*` | `16777216` | `1073741824` | `parse-file` checks known file sizes before allocation; for unknown sizes, it reads incrementally through at most the effective limit plus one byte and rejects excess before decoding. `edit-toml` checks octet-vector length before decoding. | `toml-parse-error` for `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
+| `*toml-max-input-characters*` | `16777216` | `67108864` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. | `toml-parse-error` for `parse` and `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
+| `*toml-max-number-token-length*` | `256` | `4096` | `parse` and `parse-file` limit integer and finite floating-point tokens; `edit-toml` applies the reader check to its source and edited result. Infinity and NaN tokens bypass the limit. | `toml-parse-error` while parsing; `toml-format-preservation-error` if edited-result validation exceeds the limit. |
 | `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. | `toml-format-preservation-error` while editing. |
 
 For `edit-toml`, replacement values and array or inline-table additions start
@@ -430,7 +431,9 @@ See also: [TOML value model error](conditions.md#toml-value-model-error).
 
 ### `toml-parse-error`
 
-A condition, subtype of `toml-kit-error`, signalled for malformed TOML input.
+A condition, subtype of `toml-kit-error`, signalled for malformed TOML,
+input-limit errors from `parse` or `parse-file`, and invalid UTF-8 from
+`parse-file`.
 Its readers, with their default values: `toml-parse-error-source-name`
 (`nil`), `toml-parse-error-position` (`0`), `toml-parse-error-line` (`1`),
 `toml-parse-error-column` (`1`), `toml-parse-error-path` (`nil`),
@@ -448,17 +451,20 @@ See also: [TOML parse error](conditions.md#toml-parse-error).
 ### `toml-parse-error-position`
 
 Return the zero-based character offset where TOML parsing failed. For a
-`parse-file` UTF-8 decoding error, return the byte offset in the file.
+`parse-file` byte-limit error, return `0`; for a UTF-8 decoding error, return
+the byte offset in the file.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-line`
 
-Return the one-based line number where parsing failed.
+Return the one-based line number where parsing failed, or `nil` when a byte or
+character input-size limit is exceeded before TOML parsing.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-column`
 
-Return the one-based column number where parsing failed.
+Return the one-based column number where parsing failed, or `nil` when a byte
+or character input-size limit is exceeded before TOML parsing.
 See also: [TOML parse error](conditions.md#toml-parse-error).
 
 ### `toml-parse-error-path`

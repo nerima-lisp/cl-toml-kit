@@ -45,15 +45,16 @@ See also: [`toml-value-model-error`](api.md#toml-value-model-error).
 
 ## TOML parse error
 
-Malformed TOML input signals `toml-parse-error`, a subtype of
+Malformed TOML, input-limit errors from `parse` or `parse-file`, and invalid
+UTF-8 from `parse-file` signal `toml-parse-error`, a subtype of
 `toml-kit-error`. Its public readers are:
 
 | Reader | Meaning |
 | --- | --- |
 | `toml-parse-error-source-name` | Bounded, sanitized diagnostic text derived from `source-name`; `nil` if omitted or supplied as `nil`. |
-| `toml-parse-error-position` | Zero-based character offset where parsing failed, or byte offset for a `parse-file` UTF-8 decoding error. Default `0`. |
-| `toml-parse-error-line` | One-based line number where parsing failed. Default `1`. |
-| `toml-parse-error-column` | One-based column number where parsing failed. Default `1`. |
+| `toml-parse-error-position` | Zero-based character offset where parsing failed; `0` for a `parse-file` byte-limit error; byte offset for a `parse-file` UTF-8 decoding error. Default `0`. |
+| `toml-parse-error-line` | One-based line number where parsing failed, or `nil` when a byte or character input-size limit is exceeded before TOML parsing. Default `1`. |
+| `toml-parse-error-column` | One-based column number where parsing failed, or `nil` when a byte or character input-size limit is exceeded before TOML parsing. Default `1`. |
 | `toml-parse-error-path` | Path of table keys and vector indices from the document root to the failure; `nil` when no path applies. |
 | `toml-parse-error-expected` | Short description of what the parser expected; `nil` when the parser did not record one. |
 | `toml-parse-error-context` | The context label of the failure; defaults to `"TOML"`. |
@@ -148,11 +149,12 @@ index, or requests a structural change inside an ambiguous dotted-key
 definition. It also signals this condition when an addition or deletion would
 make comment, delimiter, or table ownership unclear; when a deletion would
 remove or strand a comment; or when an array insertion would cross a trailing
-element comment. After an edit, a parsed-value mismatch also signals this
-condition. Omitting both `new-value` and `:delete t` from an `edit-toml` call
-signals this condition; passing `nil` as `new-value` does not request deletion.
-The `edit-toml` input byte vector is unchanged when it signals
-`toml-parse-error` or `toml-format-preservation-error`.
+element comment. Nesting-limit failures while scanning the source or validating
+the edited result also signal this condition. After an edit, a parsed-value
+mismatch signals this condition. Omitting both `new-value` and `:delete t` from
+an `edit-toml` call signals this condition; passing `nil` as `new-value` does
+not request deletion. The input byte vector is unchanged when `edit-toml`
+signals `toml-parse-error` or `toml-format-preservation-error`.
 
 ## Reports
 
