@@ -91,22 +91,10 @@
           (fmakunbound name))
         (unintern name package))))
   (it "signals a value model error for an unknown emitter kind"
-    (let ((cl-toml-kit::*toml-writer-emitter-specifications*
-            '((:unknown
-               (write-string cl-toml-kit::value
-                             cl-toml-kit::stream)))))
-      (expect
-        (signals toml-value-model-error
-          (macroexpand-1
-            (list* 'cl-toml-kit::toml-value-typecase
-                   'cl-toml-kit::value
-                   (append
-                     cl-toml-kit::*toml-writer-emitter-specifications*
-                     '((t
-                        (cl-toml-kit::%write-fallback-value
-                         cl-toml-kit::value
-                         cl-toml-kit::stream
-                         cl-toml-kit::path)))))))))))
+    (expect
+     (signals toml-value-model-error
+       (macroexpand-1
+        '(cl-toml-kit::toml-value-typecase x (:unknown nil)))))))
 
 (describe "TOML writer root context"
   (it "starts a fresh context even when another writer context is active"
