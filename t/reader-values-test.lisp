@@ -241,4 +241,29 @@
                          (toml-parse-error-line condition)
                          (toml-parse-error-column condition)
                          (toml-parse-error-expected condition)
-                         (toml-parse-error-path condition))))))))
+                         (toml-parse-error-path condition)))))))
+  (it "rejects an inline-table dotted key that extends a scalar"
+    (let ((condition
+            (handler-case
+                (progn (parse "value = { answer = 42, answer.next = 7 }") nil)
+              (toml-parse-error (error) error))))
+      (expect
+       (and (typep condition (quote toml-parse-error))
+            (string= "inline table"
+                     (toml-parse-error-expected condition))))))
+  (it "rejects extension of a closed nested inline table"
+    (let ((condition
+            (handler-case
+                (progn
+                  (parse "value = { nested = { answer = 42 }, nested.extra = 7 }")
+                  nil)
+              (toml-parse-error (error) error))))
+      (expect
+       (and (typep condition (quote toml-parse-error))
+            (string= "inline table"
+                     (toml-parse-error-expected condition))))))
+  (it "accepts a raw tab inside a quoted key"
+    (let* ((key (format nil "left~Cright" #\Tab))
+           (table (parse (format nil "\"left~Cright\" = 42" #\Tab))))
+      (expect (= 1 (hash-table-count table)))
+      (expect (toml-test-value= 42 (gethash key table))))))
