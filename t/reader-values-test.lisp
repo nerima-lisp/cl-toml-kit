@@ -167,9 +167,9 @@
       (expect (= evaluations 1))))
   (it "generates an integer-range predicate with one argument evaluation"
     (let* ((macro-name (find-symbol "DEFINE-TOML-INTEGER-RANGE" "CL-TOML-KIT"))
-           (minimum-name (find-symbol "+TOML-MIN-INTEGER+" "CL-TOML-KIT"))
-           (maximum-name (find-symbol "+TOML-MAX-INTEGER+" "CL-TOML-KIT"))
-           (predicate-name (find-symbol "%TOML-INTEGER-IN-RANGE-P" "CL-TOML-KIT"))
+           (minimum-name (gensym "TOML-MIN-INTEGER-"))
+           (maximum-name (gensym "TOML-MAX-INTEGER-"))
+           (predicate-name (gensym "TOML-INTEGER-IN-RANGE-P-"))
            (expansion
              (macroexpand-1
               (list macro-name
@@ -180,7 +180,7 @@
            (argument (first (third definition)))
            (evaluations 0))
       (expect (and (symbolp argument) (null (symbol-package argument))))
-      (eval definition)
+      (eval expansion)
       (expect (funcall predicate-name (progn (incf evaluations) 0)))
       (expect (= evaluations 1))))
   (it "maps lookup entries and signals on an unknown key"
