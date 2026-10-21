@@ -2,7 +2,7 @@
 (in-package #:cl-toml-kit)
 
 (defstruct (toml-reader-state (:constructor %make-reader-state))
-  (source "" :type simple-string)
+  (source "" :type string)
   source-name
   (position 0 :type fixnum)
   (length 0 :type fixnum)

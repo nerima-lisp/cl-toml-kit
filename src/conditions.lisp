@@ -190,22 +190,27 @@
                     (line (toml-parse-error-line condition))
                     (column (toml-parse-error-column condition))
                     (position (toml-parse-error-position condition))
-                    (line-text (if (integerp line)
-                                   (format nil "~D" line)
-                                 (%diagnostic-string line)))
-                    (column-text (if (integerp column)
-                                     (format nil "~D" column)
-                                   (%diagnostic-string column)))
-                    (position-text (if (integerp position)
-                                       (format nil "~D" position)
-                                     (%diagnostic-string position))))
+                    (line-text (if (integerp line) (format nil "~D" line)
+                                   (%diagnostic-string line)))
+                    (column-text (if (integerp column) (format nil "~D" column)
+                                     (%diagnostic-string column)))
+                    (position-text (if (integerp position) (format nil "~D" position)
+                                       (%diagnostic-string position)))
+                    (location-text
+                     (cond
+                       ((and (integerp line) (integerp column))
+                        (format nil "at line ~D, column ~D (position ~A)"
+                                line column position-text))
+                       ((and line column)
+                        (format nil "at line ~A, column ~A (position ~A)"
+                                line-text column-text position-text))
+                       (t (format nil "at position ~A" position-text)))))
                (format stream
-                       "TOML parse error~@[ in ~A~] at line ~A, column ~A (position ~A)~@[ at ~A~]~@[; expected ~A~]"
+                       "TOML parse error~@[ in ~A~] ~A~@[ at ~A~]~@[; expected ~A~]"
                        (and source-name (%diagnostic-string source-name))
-                       line-text
-                       column-text
-                       position-text
-                       (%diagnostic-path-report-string (toml-parse-error-path condition))
+                       location-text
+                       (%diagnostic-path-report-string
+                        (toml-parse-error-path condition))
                        (and expected (%diagnostic-string expected 128)))))))
 
 (defun make-toml-parse-error (&key source-name position line column path expected context text)

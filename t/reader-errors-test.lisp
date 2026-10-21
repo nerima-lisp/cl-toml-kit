@@ -145,4 +145,25 @@
                          (toml-parse-error-line condition)
                          (toml-parse-error-column condition)
                          (toml-parse-error-expected condition)
-                         (toml-parse-error-path condition))))))))
+                         (toml-parse-error-path condition)))))))
+  (it "keeps absolute position and bounded text for character-limit errors"
+    (let* ((*toml-max-input-characters* 64)
+           (condition
+             (handler-case
+                 (parse (make-string 4096 :initial-element (aref "x" 0)))
+               (toml-parse-error (condition) condition))))
+      (expect (typep condition 'toml-parse-error))
+      (expect (= 64 (toml-parse-error-position condition)))
+      (expect (<= (length (toml-parse-error-text condition)) 40))))
+  (it "omits unavailable coordinates from character-limit reports"
+    (let* ((*toml-max-input-characters* 64)
+           (condition
+             (handler-case
+                 (parse (make-string 4096 :initial-element (aref "x" 0)))
+               (toml-parse-error (condition) condition)))
+           (report (princ-to-string condition)))
+      (expect (equal (list nil nil)
+                     (list (toml-parse-error-line condition)
+                           (toml-parse-error-column condition))))
+      (expect (search "at position 64" report))
+      (expect (not (search "null" report))))))

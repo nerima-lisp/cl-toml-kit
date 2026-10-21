@@ -62,37 +62,57 @@
         (expect (string= "TOML input character limit exceeded"
                          (toml-parse-error-expected condition)))
         (expect (= 5 (file-position stream))))))
+  (it "reports source location for file byte-limit errors"
+      (let* ((bytes (make-array 4 :element-type '(unsigned-byte 8)
+                                :initial-element #xff))
+             (*toml-max-input-bytes* 3)
+             (source-name nil)
+             (condition
+              (%reader-input-with-byte-file
+               bytes
+               (lambda (pathname)
+                 (setf source-name (namestring pathname))
+                 (%reader-input-error
+                  (lambda () (parse-file pathname))))))
+             (report (princ-to-string condition)))
+        (expect (typep condition 'toml-parse-error))
+        (expect (= 0 (toml-parse-error-position condition)))
+        (expect (null (toml-parse-error-line condition)))
+        (expect (null (toml-parse-error-column condition)))
+        (expect (search "at position 0" report))
+        (expect (not (search "at line" report)))
+        (expect (not (search "column" report)))
+        (expect (not (search "null" report)))
+        (expect (string= source-name
+                         (toml-parse-error-source-name condition)))))
   (it "checks the file byte limit before decoding invalid UTF-8"
     (let* ((bytes (make-array 4 :element-type '(unsigned-byte 8)
                               :initial-element #xff))
            (*toml-max-input-bytes* 3)
-           (source-name nil)
            (condition
              (%reader-input-with-byte-file
               bytes
               (lambda (pathname)
-                (setf source-name (namestring pathname))
                 (%reader-input-error
                  (lambda () (parse-file pathname)))))))
-      (expect (typep condition 'toml-parse-error))
-      (expect (and (= 0 (toml-parse-error-position condition))
-                   (string= source-name
-                            (toml-parse-error-source-name condition))))
       (expect (string= "TOML input byte limit exceeded"
                        (toml-parse-error-expected condition)))))
   (it "checks decoded file characters before parsing invalid TOML"
-    (let* ((text "value = [")
-           (bytes (map '(vector (unsigned-byte 8)) #'char-code text))
-           (*toml-max-input-bytes* (length bytes))
-           (*toml-max-input-characters* (1- (length text)))
-           (condition
-             (%reader-input-with-byte-file
-              bytes
-              (lambda (pathname)
-                (%reader-input-error
-                 (lambda () (parse-file pathname)))))))
-      (expect (typep condition 'toml-parse-error))
-      (expect (string= "TOML input character limit exceeded"
-                       (toml-parse-error-expected condition)))
-      (expect (= (1- (length text))
-                 (toml-parse-error-position condition))))))
+      (let* ((text "value = [")
+             (bytes (map '(vector (unsigned-byte 8)) #'char-code text))
+             (*toml-max-input-bytes* (length bytes))
+             (*toml-max-input-characters* (1- (length text)))
+             (condition
+              (%reader-input-with-byte-file
+               bytes
+               (lambda (pathname)
+                 (%reader-input-error
+                  (lambda () (parse-file pathname)))))))
+        (expect (typep condition 'toml-parse-error))
+        (expect (string= "TOML input character limit exceeded"
+                         (toml-parse-error-expected condition)))
+        (expect (= (1- (length text))
+                   (toml-parse-error-position condition)))
+        (expect (null (toml-parse-error-line condition)))
+        (expect (null (toml-parse-error-column condition)))
+        (expect (string= text (toml-parse-error-text condition))))))

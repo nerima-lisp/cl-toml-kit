@@ -5,16 +5,17 @@
   (multiple-value-bind (limit message)
       (%toml-limit :input-characters)
     (flet ((input-limit-error (input position)
-             (let* ((simple-source
-                      (if (typep input 'simple-string)
-                          input
-                          (coerce (subseq input 0 position) 'simple-string)))
-                    (state
-                      (%make-reader-state
-                       :source simple-source
-                       :source-name source-name
-                       :length (length simple-source))))
-               (%error-at-message state position message))))
+             (let* ((window-start (max 0 (- position 20)))
+                    (window-end (min (length input) (+ position 20)))
+                    (window (subseq input window-start window-end)))
+               (error
+                (make-toml-parse-error
+                 :source-name source-name
+                 :position position
+                 :line nil
+                 :column nil
+                 :expected message
+                 :text window)))))
       (etypecase source
         (string
          (when (> (length source) limit)
@@ -108,14 +109,39 @@
   (let ((source-name (namestring pathname)))
     (with-open-file (stream pathname :direction :input
                             :element-type '(unsigned-byte 8))
-      (let ((byte-length (file-length stream)))
-        (multiple-value-bind (byte-limit byte-message)
-            (%toml-limit :input-bytes)
-          (when (> byte-length byte-limit)
-            (%error-at-message
-             (%make-reader-state :source "" :source-name source-name :length 0)
-             0 byte-message)))
-        (let ((bytes (make-array byte-length
-                                 :element-type '(unsigned-byte 8))))
-          (read-sequence bytes stream)
-          (parse (%decode-utf8 bytes pathname) :source-name source-name))))))
+      (multiple-value-bind (byte-limit byte-message)
+          (%toml-limit :input-bytes)
+        (labels ((input-limit-error ()
+                   (error
+                    (make-toml-parse-error
+                     :source-name source-name
+                     :position 0
+                     :line nil
+                     :column nil
+                     :expected byte-message))))
+          (let ((byte-length (file-length stream)))
+            (when (and (integerp byte-length) (> byte-length byte-limit))
+              (input-limit-error))
+            (let ((bytes
+                   (make-array (min 65536 (1+ byte-limit))
+                               :element-type '(unsigned-byte 8)
+                               :adjustable t :fill-pointer 0)))
+              (loop
+                for start = (fill-pointer bytes)
+                for read-end = (min (1+ byte-limit) (+ start 65536))
+                do (when (> read-end (array-total-size bytes))
+                     (adjust-array
+                      bytes
+                      (min (1+ byte-limit)
+                           (max read-end (* 2 (array-total-size bytes))))
+                      :fill-pointer start))
+                   (setf (fill-pointer bytes) read-end)
+                   (let ((end (read-sequence bytes stream
+                                             :start start :end read-end)))
+                     (setf (fill-pointer bytes) end)
+                     (when (> end byte-limit)
+                       (input-limit-error))
+                     (when (< end read-end)
+                       (return))))
+              (parse (%decode-utf8 bytes pathname)
+                     :source-name source-name))))))))
