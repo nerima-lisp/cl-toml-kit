@@ -173,4 +173,106 @@
                    (toml-parse-error-position condition)))
         (expect (null (toml-parse-error-line condition)))
         (expect (null (toml-parse-error-column condition)))
-        (expect (string= text (toml-parse-error-text condition))))))
+        (expect (string= text (toml-parse-error-text condition)))))
+  (it "reports diagnostic positions at CRLF boundaries"
+    (dolist (case
+             (list (list (format nil "a~C~C" #\Return #\Newline) 2 2 1)
+                   (list (format nil "a~CX~C" #\Return #\Newline) 3 2 2)
+                   (list (format nil "a~C~CX" #\Return #\Newline) 3 2 1)))
+      (destructuring-bind (source position expected-line expected-column) case
+        (let ((condition
+                (%reader-input-error
+                 (lambda ()
+                   (cl-toml-kit::%error-at-message
+                    (cl-toml-kit::%make-reader-state
+                     :source source :length (length source))
+                    position "reader position probe")))))
+          (expect (typep condition (find-class (quote cl-toml-kit::toml-parse-error))))
+          (expect (= position (toml-parse-error-position condition)))
+          (expect (= expected-line (toml-parse-error-line condition)))
+          (expect (= expected-column (toml-parse-error-column condition)))
+          (expect (string= "reader position probe"
+                           (toml-parse-error-expected condition)))))))
+  (it "preserves TAB in basic and literal strings"
+    (let* ((tab #\Tab)
+           (quote-char (code-char 39))
+           (source
+             (format nil
+                     "basic = \"left~Cright\"~%literal = ~Cleft~Cright~C"
+                     tab quote-char tab quote-char))
+           (document (parse source)))
+      (expect (string= (format nil "left~Cright" tab)
+                       (gethash "basic" document)))
+      (expect (string= (format nil "left~Cright" tab)
+                       (gethash "literal" document)))))
+  (it "accepts TAB and rejects other controls in reader string helpers"
+    (dolist (delimiter (list #\" (code-char 39)))
+      (let* ((tab-source (format nil "~C~C~C" delimiter #\Tab delimiter))
+             (tab-state
+               (cl-toml-kit::%make-reader-state
+                :source tab-source :length (length tab-source)))
+             (tab-result
+               (cl-toml-kit::%read-string-character
+                tab-state 1 delimiter nil
+                (lambda (next) (list :accepted next))
+                (lambda (position expected path)
+                  (list :rejected position expected path)))))
+        (expect (= 2
+                   (cl-toml-kit::%simple-string-end tab-state 0 delimiter)))
+        (expect (equal (list :accepted 2) tab-result))
+        (expect (string= (string #\Tab)
+                         (coerce
+                          (cl-toml-kit::toml-reader-state-buffer tab-state)
+                          (quote string)))))
+      (let* ((control (code-char 1))
+             (source (format nil "~C~C~C" delimiter control delimiter))
+             (state
+               (cl-toml-kit::%make-reader-state
+                :source source :length (length source)))
+             (result
+               (cl-toml-kit::%read-string-character
+                state 1 delimiter nil
+                (lambda (next) (list :accepted next))
+                (lambda (position expected path)
+                  (list :rejected position expected path)))))
+        (expect (null
+                 (cl-toml-kit::%simple-string-end state 0 delimiter)))
+        (expect (equal
+                 (list :rejected 1 :printable-string-character nil)
+                 result)))))
+  (it "reports public control character positions"
+    (let* ((control (code-char 1))
+           (source (format nil "value = \"left~Cright\"" control))
+           (position (position control source))
+           (condition
+             (%reader-input-error
+              (lambda () (parse source)))))
+      (expect (typep condition
+                     (find-class (quote cl-toml-kit::toml-parse-error))))
+      (expect (string= "printable character"
+                       (toml-parse-error-expected condition)))
+      (expect (= position (toml-parse-error-position condition)))
+      (expect (= 1 (toml-parse-error-line condition)))
+      (expect (= (1+ position) (toml-parse-error-column condition)))))
+  (it "reports invalid UTF-8 positions after CR boundaries"
+    (dolist (case
+             (list (list (vector 97 13 255 10) 2 2 1)
+                   (list (vector 97 13 88 255) 3 2 2)
+                   (list (vector 97 13 10 255) 3 2 1)))
+      (destructuring-bind (octets position expected-line expected-column) case
+        (let* ((bytes
+                 (make-array (length octets)
+                            :element-type (quote (unsigned-byte 8))
+                            :initial-contents octets))
+               (condition
+                 (%reader-input-with-byte-file
+                  bytes
+                  (lambda (pathname)
+                    (%reader-input-error
+                     (lambda () (parse-file pathname)))))))
+          (expect (typep condition
+                         (find-class (quote cl-toml-kit::toml-parse-error))))
+          (expect (string= "UTF-8" (toml-parse-error-expected condition)))
+          (expect (= position (toml-parse-error-position condition)))
+          (expect (= expected-line (toml-parse-error-line condition)))
+          (expect (= expected-column (toml-parse-error-column condition))))))))

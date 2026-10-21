@@ -194,6 +194,14 @@
       (expect (hash-table-p table))
       (expect (= 1 (gethash "p" nested)))
       (expect (= 1 (gethash "q" nested)))))
+          (it "finalizes nested arrays as simple vectors"
+    (let* ((*toml-max-nesting-depth* 2)
+           (result (parse "value = [[1]]"))
+           (table (gethash "value" result))
+           (nested (aref table 0)))
+      (expect (simple-vector-p table))
+      (expect (simple-vector-p nested))
+      (expect (equalp #(#(1)) table))))
           (it "accepts inline dotted keys at depth one below the limit"
     (let* ((*toml-max-nesting-depth* 6)
            (result (parse "x = {a.b.c.d.p = 1, a.b.c.d.q = 1}"))
@@ -439,6 +447,20 @@
                      (%reader-test-nesting-error "a.\"b\".c = 1"))
                    (escaped-condition
                      (%reader-test-nesting-error "a.\"b\\u0063\".c = 1")))
+              (expect (equal expected-error-report
+                             (%reader-test-condition-report simple-condition)))
+              (expect (equal expected-error-report
+                             (%reader-test-condition-report escaped-condition)))))
+          (it "rejects triple-quoted keys before dotted-key lookahead"
+            (let* ((*toml-max-nesting-depth* 1)
+                   (expected-message
+                     (cl-toml-kit::%toml-reader-error-message :single-line-key))
+                   (expected-error-report
+                     (list (quote toml-parse-error) 2 expected-message))
+                   (simple-condition
+                     (%reader-test-nesting-error "a.\"\"\"b\"\"\".c = 1"))
+                   (escaped-condition
+                     (%reader-test-nesting-error "a.\"\"\"b\\u0063\"\"\".c = 1")))
               (expect (equal expected-error-report
                              (%reader-test-condition-report simple-condition)))
               (expect (equal expected-error-report
