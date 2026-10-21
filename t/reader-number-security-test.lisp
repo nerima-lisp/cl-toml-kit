@@ -5,7 +5,7 @@
     (toml-parse-error (condition) condition)))
 
 (describe "reader number security"
-  (it "preserves full error messages and source coordinates"
+  (it "preserves custom numeric diagnostic text and offset"
     (let ((condition
             (handler-case
                 (cl-toml-kit::%error-at-message
@@ -19,14 +19,38 @@
               (toml-parse-error (error) error))))
       (expect (string= "custom numeric diagnostic"
                        (toml-parse-error-expected condition)))
-      (expect (and (= 3 (toml-parse-error-position condition))
-                   (= 2 (toml-parse-error-line condition))
-                   (= 1 (toml-parse-error-column condition))
-                   (equal '("items" "0") (toml-parse-error-path condition))))
-      (expect (and (string= "numbers.toml"
-                            (toml-parse-error-source-name condition))
-                   (search "custom numeric diagnostic"
-                           (toml-parse-error-text condition))))))
+      (expect (= 3 (toml-parse-error-position condition)))))
+  (it "preserves CRLF line and column in numeric diagnostics"
+    (let ((condition
+            (handler-case
+                (cl-toml-kit::%error-at-message
+                 (cl-toml-kit::%make-reader-state
+                  :source (format nil "a~C~Cx = 1" #\Return #\Newline)
+                  :length 8
+                  :source-name "numbers.toml")
+                 3
+                 "custom numeric diagnostic"
+                 '("items" "0"))
+              (toml-parse-error (error) error))))
+      (expect (= 2 (toml-parse-error-line condition)))
+      (expect (= 1 (toml-parse-error-column condition)))))
+  (it "preserves the path and source metadata for numeric diagnostics"
+    (let ((condition
+            (handler-case
+                (cl-toml-kit::%error-at-message
+                 (cl-toml-kit::%make-reader-state
+                  :source (format nil "a~C~Cx = 1" #\Return #\Newline)
+                  :length 8
+                  :source-name "numbers.toml")
+                 3
+                 "custom numeric diagnostic"
+                 '("items" "0"))
+              (toml-parse-error (error) error))))
+      (expect (equal '("items" "0") (toml-parse-error-path condition)))
+      (expect (string= "numbers.toml"
+                       (toml-parse-error-source-name condition)))
+      (expect (search "custom numeric diagnostic"
+                      (toml-parse-error-text condition)))))
   (it "rejects a ten-thousand-digit integer at the token limit"
     (let* ((condition
              (%reader-error
