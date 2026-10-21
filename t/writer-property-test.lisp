@@ -202,8 +202,11 @@
                         (cl-weave:run-mutations
                          form
                          (lambda (mutated-form mutation)
-                           (%writer-mutation-survives-p
-                            mutated-form mutation target samples))))))
+                           (handler-case
+                             (sb-ext:with-timeout 0.5
+                               (%writer-mutation-survives-p
+                                mutated-form mutation target samples))
+                           (sb-ext:timeout () nil)))))))
           (value-results (cdr (assoc value-target results-by-target)))
           (branch-results
             (loop for result in value-results
@@ -257,7 +260,7 @@
                     (cl-weave:mutation-result-status
                      (cdr (first matches)))))))
        branch-specifications))
-     (expect (plusp (getf summary :total)))
+     (expect (= 16 (getf summary :total)))
      (expect (= (getf summary :total)
                 (getf summary :killed)))
      (expect (zerop (getf summary :survived)))
