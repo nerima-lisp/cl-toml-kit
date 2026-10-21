@@ -172,9 +172,20 @@
    ((generated-samples
      (cl-weave:gen-list (%writer-document-generator)
                         :min-length 100 :max-length 100)))
-   (:trials 1)
-   (let* ((forms (%writer-mutation-forms))
+   (:trials 1 :timeout-per-trial 180)
+   (let* ((timeout-seconds 10)
+          (forms (%writer-mutation-forms))
           (samples (%writer-mutation-samples generated-samples))
+          (control-results
+            (loop for (target form) in forms
+                  collect
+                  (let ((started (get-internal-real-time)))
+                    (let ((matched
+                            (%writer-mutation-survives-p
+                             form nil target samples)))
+                      (cons matched
+                            (/ (- (get-internal-real-time) started)
+                               (float internal-time-units-per-second 1d0)))))))
           (value-target (find-symbol "%WRITE-VALUE" "CL-TOML-KIT"))
           (branch-specifications
             (let ((*package* (find-package "CL-TOML-KIT")))
@@ -202,11 +213,9 @@
                         (cl-weave:run-mutations
                          form
                          (lambda (mutated-form mutation)
-                           (handler-case
-                             (sb-ext:with-timeout 0.5
-                               (%writer-mutation-survives-p
-                                mutated-form mutation target samples))
-                           (sb-ext:timeout () nil)))))))
+                           (%writer-mutation-survives-p
+                            mutated-form mutation target samples))
+                         :timeout-ms (* timeout-seconds 1000)))))
           (value-results (cdr (assoc value-target results-by-target)))
           (branch-results
             (loop for result in value-results
@@ -233,9 +242,22 @@
                     collect (cons (first expected) result)))
           (results (loop for entry in results-by-target
                          append (cdr entry)))
+          (timeout-count
+            (count-if
+             (lambda (result)
+               (and (eq :errored
+                        (cl-weave:mutation-result-status result))
+                    (typep (cl-weave:mutation-result-condition result)
+                           'cl-weave:test-timeout)))
+             results))
           (summary (cl-weave:mutation-summary results)))
      (expect (= 2 (length forms)))
      (expect (%writer-generated-samples-match-p samples))
+     (expect (every #'car control-results))
+     (expect
+      (every (lambda (entry)
+               (< (cdr entry) (/ timeout-seconds 2)))
+             control-results))
      (expect
       (every
        (lambda (entry)
@@ -264,4 +286,5 @@
      (expect (= (getf summary :total)
                 (getf summary :killed)))
      (expect (zerop (getf summary :survived)))
-     (expect (zerop (getf summary :errored))))))
+     (expect (zerop (getf summary :errored)))
+     (expect (= 0 timeout-count)))))
