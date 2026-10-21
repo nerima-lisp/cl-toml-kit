@@ -494,12 +494,14 @@
           (expect (string= message (toml-encoding-error-message condition)))
           (expect (equal '("child") (toml-encoding-error-path condition)))))))
   (it "writes 1024 nested containers under the hard ceiling"
-    (let ((cl-toml-kit:*toml-max-nesting-depth*
-            (1+ cl-toml-kit::+toml-max-nesting-depth-ceiling+))
-          (root (%writer-table))
-          (parent nil))
-      (setf parent root)
-      (loop repeat cl-toml-kit::+toml-max-nesting-depth-ceiling+
+    (let* ((ceiling cl-toml-kit::+toml-max-nesting-depth-ceiling+)
+           (cl-toml-kit:*toml-max-nesting-depth* (1+ ceiling))
+           (root (%writer-table))
+           (first-table (%writer-table))
+           (parent first-table))
+      ;; The root is uncounted; the array and first inline table use levels 1 and 2.
+      (setf (gethash "next" root) (vector 0 first-table))
+      (loop repeat (- ceiling 2)
             do (let ((child (%writer-table)))
                  (setf (gethash "next" parent) child
                        parent child)))
@@ -507,10 +509,17 @@
       (multiple-value-bind (limit message)
           (cl-toml-kit::%toml-limit :nesting-depth)
         (declare (ignore message))
-        (expect (= limit
-                   cl-toml-kit::+toml-max-nesting-depth-ceiling+)))
-      (expect (= (1+ cl-toml-kit::+toml-max-nesting-depth-ceiling+)
-                 (count #\Newline (encode root))))))
+        (expect (= limit ceiling)))
+      (let* ((encoded (encode root))
+             (parsed (parse encoded))
+             (cursor (aref (gethash "next" parsed) 1))
+             (depth 2))
+        (loop for next = (gethash "next" cursor)
+              while (toml-table-p next)
+              do (incf depth)
+                 (setf cursor next))
+        (expect (= depth ceiling))
+        (expect (toml-test-value= root parsed)))))
   (it "writes direct values at the configured nesting limit"
     (labels ((write-value-direct (value)
                (with-output-to-string (stream)
