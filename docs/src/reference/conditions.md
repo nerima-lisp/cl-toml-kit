@@ -4,12 +4,17 @@
 slots. Parse, encoding, and format-preservation error helpers normalize
 diagnostic strings before storing them. Report methods normalize messages again
 when printing, including values supplied through direct condition construction.
-Diagnostic text is limited to 256 characters after escaping, except `expected`,
-which is limited to 128.
+The `toml-value-model-error-message` reader is an exception: it returns the
+stored value unchanged, even when that value is not a string; only the report
+method normalizes it for printing.
+Each diagnostic string is limited to 256 characters after escaping, except
+`expected`, which is limited to 128 characters. Integer `line`, `column`, and
+`position` values are printed as decimal numbers and are not subject to these
+limits.
 In diagnostic strings, newlines, carriage returns, tabs, and backspaces use
 `\n`, `\r`, `\t`, and `\b`; other C0 and C1 control characters use `\uXXXX`.
 Surrogate code points also use `\uXXXX`.
-Stored error paths retain at most 32 components and add an ellipsis marker when
+Stored error paths retain at most 32 components and end with `:...` when
 truncated. Their printed form is limited to 256 characters, and each component
 is limited to 64 printed characters. String path components escape controls
 and surrogate code points. Integer components remain integers when their
@@ -19,12 +24,9 @@ printed form fits both caps; otherwise, oversized integers use the bounded
 ## The shared base condition
 
 `toml-kit-error` is a subtype of `error` and the base of the library-defined
-error conditions. It carries no slots. Catch it when you want to react to a
-library-defined parse, encoding, or format-preservation failure without
-distinguishing among them; the concrete types below add the readers you can
-use once you catch one. Some operations can also signal ordinary Common Lisp
-conditions. For example, `write-toml` signals `type-error` for a non-stream,
-and `parse-file` can propagate file conditions.
+error conditions. It carries no slots. Some operations can also signal ordinary
+Common Lisp conditions. For example, `write-toml` signals `type-error` for a
+non-stream, and `parse-file` can propagate file conditions.
 
 See also: [`toml-kit-error`](api.md#toml-kit-error).
 
@@ -33,9 +35,11 @@ See also: [`toml-kit-error`](api.md#toml-kit-error).
 `toml-value-model-error` is a subtype of `toml-kit-error`. The
 `toml-value-typecase` macro signals it during macro expansion when a clause
 uses an unknown TOML kind keyword. Read `toml-value-model-error-message` for
-the explanation. The reader returns the stored message, which can be a
-non-string, unescaped, or exceed the diagnostic limit. The report method
-sanitizes it only when printing the condition.
+the explanation. For an unknown kind, the macro stores a string that the
+reader returns without escaping or truncation. A long kind name can make that
+string exceed the diagnostic limit. Direct `make-condition` calls can also
+store a non-string message, which the reader returns unchanged. The report
+method sanitizes and bounds the message only when printing the condition.
 
 See also: [`toml-value-model-error`](api.md#toml-value-model-error).
 
@@ -55,9 +59,9 @@ Malformed TOML input signals `toml-parse-error`, a subtype of
 | `toml-parse-error-context` | The context label of the failure; defaults to `"TOML"`. |
 | `toml-parse-error-text` | A bounded, sanitized snippet of the input near the failure. Default `""`. |
 
-`source-name` is normalized when the parse error is constructed. Pathnames are
-converted with `namestring`; other values become diagnostic text. Control
-characters in that text are escaped, then it is capped at 256 characters.
+The library normalizes `source-name` only when it signals `toml-parse-error`.
+Pathnames are converted with `namestring`; other values become diagnostic text.
+Control characters in that text are escaped, then it is capped at 256 characters.
 `nil` remains `nil`. The report prints the normalized text with `~A`.
 
 ```lisp
@@ -75,7 +79,8 @@ The `:report` method renders the condition as one human-readable line. The
 `in <source-name>` part appears only when a source name was given, `at <path>`
 only when a path applies, and `; expected <expected>` only when the parser
 recorded an expected value. `context` and `text` are available only through
-their readers. For the input above, the report is:
+their readers. For the input above, an illustrative report (not a stable
+wording contract) is:
 
 ```text
 TOML parse error in config.toml at line 1, column 21 (position 20); expected closing string delimiter
@@ -119,7 +124,7 @@ limits](api.md#shared-processing-limits). Strings or keys that contain
 surrogate code points are also rejected. Each failure signals
 `toml-encoding-error`.
 
-The `:report` method renders the condition as one line:
+An illustrative `:report` output (not a stable wording contract) is:
 
 ```text
 TOML encode error at ("n"): Integer is outside TOML's signed 64-bit range (value integer)
@@ -136,15 +141,18 @@ without rewriting unrelated bytes. `toml-format-preservation-error-message`
 returns the explanation and `toml-format-preservation-error-path` returns the
 requested logical path.
 
-Malformed input is rejected by `toml-parse-error` before an edit is applied.
-This condition covers paths that match more than one source value, unindexed
-array-of-tables paths, structural edits inside ambiguous dotted-key
-definitions, and additions or deletions whose comments, delimiters, or table
-ownership cannot be determined. It also covers a parsed-value mismatch after
-an edit, deletion of a span containing `#` or immediately following a comment
-line, and array insertion across a trailing comment. A missing edit value is
-invalid; it is not interpreted as deletion. The input byte vector is not
-modified when either condition is signaled.
+`edit-toml` rejects malformed input with `toml-parse-error` before applying an
+edit. It signals `toml-format-preservation-error` when a path is ambiguous,
+including when it matches multiple source values, omits an array-of-tables
+index, or requests a structural change inside an ambiguous dotted-key
+definition. It also signals this condition when an addition or deletion would
+make comment, delimiter, or table ownership unclear; when a deletion would
+remove or strand a comment; or when an array insertion would cross a trailing
+element comment. After an edit, a parsed-value mismatch also signals this
+condition. Omitting both `new-value` and `:delete t` from an `edit-toml` call
+signals this condition; passing `nil` as `new-value` does not request deletion.
+The `edit-toml` input byte vector is unchanged when it signals
+`toml-parse-error` or `toml-format-preservation-error`.
 
 ## Reports
 
@@ -155,8 +163,7 @@ report text.
 
 ## Catching library conditions
 
-To handle library-defined error conditions through the ordinary
-`handler-case` machinery, catch `toml-kit-error`:
+Here, `process` and `report-failure` are caller-supplied placeholders:
 
 ```lisp
 (handler-case
