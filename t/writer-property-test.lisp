@@ -51,10 +51,9 @@
     :max-depth 4)))
 (defun %writer-generated-samples-match-p (samples)
   (every (lambda (document)
-           (let ((encoded (encode document)))
-             (handler-case
-                 (toml-test-value= document (parse encoded))
-               (toml-parse-error () nil))))
+           (handler-case
+               (toml-test-value= document (parse (encode document)))
+             (error () nil)))
          samples))
 (defun %writer-mutation-samples (generated-samples)
   (let ((typed-values
@@ -179,6 +178,25 @@
    (let* ((forms (%writer-mutation-forms))
           (samples (%writer-mutation-samples generated-samples))
           (value-target (find-symbol "%WRITE-VALUE" "CL-TOML-KIT"))
+          (branch-specifications
+            (let ((*package* (find-package "CL-TOML-KIT")))
+              (list
+               (cons :integer
+                     (read-from-string "(typep :value '(signed-byte 64))"))
+               (cons :float
+                     (read-from-string "(typep :value 'double-float)"))
+               (cons :offset-date-time
+                     (read-from-string
+                      "(typep :value 'cl-date-kit:offset-date-time)"))
+               (cons :local-date-time
+                     (read-from-string
+                      "(typep :value 'cl-date-kit:local-date-time)"))
+               (cons :local-date
+                     (read-from-string
+                      "(typep :value 'cl-date-kit:local-date)"))
+               (cons :local-time
+                     (read-from-string
+                      "(typep :value 'cl-date-kit:local-time)")))))
           (results-by-target
             (loop for (target form) in forms
                   collect
@@ -189,48 +207,61 @@
                            (%writer-mutation-survives-p
                             mutated-form mutation target samples))))))
           (value-results (cdr (assoc value-target results-by-target)))
-          (value-branch-tests
+          (branch-results
             (loop for result in value-results
-                  for mutation = (cl-weave:mutation-result-mutation result)
+                  for mutation =
+                    (cl-weave:mutation-result-mutation result)
                   for original = (cl-weave:mutation-original mutation)
-                  when (and (consp original)
-                            (symbolp (first original))
-                            (string-equal (symbol-name (first original)) "IF")
-                            (eq (cl-weave:mutation-operator mutation)
-                                :conditional-branch))
-                    collect (prin1-to-string (second original))))
-          (results
-            (loop for entry in results-by-target
-                  append (cdr entry)))
+                  for condition =
+                    (when (and (eq (cl-weave:mutation-operator mutation)
+                                   :conditional-branch)
+                               (consp original)
+                               (eq (first original) 'if))
+                      (second original))
+                  for normalized =
+                    (when (and (consp condition)
+                               (eq (first condition) 'typep)
+                               (= (length condition) 3)
+                               (symbolp (second condition)))
+                      (list (first condition) :value (third condition)))
+                  for expected =
+                    (find normalized branch-specifications
+                          :key (function cdr)
+                          :test (function equal))
+                  when expected
+                    collect (cons (first expected) result)))
+          (results (loop for entry in results-by-target
+                         append (cdr entry)))
           (summary (cl-weave:mutation-summary results)))
      (expect (= 2 (length forms)))
      (expect (= 100 (length generated-samples)))
-     (expect (consp samples))
      (expect (%writer-generated-samples-match-p samples))
-     (expect (consp results))
-     (expect (consp value-results))
-     (expect (consp value-branch-tests))
      (expect
-       (every
-        (lambda (branch)
-          (some (lambda (test)
-                  (search branch test :test (function char-equal)))
-                value-branch-tests))
-        (list "SIGNED-BYTE 64" "DOUBLE-FLOAT"
-              "OFFSET-DATE-TIME" "LOCAL-DATE-TIME"
-              "LOCAL-DATE" "LOCAL-TIME")))
-     (expect (every (lambda (entry) (consp (cdr entry)))
-                    results-by-target))
+      (every
+       (lambda (entry)
+         (let* ((target-summary
+                  (cl-weave:mutation-summary (cdr entry)))
+                (total (getf target-summary :total)))
+           (and (plusp total)
+                (= total (getf target-summary :killed))
+                (zerop (getf target-summary :survived))
+                (zerop (getf target-summary :errored)))))
+       results-by-target))
      (expect
-       (every
-        (lambda (entry)
-          (plusp
-           (getf (cl-weave:mutation-summary (cdr entry)) :killed)))
-        results-by-target))
-     (expect (plusp (getf summary :killed)))
-     (expect (zerop (getf summary :survived)))
-     (expect (plusp (getf summary :errored)))
+      (every
+       (lambda (specification)
+         (let ((matches
+                 (remove-if-not
+                  (lambda (entry)
+                    (eq (car specification) (car entry)))
+                  branch-results)))
+           (and (= 1 (length matches))
+                (eq :killed
+                    (cl-weave:mutation-result-status
+                     (cdr (first matches)))))))
+       branch-specifications))
+     (expect (plusp (getf summary :total)))
      (expect (= (getf summary :total)
-                (+ (getf summary :killed)
-                   (getf summary :survived)
-                   (getf summary :errored)))))))
+                (getf summary :killed)))
+     (expect (zerop (getf summary :survived)))
+     (expect (zerop (getf summary :errored))))))
