@@ -9,9 +9,9 @@
     (expect (= 256 *toml-max-number-token-length*))
     (expect (= 1024 *toml-max-path-components*)))
   (it "defines hard nesting and input ceilings"
-    (expect (= 1024 cl-toml-kit::+toml-max-nesting-depth-ceiling+))
-    (expect (= 1073741824 cl-toml-kit::+toml-max-input-bytes-ceiling+))
-    (expect (= 1073741824 cl-toml-kit::+toml-max-input-characters-ceiling+)))
+  (expect (= 1024 cl-toml-kit::+toml-max-nesting-depth-ceiling+))
+  (expect (= 1073741824 cl-toml-kit::+toml-max-input-bytes-ceiling+))
+  (expect (= 67108864 cl-toml-kit::+toml-max-input-characters-ceiling+)))
   (it "defines hard token and path ceilings"
     (expect (= 4096 cl-toml-kit::+toml-max-number-token-length-ceiling+))
     (expect (= 4096 cl-toml-kit::+toml-max-path-components-ceiling+)))

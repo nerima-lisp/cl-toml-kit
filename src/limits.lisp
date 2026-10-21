@@ -8,7 +8,7 @@
   1073741824)
 
 (defconstant +toml-max-input-characters-ceiling+
-  1073741824)
+  67108864)
 
 (defconstant +toml-max-number-token-length-ceiling+
   4096)
@@ -18,7 +18,7 @@
 
 (defvar *toml-max-nesting-depth*
   256
-  "Maximum nesting depth for TOML arrays and tables. Operations reject values deeper than the effective limit.")
+  "Maximum TOML nesting depth enforced by parsing, editing, and writing. The reader counts arrays, inline tables, and table paths; the writer counts nested arrays and tables.")
 
 (defvar *toml-max-input-bytes*
   16777216
