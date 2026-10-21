@@ -23,6 +23,7 @@
 
 (progn
   (defparameter *minimum-percent* 90)
+  ;; Reader and comment-scan floors are provisional; remeasure after the reader allocation fix lands on main.
   (defparameter *file-coverage-floors*
                 '(("comment-scan.lisp" (136 137) (40 40))
                   ("conditions.lisp" (468 475) (92 92))
