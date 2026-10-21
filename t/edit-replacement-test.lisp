@@ -198,3 +198,18 @@
                                (list "parent" (surrogate-string))
                                1
                                '("parent" "n\\uD800w"))))))
+
+(describe "editor ambiguous parent boundaries"
+  (it "rejects a root addition beneath an existing descendant section"
+    (let* ((source (%edit-test-bytes "[server.tls]~%"))
+           (snapshot (copy-seq source))
+           (path (list "server" "new"))
+           (condition
+             (handler-case
+                 (edit-toml source path 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and condition
+                   (equal path (toml-format-preservation-error-path condition))
+                   (string= "Adding this path would require an ambiguous table or array structure"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source)))))

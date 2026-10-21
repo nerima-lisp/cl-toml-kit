@@ -33,3 +33,40 @@
       (expect (and condition
                    (string= "TOML path component limit exceeded"
                             (toml-format-preservation-error-message condition)))))))
+
+(describe "editor path validation boundaries"
+  (it "rejects a string path when the component limit is zero"
+    (let* ((*toml-max-path-components* 0)
+           (source (%edit-test-bytes "name = 1~%"))
+           (snapshot (copy-seq source))
+           (condition
+             (handler-case
+                 (edit-toml source "name" 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and condition
+                   (string= "TOML path component limit exceeded"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source))))
+  (it "rejects a vector path longer than the component limit"
+    (let* ((*toml-max-path-components* 1)
+           (source (%edit-test-bytes "settings = { count = 1 }~%"))
+           (snapshot (copy-seq source))
+           (condition
+             (handler-case
+                 (edit-toml source (vector "settings" "count") 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and condition
+                   (string= "TOML path component limit exceeded"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source))))
+  (it "rejects non-string and non-integer path components"
+    (let* ((source (%edit-test-bytes "name = 1~%"))
+           (snapshot (copy-seq source))
+           (condition
+             (handler-case
+                 (edit-toml source (list (make-symbol "name")) 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and condition
+                   (string= "Path components must be strings or non-negative integers"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source)))))

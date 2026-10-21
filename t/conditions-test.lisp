@@ -123,13 +123,35 @@
       (expect (= 4 (toml-parse-error-position condition)))
       (expect (= 2 (toml-parse-error-line condition)))
       (expect (= 3 (toml-parse-error-column condition)))))
-  (it "reports parse diagnostic paths and expected text"
-    (let ((condition
+  (it "normalizes diagnostic values and falls back to position"
+    (let ((position-error
             (cl-toml-kit::make-toml-parse-error
-             :path '("root" 1)
-             :expected "value")))
-      (expect (equal '("root" 1) (toml-parse-error-path condition)))
-      (expect (string= "value" (toml-parse-error-expected condition)))))
+             :position 7 :line nil :column nil)))
+      (expect
+       (string= "TOML parse error at position 7"
+                (format nil "~A" position-error)))
+      (expect (string= "null" (cl-toml-kit::%diagnostic-string nil)))
+      (expect (string= "x" (cl-toml-kit::%diagnostic-string #\x)))
+      (expect (string= "symbol"
+                       (cl-toml-kit::%diagnostic-string (make-symbol "symbol"))))
+      (expect (string= "float" (cl-toml-kit::%diagnostic-string 1.0d0)))
+      (expect (string= "table"
+                       (cl-toml-kit::%diagnostic-string (make-hash-table))))
+      (expect (string= "array"
+                       (cl-toml-kit::%diagnostic-string #(1))))
+      (expect (string= "list"
+                       (cl-toml-kit::%diagnostic-string (list 1))))
+      (expect (string= "value"
+                       (cl-toml-kit::%diagnostic-string (lambda () nil))))
+      (expect
+       (and
+        (equal (list "null" "symbol" "x" "float" "table" "array" "list" "value")
+               (cl-toml-kit::%diagnostic-path
+                (list nil (make-symbol "symbol") #\x 1.0d0
+                      (make-hash-table) #(1) (list 1) (lambda () nil))))
+        (equal (list "root" :...)
+               (cl-toml-kit::%diagnostic-path
+                (cons "root" :tail)))))))
   (it "reports parse diagnostic context and text"
     (let ((condition
             (cl-toml-kit::make-toml-parse-error
@@ -243,7 +265,23 @@
                 cl-toml-kit::+toml-diagnostic-path-component-limit+)
             (search "..." (first normalized))))
       (expect (string= "integer" (second normalized)))
-      (expect (eq :... (car (last normalized))))))
+      (expect
+       (and (typep 1234567 (quote fixnum))
+            (string= "i..."
+                     (cl-toml-kit::%diagnostic-path-component 1234567 6))))
+      (expect
+       (and (eq :... (car (last normalized)))
+            (<= (cl-toml-kit::%diagnostic-path-rendered-size normalized)
+                cl-toml-kit::+toml-diagnostic-path-limit+)))))
+  (it "truncates diagnostic paths at the item limit"
+    (let ((normalized
+            (toml-encoding-error-path
+             (cl-toml-kit::make-toml-encoding-error
+              :message "bad"
+              :path (make-list 40 :initial-element "x")))))
+      (expect
+       (equal normalized
+              (append (make-list 32 :initial-element "x") (list :...))))))
   (it "renders control-free paths consistently under print bindings"
     (let* ((path
              (append

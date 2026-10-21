@@ -58,3 +58,27 @@
        (string= (%toml-test-format-text "values = [1, 2, 3,]~%")
                 (%edit-test-text result)))
       (expect (equalp #(1 2 3) (%edit-test-value result (list "values")))))))
+
+(describe "editor assignment and path-prefix boundaries"
+  (it "deletes the final root assignment while retaining earlier lines"
+    (let* ((source (%edit-test-bytes "first = 1~%second = 2~%third = 3~%"))
+           (result (delete-toml source '("third"))))
+      (expect (string= (%toml-test-format-text "first = 1~%second = 2~%")
+                       (%edit-test-text result)))
+      (expect (= 1 (%edit-test-value result '("first"))))
+      (expect (= 2 (%edit-test-value result '("second"))))))
+  (it "checks path prefixes by component and path length"
+    (let ((prefix-p
+            (symbol-function (find-symbol "%EDIT-PATH-PREFIX-P" "CL-TOML-KIT"))))
+      (expect (funcall prefix-p '("a") '("a" "b")))
+      (expect (not (funcall prefix-p '("a" "b") '("a"))))
+      (expect (not (funcall prefix-p '("a" "x") '("a" "b")))))))
+
+(describe "editor multiline array insertion boundaries"
+  (it "appends at index one while preserving the multiline form"
+    (let* ((source (%edit-test-bytes "values = [1,~%]~%"))
+           (result (edit-toml source '("values" 1) 2)))
+      (expect (string= (%toml-test-format-text "values = [1,~%2,~%]~%")
+                       (%edit-test-text result)))
+      (expect (equalp #(1 2)
+                      (%edit-test-value result '("values")))))))

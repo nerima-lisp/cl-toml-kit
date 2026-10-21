@@ -16,8 +16,15 @@
       "matches generated type ~S"
       (value type)
     (expect (typep value type)))
-  (it "classifies the false sentinel"
-    (expect (eq :false (toml-value-kind +toml-false+))))
+  (it "classifies, dispatches, and prints the false sentinel"
+    (expect (eq :false (toml-value-kind +toml-false+)))
+    (expect
+     (eq :false
+         (toml-value-typecase +toml-false+
+           (:false :false)
+           (t :other))))
+    (expect (string= "#<CL-TOML-KIT::TOML-FALSE-SENTINEL >"
+                     (format nil "~S" +toml-false+))))
   (it "matches the generated false sentinel type"
     (expect (typep +toml-false+ '(satisfies toml-false-p))))
   (it "classifies all native containers and date values"
@@ -95,3 +102,7 @@
       "rejects ~S"
       (value)
     (expect (not (toml-value-p value)))))
+
+(describe "TOML hexadecimal digits"
+  (it "rejects non-ASCII hexadecimal digits"
+    (expect (null (cl-toml-kit::%toml-hex-digit-value #\é)))))

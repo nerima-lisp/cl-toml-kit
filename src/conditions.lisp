@@ -145,12 +145,7 @@
       (when (and (not truncated) remaining)
         (setf truncated t))
       (when truncated
-        (let ((separator-size (if items 1 0)))
-          (when (<= (+ rendered-length
-                       separator-size
-                       ellipsis-size)
-                    +toml-diagnostic-path-limit+)
-            (push +toml-diagnostic-path-ellipsis+ items))))
+        (push +toml-diagnostic-path-ellipsis+ items))
       (nreverse items))))
 
 (defun %diagnostic-path-report-string (path)

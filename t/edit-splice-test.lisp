@@ -63,7 +63,9 @@
            (deleted (delete-toml added '("values" 0)))
            (empty (delete-toml deleted '("values" 0))))
       (expect (equalp #(2) (%edit-test-value deleted '("values"))))
-      (expect (equalp #() (%edit-test-value empty '("values"))))))
+      (expect (and (equalp #() (%edit-test-value empty '("values")))
+                   (string= (%toml-test-format-text "values = []~%")
+                            (%edit-test-text empty))))))
   (it "does not join lines when deleting the final value"
     (let* ((source (%edit-test-bytes "first = 1~%last = 2~%next = 3~%"))
            (result (delete-toml source '("last"))))

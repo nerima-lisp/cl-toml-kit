@@ -159,13 +159,15 @@
                               "c" (%writer-nan)
                               "d" least-positive-double-float)))))
   (it "escapes every basic-string control form including DEL"
-    (expect (string= (format nil "value = \"\\b\\t\\n\\f\\r\\\"\\\\\\u0000\\u001F\\u007F\"~%")
-                     (encode (%writer-table "value"
-                                             (format nil "~C~C~C~C~C~C~C~C~C~C"
-                                                     #\Backspace #\Tab #\Newline
-                                                     #\Page #\Return #\" #\\
-                                                     (code-char 0) (code-char 31)
-                                                     (code-char 127)))))))
+    (expect
+     (string=
+      (format nil "value = \"\\b\\t\\n\\f\\r\\u001B\\\"\\\\\\u0000\\u001F\\u007F\"~%")
+      (encode
+       (%writer-table "value"
+                      (format nil "~C~C~C~C~C~C~C~C~C~C~C"
+                              #\Backspace #\Tab #\Newline #\Page #\Return
+                              #\Escape #\" #\\ (code-char 0) (code-char 31)
+                              (code-char 127)))))))
   (it-each (("plain-key" "plain-key = 1~%")
             ("has space" "\"has space\" = 1~%")
             ("" "\"\" = 1~%")
@@ -344,6 +346,8 @@
     (let ((cases (list (list (1- (expt 10 20000)) "integer" nil)
                        (list (make-string 200000 :initial-element #\x) "string" t)
                        (list (list (make-string 200000 :initial-element #\x)) "list" nil)
+                       (list #\x "character" nil)
+                       (list 1.0f0 "float" nil)
                        (list (%make-writer-unbounded-value) "value" nil))))
       (dolist (case cases)
         (let* ((value (first case))

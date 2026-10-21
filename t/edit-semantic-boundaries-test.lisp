@@ -105,3 +105,28 @@
       (setf (gethash "value" table) 1)
       (expect (signals error (funcall change table (list "missing") nil t)))
       (expect (signals error (funcall change #(1) (list -1) 0 nil))))))
+
+(describe "editor source and missing-parent boundaries"
+  (it "rejects string sources with the byte-vector type contract"
+    (let* ((source "name = 1")
+           (condition
+             (handler-case
+                 (edit-toml source "name" 2)
+               (type-error (condition) condition))))
+      (expect (and condition
+                   (equal source (type-error-datum condition))
+                   (equal '(vector (unsigned-byte 8))
+                          (type-error-expected-type condition))))))
+  (it "rejects a nested root addition without an existing parent table"
+    (let* ((source (%edit-test-bytes "root = 1~%"))
+           (snapshot (copy-seq source))
+           (path (list "missing" "child"))
+           (condition
+             (handler-case
+                 (edit-toml source path 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and condition
+                   (equal path (toml-format-preservation-error-path condition))
+                   (string= "Edited path is absent from parsed TOML"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source)))))

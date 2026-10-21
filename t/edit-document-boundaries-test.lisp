@@ -44,3 +44,40 @@
        (string= (concatenate 'string "[server]" crlf "name = 1" crlf "port = 2" crlf)
                 (%edit-test-text result)))
       (expect (= 2 (%edit-test-value result (list "server" "port")))))))
+
+(describe "editor helper defaults"
+  (it "uses the default array-table counter path"
+    (let* ((array-table-context
+             (symbol-function
+              (find-symbol "%EDIT-ARRAY-TABLE-CONTEXT" "CL-TOML-KIT")))
+           (latest (make-hash-table :test (function equal)))
+           (counts (make-hash-table :test (function equal)))
+           (first-context
+             (funcall array-table-context (list "products" "item") latest counts))
+           (second-context
+             (funcall array-table-context (list "products" "item") latest counts)))
+      (expect (equal (list "products" "item" 0) first-context))
+      (expect (equal (list "products" "item" 1) second-context))
+      (expect (equal 2 (gethash (list "products" "item") counts)))))
+  (it "scans an array-table header with the default counter path"
+    (let* ((scan-header
+             (symbol-function
+              (find-symbol "%EDIT-SCAN-HEADER-LINE" "CL-TOML-KIT")))
+           (latest (make-hash-table :test (function equal)))
+           (counts (make-hash-table :test (function equal)))
+           (text "[[products]]"))
+      (multiple-value-bind (path next)
+          (funcall scan-header text 0 0 (length text) latest counts)
+        (expect (equal (list "products" 0) path))
+        (expect (= (length text) next))
+        (expect (equal 1 (gethash (list "products") counts))))))
+  (it "uses the full text for the default line-ending position"
+    (let* ((line-ending
+             (symbol-function (find-symbol "%EDIT-LINE-ENDING" "CL-TOML-KIT")))
+           (crlf (format nil "first~C~Csecond~C~C"
+                         #\Return #\Newline #\Return #\Newline))
+           (lf (format nil "first~%second~%")))
+      (expect (string= (format nil "~C~C" #\Return #\Newline)
+                       (funcall line-ending crlf)))
+      (expect (string= (string #\Newline)
+                       (funcall line-ending lf))))))
