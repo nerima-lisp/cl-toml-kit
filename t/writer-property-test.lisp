@@ -145,9 +145,7 @@
                  (setf (gethash "next" parent) child
                        parent child)))
       (setf (gethash "leaf" parent) 1)
-      (expect
-       (= (1+ *toml-max-nesting-depth*)
-          (count #\Newline (encode root))))))
+      (expect (toml-test-value= root (parse (encode root))))))
   (cl-weave:it-fuzz
    "rejects cyclic tables with a TOML encoding error"
       ((size (cl-weave:gen-integer :min 1 :max 4)))
