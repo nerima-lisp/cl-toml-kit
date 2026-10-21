@@ -129,4 +129,11 @@
                    (equal path (toml-format-preservation-error-path condition))
                    (string= "Edited path is absent from parsed TOML"
                             (toml-format-preservation-error-message condition))))
-      (expect (equalp snapshot source)))))
+      (expect (equalp snapshot source))))
+  (it "adds a root key while preserving formatted and parsed values"
+    (let* ((source (%edit-test-bytes "other = 1~%"))
+           (result (edit-toml source (list "new") 2)))
+      (expect (string= (%toml-test-format-text "other = 1~%new = 2~%")
+                       (%edit-test-text result)))
+      (expect (= 1 (%edit-test-value result (list "other"))))
+      (expect (= 2 (%edit-test-value result (list "new")))))))

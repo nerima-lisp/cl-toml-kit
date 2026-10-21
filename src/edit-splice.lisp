@@ -29,7 +29,7 @@
                         (nth (1+ position) children))))
         (if (eq (edit-node-kind parent) :inline)
             (%edit-inline-delete-range node previous next)
-            (%edit-sequence-delete-range text node parent previous next)))))
+            (%edit-sequence-delete-range text node previous next)))))
 
 (defun %edit-trivia-line-p (text start end)
   (let ((first (%edit-horizontal-space text start end)))
@@ -54,8 +54,7 @@
                      newline))
                (setf position newline)
                (return position)))
-          ((and (>= line-start section-start)
-                (%edit-trivia-line-p text line-start position))
+          ((%edit-trivia-line-p text line-start position)
            (setf position line-start))
           (t (return position)))))))
 
@@ -111,14 +110,11 @@
                     :end (edit-node-end node))
       (%edit-fail (edit-node-path node)
                   "Array insertion cannot preserve a trailing comment"))
-    (loop while (and (> position (edit-node-start node))
-                     (or (toml-space-character-p (char text (1- position)))
-                         (member (char text (1- position))
-                                 +toml-newline-characters+)))
+    (loop while (or (toml-space-character-p (char text (1- position)))
+                    (member (char text (1- position))
+                            +toml-newline-characters+))
           do (decf position))
-    (if (and children
-             (> position (edit-node-start node))
-             (char= (char text (1- position)) #\,))
+    (if (and children (char= (char text (1- position)) #\,))
         (1- position)
         position)))
 
@@ -134,8 +130,7 @@
                          -1))
          (indent-start (1+ line-start))
          (indent-end indent-start))
-    (loop while (and (< indent-end insertion-position)
-                     (toml-space-character-p (char text indent-end)))
+    (loop while (toml-space-character-p (char text indent-end))
           do (incf indent-end))
     (if multiline
         (format nil ",~A~A" line-ending
@@ -183,7 +178,7 @@
      (list (edit-node-key-start node) (edit-node-end node)
            (make-array 0 :element-type '(unsigned-byte 8))))))
 
-(defun %edit-sequence-delete-range (text node parent previous next)
+(defun %edit-sequence-delete-range (text node previous next)
   (cond
     (next
      (list (edit-node-start node) (edit-node-start next)
@@ -193,9 +188,7 @@
            (make-array 0 :element-type '(unsigned-byte 8))))
     (t
      (let ((end (edit-node-end node)))
-       (when (and (eq (edit-node-kind parent) :array)
-                  (< end (edit-node-end parent))
-                  (char= (char text end) #\,))
+       (when (char= (char text end) #\,)
          (incf end))
        (list (edit-node-start node) end
              (make-array 0 :element-type '(unsigned-byte 8)))))))

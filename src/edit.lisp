@@ -25,8 +25,6 @@
     (source text positions assignments sections path new-value delete-p
      &key (path-prefix-p #'%edit-path-prefix-p))
   (let ((matches (%edit-collect-nodes assignments path)))
-    (when (> (length matches) 1)
-      (%edit-fail path "The path identifies more than one source value"))
     (cond
       ((plusp (length matches))
        (let ((match (first matches)))

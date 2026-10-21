@@ -80,4 +80,18 @@
       (expect (string= (format nil "~C~C" #\Return #\Newline)
                        (funcall line-ending crlf)))
       (expect (string= (string #\Newline)
-                       (funcall line-ending lf))))))
+                       (funcall line-ending lf)))))
+  (it "keeps malformed private document lines fail-closed"
+    (dolist (case '(("[" nil "Invalid key while editing TOML")
+                    ("[x" ("x") "Invalid table header")
+                    ("[[x]" ("x") "Invalid table header")
+                    ("x" ("x") "Assignment has no equals sign")))
+      (let ((condition
+              (handler-case
+                  (progn (cl-toml-kit::%edit-scan-document (first case)) nil)
+                (toml-format-preservation-error (condition) condition))))
+        (expect (typep condition 'toml-format-preservation-error))
+        (expect (equal (second case)
+                       (toml-format-preservation-error-path condition)))
+        (expect (string= (third case)
+                         (toml-format-preservation-error-message condition)))))))

@@ -47,8 +47,7 @@
                             (escape-position
                               (position escape +toml-escape-letters+ :test #'char=)))
                        (cond
-                         ((and escape-position
-                               (not (%toml-hex-escape-width escape)))
+                         (escape-position
                           (write-char (aref +toml-escape-table+ escape-position) out))
                          ((%toml-hex-escape-width escape)
                           (let ((digits (%toml-hex-escape-width escape))
@@ -58,7 +57,7 @@
                               (setf value (+ (* value 16)
                                              (%toml-hex-digit-value (char text index)))))
                             (write-char (code-char value) out)))
-                         (t (write-char escape out))))))
+                         (t (%edit-fail nil "Invalid string escape while editing TOML"))))))
                (incf index)))))
 
 (defun %edit-scan-string-triple-end (text delimiter index limit)

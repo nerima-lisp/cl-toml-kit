@@ -141,4 +141,17 @@
            (result (edit-toml source '("a.b") "value")))
       (expect (string= (%toml-test-format-text "other = 1~%\"a.b\" = \"value\"~%")
                        (%edit-test-text result)))
-      (expect (string= "value" (%edit-test-value result '("a.b")))))))
+      (expect (string= "value" (%edit-test-value result '("a.b"))))))
+  (it "rejects an array addition beyond the next index without changing the source"
+    (let* ((source (%edit-test-bytes "values = [1]~%"))
+           (snapshot (copy-seq source))
+           (path (list "values" 3))
+           (condition
+             (handler-case
+                 (edit-toml source path 2)
+               (toml-format-preservation-error (condition) condition))))
+      (expect (and (typep condition (quote toml-format-preservation-error))
+                   (equal path (toml-format-preservation-error-path condition))
+                   (string= "Adding this path would require an ambiguous table or array structure"
+                            (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source)))))

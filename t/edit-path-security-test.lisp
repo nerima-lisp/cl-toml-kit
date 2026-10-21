@@ -69,4 +69,29 @@
       (expect (and condition
                    (string= "Path components must be strings or non-negative integers"
                             (toml-format-preservation-error-message condition))))
+      (expect (equalp snapshot source))))
+  (it-each ((nil "Path must not be empty")
+            (42 "Path must be a string, list, or vector"))
+      "rejects invalid path shape ~S with a format-preservation error"
+      (path expected-message)
+    (let* ((source (%edit-test-bytes "name = 1~%"))
+           (snapshot (copy-seq source))
+           (condition
+             (handler-case
+                 (edit-toml source path 2)
+               (toml-format-preservation-error (error) error))))
+      (expect (and (typep condition (quote toml-format-preservation-error))
+                   (string= expected-message
+                            (toml-format-preservation-error-message condition))))
       (expect (equalp snapshot source)))))
+
+(describe "editor source type boundaries"
+  (it "rejects a non-vector source with the octet-vector type contract"
+    (let ((condition
+            (handler-case
+                (progn (edit-toml 42 (quote ("name")) 2) nil)
+              (type-error (condition) condition))))
+      (expect (typep condition (quote type-error)))
+      (expect (eql 42 (type-error-datum condition)))
+      (expect (equal (quote (vector (unsigned-byte 8)))
+                     (type-error-expected-type condition))))))

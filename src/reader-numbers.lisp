@@ -27,7 +27,6 @@
   (and (= (length text) 10)
        (loop for index below 4
              always (toml-decimal-character-p (char text index)))
-       (eq (%toml-date-separator-kind (char text 4)) :date)
        (loop for index from 5 below 7
              always (toml-decimal-character-p (char text index)))
        (eq (%toml-date-separator-kind (char text 7)) :date)

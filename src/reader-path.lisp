@@ -11,6 +11,4 @@
   (if (stringp path) path (car (last path))))
 
 (defun %path-next (path)
-  (if (stringp path)
-      (values path nil)
-      (values (car path) (cdr path))))
+  (values (car path) (cdr path)))

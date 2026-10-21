@@ -137,27 +137,66 @@
            (skip-trivia
              (symbol-function
               (find-symbol "%EDIT-SKIP-COMMENT-AND-TRIVIA" "CL-TOML-KIT")))
-           (comment (format nil "# comment~%  value")))
+           (comment (format nil "# comment~%  value"))
+           (unterminated
+             (handler-case (progn (funcall scan-string "\"open" 0 5) nil)
+               (toml-format-preservation-error (condition) condition))))
       (expect (= 7 (funcall scan-string "\"\"\"x\"\"\"" 0 7)))
-      (expect (signals error (funcall scan-string "\"open" 0 5)))
+      (expect (typep unterminated 'toml-format-preservation-error))
+      (expect
+       (string= "Unterminated string while editing TOML"
+                (toml-format-preservation-error-message unterminated)))
       (expect
        (= (position #\v comment)
           (funcall skip-trivia comment 0 (length comment))))))
-  (it "rejects invalid key and container scanners"
-    (let* ((key-component
+  (it "checks private scanner fallbacks and exact failures"
+    (let* ((decode-basic-string
+             (symbol-function
+              (find-symbol "%EDIT-DECODE-BASIC-STRING" "CL-TOML-KIT")))
+           (key-component
              (symbol-function
               (find-symbol "%EDIT-SCAN-KEY-COMPONENT" "CL-TOML-KIT")))
            (scan-array
              (symbol-function (find-symbol "%EDIT-SCAN-ARRAY-NODE" "CL-TOML-KIT")))
            (scan-inline
-             (symbol-function (find-symbol "%EDIT-SCAN-INLINE-NODE" "CL-TOML-KIT"))))
-      (expect (signals error (funcall key-component "?" 0 1)))
-      (expect (signals error
-                (funcall scan-array "[1" 0 2 nil nil 1 4
-                         "TOML nesting depth limit exceeded")))
-      (expect (signals error
-                (funcall scan-inline "{a=1" 0 4 nil nil 1 4
-                         "TOML nesting depth limit exceeded")))))
+             (symbol-function (find-symbol "%EDIT-SCAN-INLINE-NODE" "CL-TOML-KIT")))
+           (scan-value
+             (symbol-function
+              (find-symbol "%EDIT-SCAN-VALUE-NODE" "CL-TOML-KIT"))))
+      (labels ((expect-error (thunk expected-message)
+                 (let ((condition
+                         (handler-case (progn (funcall thunk) nil)
+                           (toml-format-preservation-error (condition) condition))))
+                   (expect (typep condition 'toml-format-preservation-error))
+                   (expect
+                    (string= expected-message
+                             (toml-format-preservation-error-message condition))))))
+        (expect-error (lambda () (funcall key-component "?" 0 1))
+                      "Invalid key while editing TOML")
+        (expect-error
+         (lambda ()
+           (funcall scan-array "[1" 0 2 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Array value has no closing bracket")
+        (expect-error
+         (lambda ()
+           (funcall scan-inline "{a=1" 0 4 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Inline table has no closing brace")
+        (expect-error
+         (lambda ()
+           (funcall scan-inline "{a 1}" 0 5 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Inline table entry has no equals sign")
+        (expect-error
+         (lambda ()
+           (funcall scan-value "[]" 0 2 nil nil 0 0
+                    "TOML nesting depth limit exceeded"))
+         "TOML nesting depth limit exceeded")
+        (expect-error
+         (lambda ()
+           (funcall decode-basic-string "\"\\z\"" 0 4))
+         "Invalid string escape while editing TOML"))))
   (it "uses adjacent CRLF and LF boundaries"
     (let* ((line-ending
              (symbol-function (find-symbol "%EDIT-LINE-ENDING" "CL-TOML-KIT")))
@@ -186,3 +225,35 @@
       (expect
        (eq (cdr (cl-toml-kit::edit-node-path-reversed child))
            (cl-toml-kit::edit-node-path-reversed parent))))))
+
+(describe "editor scanner end-of-input guards"
+  (it "rejects truncated containers and missing inline separators"
+    (let ((scan-array
+            (symbol-function
+             (find-symbol "%EDIT-SCAN-ARRAY-NODE" "CL-TOML-KIT")))
+          (scan-inline
+            (symbol-function
+             (find-symbol "%EDIT-SCAN-INLINE-NODE" "CL-TOML-KIT"))))
+      (labels ((expect-scan-error (thunk expected-message)
+                 (let ((condition
+                         (handler-case (progn (funcall thunk) nil)
+                           (toml-format-preservation-error (condition) condition))))
+                   (expect (typep condition (quote toml-format-preservation-error)))
+                   (expect
+                    (string= expected-message
+                             (toml-format-preservation-error-message condition))))))
+        (expect-scan-error
+         (lambda ()
+           (funcall scan-array "[" 0 1 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Array value has no closing bracket")
+        (expect-scan-error
+         (lambda ()
+           (funcall scan-inline "{" 0 1 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Invalid key while editing TOML")
+        (expect-scan-error
+         (lambda ()
+           (funcall scan-inline "{a" 0 2 nil nil 1 4
+                    "TOML nesting depth limit exceeded"))
+         "Inline table entry has no equals sign")))))

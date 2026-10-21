@@ -342,6 +342,22 @@
       (expect (typep condition 'type-error))
       (expect (eq (type-error-datum condition) :not-a-stream))
       (expect (eq (type-error-expected-type condition) 'stream))))
+  (it-each ((#\x "Table keys must be strings (value character)" ("x"))
+            (1.0f0 "Table keys must be strings (value float)" ("float")))
+      "reports the category of rejected non-string keys"
+      (key expected-message expected-path)
+    (let ((table (make-hash-table :test (function equal))))
+      (setf (gethash key table) 1)
+      (let ((condition
+              (handler-case
+                  (progn (encode table) nil)
+                (toml-encoding-error (error) error))))
+        (expect
+         (and (typep condition
+                     (find-class (find-symbol "TOML-ENCODING-ERROR" "CL-TOML-KIT")))
+              (string= expected-message
+                       (toml-encoding-error-message condition))
+              (equal expected-path (toml-encoding-error-path condition)))))))
   (it "bounds diagnostics for rejected writer values"
     (let ((cases (list (list (1- (expt 10 20000)) "integer" nil)
                        (list (make-string 200000 :initial-element #\x) "string" t)
@@ -633,4 +649,20 @@
         (let ((key (concatenate 'string "quoted " (string surrogate))))
           (verify-rejected (%writer-table key 1)
                            surrogate
-                           (cl-toml-kit::%diagnostic-path (list key))))))))
+                           (cl-toml-kit::%diagnostic-path (list key)))))))
+  (it "validates writer keys directly and restores the path after failure"
+    (let* ((validator
+             (symbol-function
+              (find-symbol "%VALIDATE-WRITER-KEY" "CL-TOML-KIT")))
+           (path (make-array 0 :adjustable t :fill-pointer 0))
+           (condition
+             (handler-case
+                 (progn (funcall validator 42 path) nil)
+               (toml-encoding-error (condition) condition))))
+      (expect (typep condition 'toml-encoding-error))
+      (expect (string= "Table keys must be strings (value integer)"
+                       (toml-encoding-error-message condition)))
+      (expect (equal '(42) (toml-encoding-error-path condition)))
+      (expect (zerop (fill-pointer path)))
+      (expect (null (funcall validator "safe" path)))
+      (expect (zerop (fill-pointer path))))))

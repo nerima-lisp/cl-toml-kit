@@ -23,25 +23,24 @@
 
 (progn
   (defparameter *minimum-percent* 90)
-  ;; Reader and comment-scan floors are provisional; remeasure after the reader allocation fix lands on main.
   (defparameter *file-coverage-floors*
                 '(("comment-scan.lisp" (135 136) (40 40))
                   ("conditions.lisp" (468 475) (92 92))
                   ("data.lisp" (57 115) (6 6))
                   ("edit-bytes.lisp" (197 199) (16 16))
-                  ("edit-document.lisp" (319 326) (24 30))
+                  ("edit-document.lisp" (326 327) (30 30))
                   ("edit-model.lisp" (107 112) (26 28))
-                  ("edit-scan.lisp" (598 612) (104 112))
+                  ("edit-scan.lisp" (606 608) (108 108))
                   ("edit-semantic.lisp" (229 231) (38 38))
-                  ("edit-splice.lisp" (479 480) (53 58))
-                  ("edit.lisp" (375 385) (40 44))
+                  ("edit-splice.lisp" (463 464) (48 48))
+                  ("edit.lisp" (370 377) (42 42))
                   ("limits.lisp" (1 30) :not-applicable)
                   ("package.lisp" (0 1) :not-applicable)
                   ("reader-data.lisp" (20 30) :not-applicable)
                   ("reader-document.lisp" (786 843) (90 100))
                   ("reader-macros.lisp" (7 13) :not-applicable)
-                  ("reader-numbers.lisp" (654 655) (125 126))
-                  ("reader-path.lisp" (27 31) (7 8))
+                  ("reader-numbers.lisp" (650 651) (124 124))
+                  ("reader-path.lisp" (24 25) (6 6))
                   ("reader-scan.lisp" (237 238) (42 44))
                   ("reader-strings.lisp" (383 388) (58 60))
                   ("reader-values.lisp" (403 409) (58 60))
@@ -49,7 +48,7 @@
                   ("syntax-data.lisp" (45 145) (4 4))
                   ("writer-data.lisp" (1 4) :not-applicable)
                   ("writer-macros.lisp" (4 5) :not-applicable)
-                  ("writer.lisp" (419 446) (62 64)))))
+                  ("writer.lisp" (434 448) (64 64)))))
 
 (defparameter *source-directory* (merge-pathnames #P"src/" *default-pathname-defaults*))
 
