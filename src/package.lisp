@@ -14,7 +14,7 @@
    ;; Shared processing limits
    #:*toml-max-nesting-depth* #:*toml-max-input-bytes*
    #:*toml-max-input-characters* #:*toml-max-number-token-length*
-   #:*toml-max-path-components*
+   #:*toml-max-path-components* #:*toml-max-tables*
    ;; Conditions
    #:toml-kit-error #:toml-value-model-error #:toml-value-model-error-message
    #:toml-parse-error #:toml-parse-error-source-name
@@ -28,3 +28,12 @@
    #:toml-format-preservation-error-message
    #:toml-format-preservation-error-path
    #:toml-comment-spans))
+
+(in-package #:cl-toml-kit)
+
+(defconstant +toml-max-tables-ceiling+
+  32768)
+
+(defvar *toml-max-tables*
+  16384
+  "Maximum number of tables created while parsing one TOML document.")

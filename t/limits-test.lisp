@@ -89,3 +89,91 @@
               (cl-toml-kit::%toml-limit :unknown-limit)))
     (expect (signals error
               (cl-toml-kit::%toml-limit-error-message :unknown-limit)))))
+(progn
+  (defun %table-limit-attack-source (shape)
+    (let* ((target-size (* 4 1024 1024))
+           (dotted-path
+             (format nil "~{~A~^.~}" (make-list 249 :initial-element "a")))
+           (body
+             (with-output-to-string (stream)
+               (dotimes (index 66)
+                 (ecase shape
+                   (:dotted
+                    (format stream "x~D.~A.leaf = 1~%" index dotted-path))
+                   (:inline
+                    (format stream "x~D = {~A.leaf = 1}~%" index dotted-path))
+                   (:header
+                    (format stream "[x~D.~A]~%" index dotted-path)))))))
+      (when (> (length body) target-size)
+        (error "The table-limit test source exceeds its target size"))
+      (concatenate 'string body
+                   (make-string (- target-size (length body))
+                                :initial-element #\#))))
+
+  (defun %table-limit-error-message (thunk)
+    (handler-case
+        (progn (funcall thunk) :returned)
+      (toml-parse-error (condition)
+        (toml-parse-error-expected condition))))
+
+  (describe "TOML table-count limits"
+    (it "defines a default, a hard ceiling, and an effective limit"
+      (expect (= 16384 *toml-max-tables*))
+      (expect (= 32768 cl-toml-kit::+toml-max-tables-ceiling+))
+      (expect (= 16384 (cl-toml-kit::%toml-limit :table-count))))
+    (it "clamps the table-count limit to its hard ceiling"
+      (let ((*toml-max-tables* (1+ cl-toml-kit::+toml-max-tables-ceiling+)))
+        (expect (= cl-toml-kit::+toml-max-tables-ceiling+
+                   (cl-toml-kit::%toml-limit :table-count)))))
+    (it "rejects invalid values and accepts zero"
+      (expect (signals type-error
+                (let ((*toml-max-tables* "256"))
+                  (cl-toml-kit::%toml-limit :table-count))))
+      (expect (= 0
+                 (let ((*toml-max-tables* 0))
+                   (cl-toml-kit::%toml-limit :table-count)))))
+    (it "selects the table-count error message by keyword"
+      (let ((*toml-max-tables* 3))
+        (multiple-value-bind (limit message)
+            (cl-toml-kit::%toml-limit :table-count)
+          (expect (= 3 limit))
+          (expect (equal "TOML table count limit exceeded" message)))))
+    (it "counts the root table"
+      (let ((*toml-max-tables* 0))
+        (expect (equal
+                 "TOML table count limit exceeded"
+                 (%table-limit-error-message (lambda () (parse "")))))))
+    (it "accepts exactly the configured table count"
+      (let ((*toml-max-tables* 2))
+        (expect (hash-table-p (parse "x = {}")))
+        (expect
+         (equal
+          "TOML table count limit exceeded"
+          (%table-limit-error-message (lambda () (parse "x = {a = {}}")))))))
+    (it "rejects deep dotted assignments with distinct roots at the default limit"
+      (let* ((source (%table-limit-attack-source :dotted))
+             (message
+               (%table-limit-error-message (lambda () (parse source)))))
+        (expect (= 4194304 (length source)))
+        (expect (equal "TOML table count limit exceeded" message))))
+    (it "rejects inline dotted keys with distinct roots at the default limit"
+      (let* ((source (%table-limit-attack-source :inline))
+             (message
+               (%table-limit-error-message (lambda () (parse source)))))
+        (expect (= 4194304 (length source)))
+        (expect (equal "TOML table count limit exceeded" message))))
+    (it "rejects deep table headers with distinct roots at the default limit"
+      (let* ((source (%table-limit-attack-source :header))
+             (message
+               (%table-limit-error-message (lambda () (parse source)))))
+        (expect (= 4194304 (length source)))
+        (expect (equal "TOML table count limit exceeded" message))))
+    (it "applies the default table-count limit while editing"
+      (let* ((source (%table-limit-attack-source :dotted))
+             (bytes (sb-ext:string-to-octets
+                     source :external-format :utf-8))
+             (message
+               (%table-limit-error-message
+                (lambda () (edit-toml bytes '("new") 1)))))
+        (expect (= 4194304 (length bytes)))
+        (expect (equal "TOML table count limit exceeded" message))))))

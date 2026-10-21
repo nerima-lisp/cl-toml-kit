@@ -15,7 +15,6 @@
 
 (defconstant +toml-max-path-components-ceiling+
   4096)
-
 (defvar *toml-max-nesting-depth*
   256
   "Maximum TOML nesting depth enforced by parsing, editing, and writing. The reader counts arrays, inline tables, and table paths; the writer counts nested arrays and tables.")
@@ -35,7 +34,6 @@
 (defvar *toml-max-path-components*
   1024
   "Maximum number of components in an editor path. Editing rejects paths with more components.")
-
 (defmacro define-toml-limits (entries)
   "Define keyword-based limit lookup and its error-message table."
   (let ((key (gensym "KEY"))
@@ -43,12 +41,12 @@
         (ceiling (gensym "CEILING")))
     `(progn
        (define-toml-lookup
-           %toml-limit-error-message
+           %toml-limit-base-error-message
            ,(loop for entry in entries
                   collect `(,(first entry) ,(fourth entry)))
          :otherwise
          (error "Unknown TOML limit error key"))
-       (defun %toml-limit (,key)
+       (defun %toml-limit-base (,key)
          "Return the effective limit and its error message; cap values above the hard ceiling and signal TYPE-ERROR for invalid values."
          (multiple-value-bind (,value ,ceiling)
              (case ,key
@@ -60,7 +58,7 @@
                  (error "Unknown TOML limit key: ~S" ,key)))
            (check-type ,value (integer 0 *))
            (values (min ,value ,ceiling)
-                   (%toml-limit-error-message ,key)))))))
+                   (%toml-limit-base-error-message ,key)))))))
 
 (define-toml-limits
     ((:nesting-depth

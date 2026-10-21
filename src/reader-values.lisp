@@ -92,7 +92,7 @@
                (multiple-value-bind (child present) (gethash key target)
                  (cond
                    ((not present)
-                    (setf child (make-hash-table :test #'equal)
+                    (setf child (%reader-make-table state error-position)
                           (gethash key target) child
                           (gethash child
                                    (toml-reader-state-table-states state))
@@ -131,7 +131,7 @@
       (when (> depth nesting-limit)
         (%error-at-message state position nesting-message))
       (setf (toml-reader-state-nesting-depth state) depth)
-      (let ((table (let ((inline-table (make-hash-table :test (function equal))))
+      (let ((table (let ((inline-table (%reader-make-table state position)))
                     (setf (gethash inline-table (toml-reader-state-table-depths state)) depth)
                     inline-table))
             (index (1+ position))

@@ -399,6 +399,7 @@ condition.
 | `*toml-max-input-characters*` | `16777216` | `67108864` | Character length for strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after reading the first character over the limit. | `toml-parse-error` for `parse` and `parse-file`; `toml-format-preservation-error` for `edit-toml`. |
 | `*toml-max-number-token-length*` | `256` | `4096` | `parse` and `parse-file` limit integer and finite floating-point tokens; `edit-toml` applies the reader check to its source and edited result. Infinity and NaN tokens bypass the limit. | `toml-parse-error` while parsing; `toml-format-preservation-error` if edited-result validation exceeds the limit. |
 | `*toml-max-path-components*` | `1024` | `4096` | Number of components in an editor path. Dotted keys and table headers can make a path longer than its nesting depth. | `toml-format-preservation-error` while editing. |
+| `*toml-max-tables*` | `16384` | `32768` | Maximum tables created during one parse, including the root, dotted-key paths, table headers, array-of-tables headers, and inline tables. `edit-toml` applies it while parsing its source and validating the edited result. | `toml-parse-error` while parsing or reading the edit source; `toml-format-preservation-error` if edited-result validation exceeds the limit. |
 
 For `edit-toml`, replacement values and array or inline-table additions start
 at their parent depth; table-entry additions start at depth zero.

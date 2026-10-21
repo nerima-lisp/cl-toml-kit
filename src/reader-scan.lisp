@@ -1,5 +1,6 @@
 ;;;; src/reader-scan.lisp
 (in-package #:cl-toml-kit)
+
 (defun %source-char (state position)
   (declare (type toml-reader-state state) (type fixnum position))
   (when (< position (toml-reader-state-length state))
@@ -49,6 +50,25 @@
   (%error-at-message state position
                      (%toml-reader-error-message expected-key)
                      path))
+(defun %toml-limit-error-message (key)
+  (if (eq key :table-count)
+      "TOML table count limit exceeded"
+      (%toml-limit-base-error-message key)))
+(defun %toml-limit (key)
+  (if (eq key :table-count)
+      (let ((value *toml-max-tables*))
+        (check-type value (integer 0 *))
+        (values (min value +toml-max-tables-ceiling+)
+                (%toml-limit-error-message key)))
+      (%toml-limit-base key)))
+(defun %reader-make-table
+    (state &optional (position (toml-reader-state-position state)))
+  (multiple-value-bind (limit message) (%toml-limit :table-count)
+    (when (>= (hash-table-count
+               (toml-reader-state-table-depths state))
+              limit)
+      (%error-at-message state position message))
+    (make-hash-table :test #'equal)))
 
 (defun %skip-space-and-comments (state)
   (loop

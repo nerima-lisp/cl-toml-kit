@@ -123,7 +123,7 @@
        (unless create
          (funcall failure (toml-reader-state-position state)
                   :defined-table path))
-       (setf value (make-hash-table :test #'equal)
+       (setf value (%reader-make-table state)
              (gethash key table) value
              (gethash value (toml-reader-state-table-states state))
              (if dotted :dotted :implicit)
@@ -231,7 +231,7 @@
                      (unless value
                        (setf value (make-array 0 :adjustable t :fill-pointer 0)
                              (gethash key parent) value))
-                     (let ((table (make-hash-table :test #'equal)))
+                     (let ((table (%reader-make-table state position)))
                        (vector-push-extend table value)
                        (setf (gethash table
                                       (toml-reader-state-table-states state))
@@ -243,7 +243,7 @@
                    (let ((table (gethash key parent)))
                      (cond
                        ((null table)
-                        (setf table (make-hash-table :test #'equal)
+                        (setf table (%reader-make-table state position)
                               (gethash key parent) table
                               (gethash table
                                        (toml-reader-state-table-states state))
