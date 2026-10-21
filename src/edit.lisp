@@ -151,16 +151,11 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
                           0))
          (value (%edit-value-bytes new-value initial-depth path))
          (section (%edit-section-for-path sections parent-path))
-         (writer-path (make-array (length parent-path)
-                                  :adjustable t
-                                  :fill-pointer t
-                                  :initial-contents parent-path)))
+         (writer-path (%edit-path-vector parent-path)))
     (labels ((validate-key (key)
                (%validate-writer-key key writer-path))
              (validate-key-path (key-path)
-               (let ((key-path-vector (make-array 0
-                                                  :adjustable t
-                                                  :fill-pointer 0)))
+               (let ((key-path-vector (%edit-path-vector nil)))
                  (dolist (key key-path)
                    (%validate-writer-key key key-path-vector)
                    (vector-push-extend key key-path-vector)))))

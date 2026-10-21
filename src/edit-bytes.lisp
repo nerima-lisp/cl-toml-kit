@@ -2,6 +2,7 @@
 
 (declaim
   (ftype function
+    %edit-path-vector
     %edit-string-value-bytes-for-node
     %edit-triple-string-p
     %edit-reject-invalid-literal-string
@@ -39,15 +40,18 @@
 (defun %edit-string-to-bytes (text)
   (cl-codec-kit:string-to-octets text :encoding :utf-8))
 
-(defun %edit-value-bytes (value &optional (initial-depth 0) path)
+(defun %edit-value-bytes (value initial-depth path)
   (with-output-to-string (stream)
     (%with-writer-context initial-depth
       (%write-value
        value stream
-       (make-array (length path)
-                   :adjustable t
-                   :fill-pointer t
-                   :initial-contents path)))))
+       (%edit-path-vector path)))))
+
+(defun %edit-path-vector (path)
+  (make-array (length path)
+              :adjustable t
+              :fill-pointer t
+              :initial-contents path))
 
 (defun %edit-value-bytes-for-node (text node value)
   (let ((path (edit-node-path node)))
@@ -63,10 +67,7 @@
         (progn
           (%validate-toml-string
            value
-           (make-array (length path)
-                       :adjustable t
-                       :fill-pointer t
-                       :initial-contents path))
+           (%edit-path-vector path))
           (%edit-reject-invalid-literal-string node value triple)
           (if triple
               (format nil "'''~A'''" value)

@@ -129,11 +129,17 @@
       (expect (string= (%toml-test-format-text "name = \"old\"~%")
                        (%edit-test-text source)))))
   (it "rejects surrogate code points in literal-string replacements"
-    (let* ((source (%edit-test-bytes "a = 'old'"))
+    (let* ((source (%edit-test-bytes "arr = [{ k = 'old' }, { k = 'old' }]"))
            (surrogate (code-char #xD800))
-           (value (coerce (list #\n surrogate #\w) 'string)))
-      (expect (signals toml-encoding-error
-                (edit-toml source '("a") value)))))
+           (value (format nil "~C~C~C" #\n surrogate #\w))
+           (condition
+             (handler-case
+                 (progn (edit-toml source (list "arr" 1 "k") value) nil)
+               (error (condition) condition))))
+      (expect (typep condition 'toml-encoding-error))
+      (when (typep condition 'toml-encoding-error)
+        (expect (equal (list "arr" 1 "k")
+                       (toml-encoding-error-path condition))))))
   (it "rejects edit replacements that exceed the document nesting limit"
     (let* ((cl-toml-kit:*toml-max-nesting-depth* 2)
            (source (%edit-test-bytes "a = [1]"))
