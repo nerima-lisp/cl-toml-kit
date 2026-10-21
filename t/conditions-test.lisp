@@ -3,18 +3,26 @@
 
 (describe "TOML conditions"
   (it "normalizes parse and encoding constructor inputs"
-    (let ((parse-error (make-condition 'toml-parse-error
-                                       :expected "value"
-                                       :path '("root" "child")))
-          (encoding-error (make-condition 'toml-encoding-error
-                                          :message "bad"
-                                          :path '("root" "child"))))
-      (expect (and (string= "value" (toml-parse-error-expected parse-error))
-                   (equal '("root" "child")
-                          (toml-parse-error-path parse-error))))
-      (expect (and (string= "bad" (toml-encoding-error-message encoding-error))
-                   (equal '("root" "child")
-                          (toml-encoding-error-path encoding-error))))))
+    (let* ((raw-text (format nil "value~Ctail" (code-char 0)))
+           (raw-path (format nil "root~Cchild" (code-char 0)))
+           (parse-error
+             (cl-toml-kit::make-toml-parse-error
+              :expected raw-text
+              :path (list raw-path)))
+           (encoding-error
+             (cl-toml-kit::make-toml-encoding-error
+              :message raw-text
+              :path (list raw-path))))
+      (expect
+       (and (string= "value\\u0000tail"
+                     (toml-parse-error-expected parse-error))
+            (equal (list "root\\u0000child")
+                   (toml-parse-error-path parse-error))))
+      (expect
+       (and (string= "value\\u0000tail"
+                     (toml-encoding-error-message encoding-error))
+            (equal (list "root\\u0000child")
+                   (toml-encoding-error-path encoding-error))))))
   (it "reports default and normalized value-model messages"
     (let* ((default-error (make-condition 'toml-value-model-error))
            (non-string-error (make-condition 'toml-value-model-error :message 42)))
@@ -40,7 +48,7 @@
             (cl-toml-kit::make-toml-parse-error
              :text (make-string 300 :initial-element (code-char 120)))))
       (expect (= (length (toml-parse-error-text condition)) 256))))
-  (it "escapes noninteger parse coordinates in full reports"
+  (it "formats integer and escaped noninteger parse coordinates in full reports"
     (let* ((condition
              (make-condition 'toml-parse-error
                              :line (concatenate 'string
@@ -316,7 +324,7 @@
       (expect
        (string= "bad\\u0000\\u001B\\u0080\\u009F\\u007F"
                 (format nil "~A" value-error)))))
-  (it "escapes controls in format-preservation messages"
+  (it "escapes and normalizes format-preservation error inputs"
     (let* ((controls
             (coerce
              (list (code-char 0)
@@ -326,12 +334,25 @@
                    (code-char #x7F))
              'string))
            (message (concatenate 'string "bad" controls))
+           (raw-path (concatenate 'string "root" controls))
+           (normalized-message "bad\\u0000\\u001B\\u0080\\u009F\\u007F")
+           (normalized-path "root\\u0000\\u001B\\u0080\\u009F\\u007F")
            (format-error
-            (make-condition 'toml-format-preservation-error :message message)))
+            (make-condition 'toml-format-preservation-error :message message))
+           (constructor-error
+            (cl-toml-kit::make-toml-format-preservation-error
+             :message message
+             :path (list raw-path))))
       (expect
        (string=
         "TOML format-preserving edit error: bad\\u0000\\u001B\\u0080\\u009F\\u007F"
-        (format nil "~A" format-error)))))
+        (format nil "~A" format-error)))
+      (expect
+       (string= normalized-message
+                (toml-format-preservation-error-message constructor-error)))
+      (expect
+       (equal (list normalized-path)
+              (toml-format-preservation-error-path constructor-error)))))
   (it "reports nil encoding and format-preservation messages"
     (let ((encoding-error
             (make-condition 'toml-encoding-error :message nil))
