@@ -9,6 +9,17 @@
          (setf position (%skip-line-ending-at state position))
        (return position)))))
 
+(defun %call-with-reader-nesting-depth (state position path depth thunk)
+  (multiple-value-bind (limit message)
+      (%toml-limit :nesting-depth)
+    (when (> depth limit)
+      (%error-at-message state position message path)))
+  (let ((previous-depth (toml-reader-state-nesting-depth state)))
+    (setf (toml-reader-state-nesting-depth state) depth)
+    (unwind-protect
+         (funcall thunk)
+      (setf (toml-reader-state-nesting-depth state) previous-depth))))
+
 (define-toml-rule toml-read-value (state position success failure)
   (let* ((source (toml-reader-state-source state))
          (char (%source-char state position)))
@@ -46,7 +57,7 @@
       (%toml-limit :nesting-depth)
     (let ((depth (1+ (toml-reader-state-nesting-depth state))))
       (when (> depth nesting-limit)
-        (%error-at-message state position nesting-message nil t))
+        (%error-at-message state position nesting-message))
       (setf (toml-reader-state-nesting-depth state) depth)
       (let ((index (1+ position))
             (values '()))
@@ -86,6 +97,9 @@
                           (gethash child
                                    (toml-reader-state-table-states state))
                           :inline
+                          (gethash child
+                                   (toml-reader-state-table-depths state))
+                          (1+ (%reader-path-depth state target nil))
                           (gethash child created) t))
                    ((not (hash-table-p child))
                     (funcall failure error-position :inline-table nil))
@@ -115,7 +129,7 @@
       (%toml-limit :nesting-depth)
     (let ((depth (1+ (toml-reader-state-nesting-depth state))))
       (when (> depth nesting-limit)
-        (%error-at-message state position nesting-message nil t))
+        (%error-at-message state position nesting-message))
       (setf (toml-reader-state-nesting-depth state) depth)
       (let ((table (make-hash-table :test #'equal))
             (index (1+ position))
@@ -123,9 +137,9 @@
         (loop
           (setf index (%skip-inline-space state index))
           (when (eql (%source-char state index) #\})
-            (setf (gethash table
-                           (toml-reader-state-table-states state))
-                  :inline)
+            (setf (gethash table (toml-reader-state-table-states state)) :inline
+                  (gethash table (toml-reader-state-table-depths state))
+                  (toml-reader-state-nesting-depth state))
             (decf (toml-reader-state-nesting-depth state))
             (return-from toml-read-inline-table
               (funcall success table (1+ index))))
@@ -155,8 +169,13 @@
                                    state table keys created value value-end
                                    #'inline-value-stored failure))))
                          (declare (dynamic-extent #'accept-inline-value))
-                         (toml-read-value state value-position
-                                          #'accept-inline-value failure))))))
+                         (%call-with-reader-nesting-depth
+                          state value-position keys
+                          (%reader-path-depth state table (%path-parent keys))
+                          (lambda ()
+                            (toml-read-value state value-position
+                                             #'accept-inline-value failure))))))))
             (declare (dynamic-extent #'accept-inline-key))
             (%read-key-path state index
-                            #'accept-inline-key failure)))))))
+                            #'accept-inline-key failure
+                            :depth-table table)))))))

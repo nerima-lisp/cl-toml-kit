@@ -36,6 +36,7 @@
          (root (make-hash-table :test #'equal))
          (state (%make-reader-state :source text :source-name source-name
                                     :length (length text) :root root)))
+    (setf (gethash root (toml-reader-state-table-depths state)) 0)
     (loop for index below (length text)
           for char = (char text index)
           for code = (char-code char)

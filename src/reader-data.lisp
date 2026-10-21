@@ -10,6 +10,7 @@
   (root nil)
   (current nil)
   (table-states (make-hash-table :test #'eq))
+  (table-depths (make-hash-table :test #'eq))
   (buffer
    (make-array 64 :element-type 'character :adjustable t :fill-pointer 0)))
 
