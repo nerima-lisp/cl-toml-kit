@@ -29,73 +29,107 @@
     (toml-encoding-error () t)
     (sb-ext:timeout ()
       (error "Writer did not reject an invalid value before timeout."))))
-(defun %writer-escape-cases-match-p (function)
-  (and
-   (every
-    (lambda (case)
-      (destructuring-bind (input expected) case
-        (string= expected
-                 (with-output-to-string (stream)
-                   (funcall function input stream nil)))))
-    (list
-     (list "plain" "\"plain\"")
-     (list " " "\" \"")
-     (list (format nil "quote~Cslash~C" #\" #\\)
-           "\"quote\\\"slash\\\\\"")
-     (list (format nil "~C~C~C~C~C~C~C~C~C~C"
-                   #\Backspace #\Tab #\Newline #\Page #\Return
-                   #\" #\\ (code-char 0) (code-char 31) (code-char 127))
-           "\"\\b\\t\\n\\f\\r\\\"\\\\\\u0000\\u001F\\u007F\"")
-     (list (string (code-char 128))
-           (format nil "\"~C\"" (code-char 128)))
-     (list "café 🧪" "\"café 🧪\"")))
-   (handler-case
-       (progn
-         (funcall function
-          (string (code-char #xd800))
-          (make-string-output-stream)
-          nil)
-         nil)
-     (toml-encoding-error (condition)
-       (null (toml-encoding-error-path condition)))
-     (error () nil))))
-(defun %writer-mutation-form ()
-  (let ((*package* (find-package "CL-TOML-KIT")))
+(defun %writer-document-generator ()
+  (toml-test-document-generator
+   (cl-weave:gen-recursive
+    (cl-weave:gen-one-of
+     (cl-weave:gen-integer :min -1000 :max 1000)
+     (cl-weave:gen-string
+      :max-length 16
+      :alphabet (toml-test-string-alphabet))
+     (cl-weave:gen-member
+      (list t +toml-false+ -0.0d0 1.5d0))
+     (toml-test-date-generator))
+    #'%writer-generated-values
+    :max-depth 4)))
+(defun %writer-generated-samples-match-p (samples)
+  (every (lambda (document)
+           (let ((encoded (encode document)))
+             (handler-case
+                 (toml-test-value= document (parse encoded))
+               (toml-parse-error () nil))))
+         samples))
+(defun %writer-mutation-samples (generated-samples)
+  (let ((typed-values
+          (append
+           (list -1000 0 1000
+                 -0.0d0 1.5d0
+                 sb-ext:double-float-positive-infinity
+                 sb-ext:double-float-negative-infinity
+                 (%writer-nan)
+                 t +toml-false+
+                 "quote\"slash\\"
+                 (format nil "~C~C~C"
+                         #\Tab #\Newline (code-char 0))
+                 "café 🧪")
+           (toml-test-date-values))))
+    (append generated-samples
+            (mapcar (lambda (value)
+                      (%writer-table "value" value))
+                    typed-values))))
+(defun %writer-mutation-forms ()
+  (let* ((package (find-package "CL-TOML-KIT"))
+         (*package* package)
+         (string-name (find-symbol "%WRITE-STRING-VALUE" package))
+         (value-name (find-symbol "%WRITE-VALUE" package))
+         (emitter-name (find-symbol "DEFINE-TOML-EMITTER" package))
+         (string-form nil)
+         (value-form nil))
     (with-open-file
         (stream (asdf:system-relative-pathname
                  "cl-toml-kit" "src/writer.lisp"))
       (loop for form = (read stream nil :eof)
             until (eq form :eof)
-            when (and (consp form)
-                      (eq (first form) 'defun)
-                      (eq (second form) (find-symbol "%WRITE-STRING-VALUE" "CL-TOML-KIT")))
-              return form))))
+            do (cond
+                ((and (consp form)
+                      (eq (first form) (find-symbol "DEFUN" "COMMON-LISP"))
+                      (eq (second form) string-name))
+                 (setf string-form form))
+                ((and (consp form)
+                      (eq (first form) emitter-name)
+                      (eq (second form) value-name))
+                 (setf value-form (macroexpand-1 form))))))
+    (unless (and string-form value-form)
+      (error "Unable to read writer mutation forms."))
+    (require :sb-cltl2)
+    (setf (fourth value-form)
+          (funcall (symbol-function
+                    (find-symbol "MACROEXPAND-ALL" "SB-CLTL2"))
+                   (fourth value-form)))
+    (list (list string-name string-form)
+          (list value-name value-form))))
 ;; CL-WEAVE passes the mutated form first; the descriptor is unused here.
-(defun %writer-mutation-survives-p (form mutation)
+(defun %writer-mutation-survives-p (form mutation target samples)
   (declare (ignore mutation))
   (let* ((name (gensym "WRITER-MUTANT-"))
-         (definition (copy-tree form)))
+         (definition (copy-tree form))
+         (original (symbol-function target)))
     (setf (second definition) name)
     (unwind-protect
          (progn
-           (eval definition)
-           (handler-case
-               (%writer-escape-cases-match-p (symbol-function name))
-             (error () nil)))
+           (handler-bind
+               ((warning
+                  (lambda (condition)
+                    (let ((message (princ-to-string condition)))
+                      (when (and
+                             (search "Derived type of CL-TOML-KIT::ESCAPE is"
+                                     message :test (function char-equal))
+                             (search "(VALUES NULL &OPTIONAL)"
+                                     message :test (function char-equal))
+                             (search "conflicting with its asserted type"
+                                     message :test (function char-equal))
+                             (search "STRING."
+                                     message :test (function char-equal)))
+                        (muffle-warning condition))))))
+             (eval definition))
+           (setf (symbol-function target) (symbol-function name))
+           (%writer-generated-samples-match-p samples))
+      (setf (symbol-function target) original)
       (when (fboundp name)
         (fmakunbound name)))))
 (describe "TOML writer generated input"
   (it-property "writes and parses generated values"
-      ((table
-         (toml-test-document-generator
-          (cl-weave:gen-recursive
-           (cl-weave:gen-one-of
-            (cl-weave:gen-integer :min -1000 :max 1000)
-            (cl-weave:gen-string :max-length 16 :alphabet (toml-test-string-alphabet))
-            (cl-weave:gen-member
-             (list t +toml-false+ -0.0d0 1.5d0)))
-           #'%writer-generated-values
-           :max-depth 4))))
+      ((table (%writer-document-generator)))
     (expect (toml-test-value= table (parse (encode table)))))
   (cl-weave:it-fuzz
    "rejects cyclic tables with a TOML encoding error"
@@ -118,18 +152,67 @@
     (:trials 8 :timeout-per-trial 2)
     (%writer-expect-encoding-error
      (%writer-invalid-value :surrogate code)))
-  (it "kills all generated mutations of the production string escaper"
-    (let* ((form (%writer-mutation-form))
-           (results (cl-weave:run-mutations
-                     form #'%writer-mutation-survives-p))
-           (summary (cl-weave:mutation-summary results)))
-      (expect (and
-               (%writer-escape-cases-match-p
-                #'cl-toml-kit::%write-string-value)
-               (consp results)
-               (plusp (getf summary :total))))
-      (expect (= 1.0 (getf summary :score)))
-      (expect (and
-               (= (getf summary :killed) (getf summary :total))
-               (zerop (getf summary :survived))
-               (zerop (getf summary :errored)))))))
+  (cl-weave:it-fuzz
+   "classifies generated mutations of both production writer emitters"
+   ((generated-samples
+     (cl-weave:gen-list (%writer-document-generator)
+                        :min-length 100 :max-length 100)))
+   (:trials 1)
+   (let* ((forms (%writer-mutation-forms))
+          (samples (%writer-mutation-samples generated-samples))
+          (value-target (find-symbol "%WRITE-VALUE" "CL-TOML-KIT"))
+          (results-by-target
+            (loop for (target form) in forms
+                  collect
+                  (cons target
+                        (cl-weave:run-mutations
+                         form
+                         (lambda (mutated-form mutation)
+                           (%writer-mutation-survives-p
+                            mutated-form mutation target samples))))))
+          (value-results (cdr (assoc value-target results-by-target)))
+          (value-branch-tests
+            (loop for result in value-results
+                  for mutation = (cl-weave:mutation-result-mutation result)
+                  for original = (cl-weave:mutation-original mutation)
+                  when (and (consp original)
+                            (symbolp (first original))
+                            (string-equal (symbol-name (first original)) "IF")
+                            (eq (cl-weave:mutation-operator mutation)
+                                :conditional-branch))
+                    collect (prin1-to-string (second original))))
+          (results
+            (loop for entry in results-by-target
+                  append (cdr entry)))
+          (summary (cl-weave:mutation-summary results)))
+     (expect (= 2 (length forms)))
+     (expect (= 100 (length generated-samples)))
+     (expect (consp samples))
+     (expect (%writer-generated-samples-match-p samples))
+     (expect (consp results))
+     (expect (consp value-results))
+     (expect (consp value-branch-tests))
+     (expect
+       (every
+        (lambda (branch)
+          (some (lambda (test)
+                  (search branch test :test (function char-equal)))
+                value-branch-tests))
+        (list "SIGNED-BYTE 64" "DOUBLE-FLOAT"
+              "OFFSET-DATE-TIME" "LOCAL-DATE-TIME"
+              "LOCAL-DATE" "LOCAL-TIME")))
+     (expect (every (lambda (entry) (consp (cdr entry)))
+                    results-by-target))
+     (expect
+       (every
+        (lambda (entry)
+          (plusp
+           (getf (cl-weave:mutation-summary (cdr entry)) :killed)))
+        results-by-target))
+     (expect (plusp (getf summary :killed)))
+     (expect (zerop (getf summary :survived)))
+     (expect (plusp (getf summary :errored)))
+     (expect (= (getf summary :total)
+                (+ (getf summary :killed)
+                   (getf summary :survived)
+                   (getf summary :errored)))))))
