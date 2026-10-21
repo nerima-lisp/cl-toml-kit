@@ -34,10 +34,7 @@ and rejects unknown kind keywords at macro expansion. See the
 ## Opaque TOML false
 
 TOML false is not `nil`. Common Lisp uses `nil` for both boolean false and the
-empty list, and in this model `nil` and lists are not TOML values at all: an
-empty TOML array is an empty `simple-vector`, and TOML has no null. If `nil`
-doubled as TOML false, the empty list and the empty array would collide, which
-is exactly the ambiguity this model avoids.
+empty list. The native TOML value model does not include `nil` or lists.
 
 TOML false is instead an opaque sentinel, `+toml-false+`. It is a single
 object, distinct from both `t` and `nil`, created only by the library. Test

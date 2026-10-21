@@ -13,7 +13,7 @@ component order.
 | Path | Responsibility |
 | --- | --- |
 | `src/package.lisp` | Defines the public package and exported API. |
-| `src/conditions.lisp` | Defines typed parse and encoding conditions. |
+| `src/conditions.lisp` | Defines typed value-model, parse, encoding, and format-preservation conditions. |
 | `src/data.lisp` | Defines the native value model and generated predicates. |
 | `src/reader-data.lisp` | Defines reader state and character-class tables. |
 | `src/reader-macros.lisp` | Defines reader-rule and character-class macros. |
@@ -84,7 +84,7 @@ document value. It preserves bytes outside the edit and signals
 
 `nil` and lists are not TOML values. The declarative definitions in
 `src/data.lisp` derive the type declarations, predicates, kind dispatch, and
-`toml-value-typecase`. There are no adapter objects for date values.
+`toml-value-typecase`.
 
 ## Reader and writer control flow
 
@@ -103,7 +103,10 @@ the heap must not be declared `dynamic-extent`.
 
 `toml-kit-error` is the root condition. `toml-parse-error` adds source name,
 position, line, column, path, expected token, context, and a bounded diagnostic
-text excerpt. `toml-encoding-error` reports unsupported values and their path.
+text excerpt. The exported `toml-value-model-error` reports unknown TOML value
+kind keywords passed to `toml-value-typecase`; use its
+`toml-value-model-error-message` accessor to read the message.
+`toml-encoding-error` reports unsupported values and their path.
 `toml-format-preservation-error` reports edits that cannot be applied while
 preserving unrelated source bytes. Callers should use exported accessors rather
 than parse report strings.

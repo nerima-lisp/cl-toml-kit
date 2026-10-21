@@ -2,7 +2,7 @@
 
 `cl-toml-kit` provides a TOML reader, writer, and format-preserving editor.
 See the [design document](https://github.com/nerima-lisp/cl-toml-kit/blob/main/docs/design/architecture.md)
-for reader and writer design details.
+for reader, writer, and editor design details.
 
 ## Module layout
 
@@ -62,17 +62,8 @@ cases.
 
 ## Processing limits
 
-The package exports five dynamically bindable limit variables. For a variable
-used by an operation, the internal `%toml-limit` helper requires a
-non-negative integer and caps it at the listed hard ceiling.
-
-| Variable | Default | Hard ceiling | Current enforcement |
-| --- | ---: | ---: | --- |
-| `*toml-max-nesting-depth*` | 256 | 1,024 | `parse` and `edit-toml` array/inline-table depth; `encode` and `write-toml` nested table/array values |
-| `*toml-max-input-bytes*` | 16,777,216 | 1,073,741,824 | `parse-file` file bytes before allocation or decoding; octet vectors passed to `edit-toml` |
-| `*toml-max-input-characters*` | 16,777,216 | 1,073,741,824 | Strings and streams passed to `parse`, decoded `parse-file` text, and decoded `edit-toml` text; streams stop after the first character over the limit |
-| `*toml-max-number-token-length*` | 256 | 4,096 | Integer and decimal/exponent number tokens parsed by `parse`; fixed infinity and NaN literals bypass the check. `parse-file` and `edit-toml` reach it through their parser calls |
-| `*toml-max-path-components*` | 1,024 | 4,096 | Number of components in an `edit-toml` path; dotted keys and table headers can make a path longer than its nesting depth |
+See [Shared processing limits](api.md#shared-processing-limits) in the API
+reference for the defaults, hard ceilings, and enforcement details.
 
 ## Tests
 
