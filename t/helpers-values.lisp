@@ -142,80 +142,158 @@
     (loop for (key value) on entries by (function cddr)
           do (setf (gethash key table) value))
     table))
-(defun toml-test-parser-document-generator ()
+(defun %toml-test-nan-from-infinities (positive negative)
+  (sb-int:with-float-traps-masked (:invalid)
+    (+ positive negative)))
+
+(defun %toml-test-nan ()
+  (%toml-test-nan-from-infinities
+   sb-ext:double-float-positive-infinity
+   sb-ext:double-float-negative-infinity))
+
+(defun %toml-test-group-digits (digits group-size)
+  (with-output-to-string (stream)
+    (loop for index below (length digits)
+          do (when (and (plusp index)
+                        (zerop (mod (- (length digits) index) group-size)))
+               (write-char #\_ stream))
+             (write-char (char digits index) stream))))
+
+(defun %toml-test-basic-string-token (value)
+  (with-output-to-string (stream)
+    (write-char #\" stream)
+    (loop for character across value
+          for code = (char-code character)
+          do (cond ((char= character #\") (write-string "\\\"" stream))
+                   ((char= character #\\) (write-string "\\\\" stream))
+                   ((= code 8) (write-string "\\b" stream))
+                   ((= code 9) (write-string "\\t" stream))
+                   ((= code 10) (write-string "\\n" stream))
+                   ((= code 12) (write-string "\\f" stream))
+                   ((= code 13) (write-string "\\r" stream))
+                   ((or (< code 32) (<= 127 code 159))
+                    (format stream "\\u~4,'0X" code))
+                   (t (write-char character stream))))
+    (write-char #\" stream)))
+
+(defun %toml-test-escaped-string (suffix escape-characters)
+  (concatenate 'string
+               "quote:" (string #\")
+               " slash:" (string #\\)
+               (coerce escape-characters 'string)
+               " " suffix))
+
+(defun %toml-test-date-token (value)
+  (cond ((cl-date-kit:offset-date-time-p value)
+         (cl-date-kit:format-offset-date-time value :profile :rfc3339))
+        ((cl-date-kit:local-date-time-p value)
+         (cl-date-kit:format-local-date-time value :profile :rfc3339))
+        ((cl-date-kit:local-date-p value)
+         (cl-date-kit:format-local-date value))
+        ((cl-date-kit:local-time-p value)
+         (cl-date-kit:format-local-time value :profile :rfc3339))))
+
+(defun %toml-test-source-document (components)
+  (destructuring-bind
+      (positive negative hexadecimal octal binary underscored group-size
+       infinity-sign nan-sign negative-zero suffix escape-characters date
+       inline-amount records)
+      components
+    (let* ((escaped-value
+             (%toml-test-escaped-string suffix escape-characters))
+           (dynamic-key
+             (concatenate 'string "field:" suffix (string #\") (string #\\)))
+           (inline-value
+             (%toml-test-escaped-string
+              (concatenate 'string suffix "!") escape-characters))
+           (expected-records
+             (map 'vector
+                  (lambda (record)
+                    (destructuring-bind (name rank) record
+                      (%toml-test-table "name" name "rank" rank)))
+                  records))
+           (expected
+             (apply #'%toml-test-table
+                    (append
+                     (list "plus" positive
+                           "negative" (- negative)
+                           "hex" hexadecimal
+                           "octal" octal
+                           "binary" binary
+                           "underscored" underscored
+                           "positive-infinity" sb-ext:double-float-positive-infinity
+                           "negative-infinity" sb-ext:double-float-negative-infinity
+                           "nan" (%toml-test-nan)
+                           "negative-zero" (- 0d0)
+                           "escaped" escaped-value
+                           dynamic-key escaped-value
+                           "date" date
+                           "inline" (%toml-test-table
+                                     "amount" inline-amount
+                                     "label" inline-value)
+                           "records" expected-records))))
+           (source
+             (with-output-to-string (stream)
+               (flet ((grouped (value base)
+                        (%toml-test-group-digits
+                         (string-downcase
+                          (write-to-string value :base base :radix nil))
+                         group-size)))
+                 (format stream "plus = +~A~%" (grouped positive 10))
+                 (format stream "negative = -~A~%" (grouped negative 10))
+                 (format stream "hex = 0x~A~%" (grouped hexadecimal 16))
+                 (format stream "octal = 0o~A~%" (grouped octal 8))
+                 (format stream "binary = 0b~A~%" (grouped binary 2))
+                 (format stream "underscored = ~A~%" (grouped underscored 10))
+                 (format stream
+                         "positive-infinity = ~Ainf~%negative-infinity = -inf~%nan = ~Anan~%negative-zero = ~A~%"
+                         infinity-sign nan-sign negative-zero)
+                 (format stream "escaped = ~A~%~A = ~A~%"
+                         (%toml-test-basic-string-token escaped-value)
+                         (%toml-test-basic-string-token dynamic-key)
+                         (%toml-test-basic-string-token escaped-value))
+                 (format stream "date = ~A~%"
+                         (%toml-test-date-token date))
+                 (format stream "inline = { amount = ~A, label = ~A }~%"
+                         (grouped inline-amount 10)
+                         (%toml-test-basic-string-token inline-value))
+                 (loop for record across records
+                       do (destructuring-bind (name rank) record
+                            (format stream
+                                    "~%[[records]]~%name = ~A~%rank = ~D~%"
+                                    (%toml-test-basic-string-token name) rank)))))))
+      (list source expected))))
+
+(defun toml-test-source-document-generator ()
   (cl-weave:gen-map
-   (lambda (numbers)
-     (let* ((inline
-             (%toml-test-table
-              "enabled" t
-              "count" (aref numbers 1)
-              "nested" (%toml-test-table "label" "inline")))
-            (servers
-             (vector
-              (%toml-test-table
-               "name" "alpha" "port" (aref numbers 2))
-              (%toml-test-table
-               "name" "beta" "port" (aref numbers 3))))
-            (expected
-             (%toml-test-table
-              "positive" (aref numbers 0)
-              "hex" #xDEADBEEF
-              "octal" #o12345
-              "binary" #b10101111
-              "underscored" 1234567
-              "escaped-quote"
-              (concatenate 'string "quote: " (string #\"))
-              "escaped-backslash"
-              (concatenate 'string "slash: " (string #\\))
-              "escaped-bmp" "あ"
-              "escaped-scalar" "🧪"
-              "positive-infinity" sb-ext:double-float-positive-infinity
-              "nan" (sb-kernel:make-double-float #x7ff80000 0)
-              "negative-zero" -0.0d0
-              "date" (cl-date-kit:local-date-of 2026 1 2)
-              "time" (cl-date-kit:local-time-of 3 4 5)
-              "local-datetime"
-              (cl-date-kit:local-date-time-of 2026 1 2 3 4 5)
-              "offset-datetime"
-              (cl-date-kit:offset-date-time-of
-               2026 1 2 3 4 5 0 (cl-date-kit:zone-offset-utc))
-              "inline" inline
-              "servers" servers))
-            (source
-             (let ((quote-mark (string #\"))
-                   (backslash-mark (string #\\)))
-               (with-output-to-string (stream)
-                 (format stream
-                         "positive = +~D~%hex = 0xDEAD_BEEF~%octal = 0o12_345~%binary = 0b1010_1111~%underscored = 1_234_567~%"
-                         (aref numbers 0))
-                 (write-line
-                  (concatenate 'string
-                               "escaped-quote = " quote-mark "quote: "
-                               backslash-mark quote-mark quote-mark)
-                  stream)
-                 (write-line
-                  (concatenate 'string
-                               "escaped-backslash = " quote-mark "slash: "
-                               backslash-mark backslash-mark quote-mark)
-                  stream)
-                 (write-line
-                  (concatenate 'string "escaped-bmp = " quote-mark
-                               backslash-mark "u3042" quote-mark)
-                  stream)
-                 (write-line
-                  (concatenate 'string "escaped-scalar = " quote-mark
-                               backslash-mark "U0001F9EA" quote-mark)
-                  stream)
-                 (format stream
-                         "positive-infinity = inf~%nan = nan~%negative-zero = -0.0~%date = 2026-01-02~%time = 03:04:05~%local-datetime = 2026-01-02T03:04:05~%offset-datetime = 2026-01-02T03:04:05Z~%")
-                 (format stream
-                         "inline = { enabled = true, count = ~D, nested = { label = \"inline\" } }~%"
-                         (aref numbers 1))
-                 (format stream "[[servers]]~%name = \"alpha\"~%port = ~D~%~%"
-                         (aref numbers 2))
-                 (format stream "[[servers]]~%name = \"beta\"~%port = ~D~%"
-                         (aref numbers 3))))))
-       (list source expected)))
-   (cl-weave:gen-vector
-    (cl-weave:gen-integer :min 1 :max 999999)
-    :min-length 4 :max-length 4)))
+   #'%toml-test-source-document
+   (cl-weave:gen-tuple
+    (cl-weave:gen-integer :min 100000 :max 9999999)
+    (cl-weave:gen-integer :min 1 :max 9999999)
+    (cl-weave:gen-integer :min #x10000 :max #xFFFFFF)
+    (cl-weave:gen-integer :min #o10000 :max #o777777)
+    (cl-weave:gen-integer :min #b1000000000 :max #b1111111111111111)
+    (cl-weave:gen-integer :min 10000 :max 9999999999)
+    (cl-weave:gen-integer :min 2 :max 4)
+    (cl-weave:gen-member '("" "+"))
+    (cl-weave:gen-member '("" "+" "-"))
+    (cl-weave:gen-member '("-0.0" "-0.00" "-0e0" "-0.0_0"))
+    (cl-weave:gen-string :max-length 8
+                         :alphabet (toml-test-string-alphabet))
+    (cl-weave:gen-vector
+     (cl-weave:gen-member
+      (list (code-char 8) #\Tab #\Newline (code-char 12) #\Return
+            (code-char 0) (code-char 127) #\" #\\
+            (char "あ" 0) (char "🧪" 0)))
+     :min-length 1 :max-length 8)
+    (toml-test-date-generator)
+    (cl-weave:gen-integer :min 1 :max 9999999)
+    (cl-weave:gen-vector
+     (cl-weave:gen-tuple
+      (cl-weave:gen-string :min-length 1 :max-length 8
+                           :alphabet (toml-test-string-alphabet))
+      (cl-weave:gen-integer :min -999999 :max 999999))
+     :min-length 1 :max-length 3))))
+
+(defun toml-test-parser-document-generator ()
+  (toml-test-source-document-generator))
