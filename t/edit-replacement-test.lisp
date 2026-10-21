@@ -145,4 +145,50 @@
       (when (typep condition 'toml-encoding-error)
         (expect (equal (list "a" 0 0)
                        (toml-encoding-error-path condition))))
-      (expect (string= "a = [1]" (%edit-test-text source))))))
+      (expect (string= "a = [1]" (%edit-test-text source)))))
+  (it "applies writer limits and surrogate paths to additions"
+    (let ((cl-toml-kit:*toml-max-nesting-depth* 2))
+      (labels ((condition-for (source path value)
+                 (handler-case
+                     (progn (edit-toml (%edit-test-bytes source) path value) nil)
+                   (error (condition) condition)))
+               (expect-encoding-error (source path value expected-path)
+                 (let ((condition (condition-for source path value)))
+                   (expect (typep condition 'toml-encoding-error))
+                   (when (typep condition 'toml-encoding-error)
+                     (expect (equal expected-path
+                                   (toml-encoding-error-path condition))))))
+               (surrogate-string ()
+                 (coerce (list #\n (code-char #xd800) #\w) 'string)))
+        (expect-encoding-error "a = [1]~%"
+                               '("a" 1)
+                               #(#(1))
+                               '("a" 1 0))
+        (expect-encoding-error "a = { x = 1 }~%"
+                               '("a" "y")
+                               #(#(1))
+                               '("a" "y" 0))
+        (expect-encoding-error "a = 1~%"
+                               '("b")
+                               #(#(#(1)))
+                               '("b" 0 0))
+        (expect-encoding-error "a = [1]~%"
+                               '("a" 1)
+                               (surrogate-string)
+                               '("a" 1))
+        (expect-encoding-error "a = { x = 1 }~%"
+                               '("a" "y")
+                               (surrogate-string)
+                               '("a" "y"))
+        (expect-encoding-error "a = {}~%"
+                               (list "a" (surrogate-string))
+                               1
+                               '("a" "n\\uD800w"))
+        (expect-encoding-error "a = 1~%"
+                               '("b")
+                               (surrogate-string)
+                               '("b"))
+        (expect-encoding-error "a = 1~%"
+                               (list "parent" (surrogate-string))
+                               1
+                               '("parent" "n\\uD800w"))))))

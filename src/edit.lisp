@@ -142,23 +142,44 @@ Use :DELETE T, or call DELETE-TOML, to remove an existing value."
      &key (path-prefix-p #'%edit-path-prefix-p))
   (let* ((last-component (car (last path)))
          (parent-path (butlast path))
-         (value (%edit-value-bytes new-value))
          (parent-match (first (%edit-collect-nodes assignments parent-path)))
          (parent-node (car parent-match))
-         (section (%edit-section-for-path sections parent-path)))
-    (cond
-      ((%edit-array-addition-p last-component parent-match)
-       (%edit-insert-array text parent-node value))
-      ((%edit-inline-addition-p last-component parent-match)
-       (%edit-insert-inline text parent-node last-component value))
-      ((and (stringp last-component) section)
-       (%edit-insert-line text section (list last-component) value))
-      ((%edit-unambiguous-root-addition-p
-        last-component assignments sections parent-path
-        :path-prefix-p path-prefix-p)
-       (%edit-insert-line text (or (%edit-section-for-path sections nil)
-                                   (first sections))
-                          path value))
-      (t
-       (%edit-fail path
-                   "Adding this path would require an ambiguous table or array structure")))))
+         (array-addition-p (%edit-array-addition-p last-component parent-match))
+         (inline-addition-p (%edit-inline-addition-p last-component parent-match))
+         (initial-depth (if (or array-addition-p inline-addition-p)
+                            (1+ (edit-node-parent-depth parent-node))
+                          0))
+         (value (%edit-value-bytes new-value initial-depth path))
+         (section (%edit-section-for-path sections parent-path))
+         (writer-path (make-array (length parent-path)
+                                  :adjustable t
+                                  :fill-pointer t
+                                  :initial-contents parent-path)))
+    (labels ((validate-key (key)
+               (%validate-writer-key key writer-path))
+             (validate-key-path (key-path)
+               (let ((key-path-vector (make-array 0
+                                                  :adjustable t
+                                                  :fill-pointer 0)))
+                 (dolist (key key-path)
+                   (%validate-writer-key key key-path-vector)
+                   (vector-push-extend key key-path-vector)))))
+      (cond
+        (array-addition-p
+         (%edit-insert-array text parent-node value))
+        (inline-addition-p
+         (validate-key last-component)
+         (%edit-insert-inline text parent-node last-component value))
+        ((and (stringp last-component) section)
+         (validate-key last-component)
+         (%edit-insert-line text section (list last-component) value))
+        ((%edit-unambiguous-root-addition-p
+          last-component assignments sections parent-path
+          :path-prefix-p path-prefix-p)
+         (validate-key-path path)
+         (%edit-insert-line text (or (%edit-section-for-path sections nil)
+                                     (first sections))
+                            path value))
+        (t
+         (%edit-fail path
+                     "Adding this path would require an ambiguous table or array structure"))))))
