@@ -76,7 +76,6 @@
                  collect `(,entry-key ,value))
          (otherwise ,otherwise)))))
 
-;; Keep writer call sites compatible with the generic lookup macro.
 (define-toml-ascii-table +toml-bare-key-table+
                          char
                          (or (alpha-char-p char)
