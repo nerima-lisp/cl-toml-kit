@@ -1,4 +1,66 @@
 (in-package #:cl-toml-kit/test)
+;; This timeout must beat cl-weave's timeout, which skips timed-out trials.
+(defun %reader-property-run-with-fail-fast-timeout (description thunk)
+  (handler-case
+      (sb-ext:with-timeout 5
+        (funcall thunk))
+    (sb-ext:timeout ()
+      (error "TOML parser fuzz trial timed out while ~A" description))
+    ;; Fuzz inputs accept any public TOML kit error condition.
+    (toml-kit-error () nil)
+    (serious-condition (condition)
+      (error "TOML parser fuzz trial ~A raised unexpected condition ~A: ~A"
+             description (type-of condition) condition))))
+(defun %reader-property-with-byte-file (octets thunk)
+  (uiop:with-temporary-file (:stream stream :pathname pathname
+                             :directory (uiop:temporary-directory)
+                             :prefix "cl-toml-kit-reader-property-"
+                             :element-type (quote (unsigned-byte 8)))
+    (write-sequence octets stream)
+    ;; UIOP closes the stream before it calls this thunk with the temporary path.
+    :close-stream
+    (funcall thunk pathname)))
+(defun %reader-property-octets-generator ()
+  (cl-weave:gen-map
+   (lambda (bytes)
+     (make-array (length bytes)
+                 :element-type (quote (unsigned-byte 8))
+                 :initial-contents bytes))
+   (cl-weave:gen-vector
+    (cl-weave:gen-integer :min 0 :max 255)
+    :min-length 1024 :max-length 8192)))
+(defun %reader-property-nested-source (kind depth)
+  (ecase kind
+    (:array
+     (concatenate (quote string)
+                  "value = "
+                  (make-string depth :initial-element #\[)
+                  "0"
+                  (make-string depth :initial-element #\])))
+    (:inline-table
+     (concatenate
+      (quote string)
+      "value = "
+      (with-output-to-string (stream)
+        (dotimes (index depth)
+          (write-string "{a = " stream))
+        (write-char #\0 stream)
+        (dotimes (index depth)
+          (write-char #\} stream)))))))
+(defun %reader-property-dotted-key-source (source-length)
+  ;; Keep the dotted key bounded while comments raise the total document length.
+  (let* ((segment-count (min 128 (max 64 (floor source-length 256))))
+         (key
+           (with-output-to-string (stream)
+             (write-char #\a stream)
+             (dotimes (index (1- segment-count))
+               (write-string ".a" stream))))
+         (assignment (format nil "~A = 0" key))
+         (comment-length (- source-length (length assignment) 3)))
+    (format nil "~A~%# ~A"
+            assignment
+            (make-string comment-length :initial-element #\x))))
+;; Fuzz checks termination and condition class; parser properties check value semantics.
 (describe "TOML parser generated input"
   (it-property "reads generated decimal integer documents"
       ((value (cl-weave:gen-integer
@@ -9,18 +71,61 @@
       value
       (gethash "value"
                (parse (format nil "value = ~D" value))))))
-  ;; Bound recursive parser depth by keeping generated strings short.
   (cl-weave:it-fuzz
-   "returns a value or a TOML error for generated strings"
+   "returns a value or signals a TOML kit error for long generated strings"
       ((source (cl-weave:gen-string
-               :max-length 96
-               :alphabet
-               (concatenate
-                'string
-                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 #=[]{},.+-_:"
-                (map 'string #'code-char
-                     '(0 1 9 10 13 31 127 34 39 92))))))
-    (:trials 40 :timeout-per-trial 2)
-    (handler-case
-        (expect (hash-table-p (parse source)))
-      (toml-kit-error () nil))))
+                :min-length 2048
+                :max-length 32768
+                :alphabet
+                (concatenate
+                 (quote string)
+                 "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 #=[]{},.+-_:"
+                 (map (quote string) (function code-char)
+                      (quote (0 1 9 10 13 31 127 34 39 92)))))))
+    (:trials 32 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "parsing generated text"
+     (lambda () (parse source))))
+  (cl-weave:it-fuzz
+   "returns a value or signals a TOML kit error for long nested arrays"
+      ((depth (cl-weave:gen-integer :min 1024 :max 4096)))
+    (:trials 8 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "parsing nested arrays"
+     (lambda () (parse (%reader-property-nested-source :array depth)))))
+  (cl-weave:it-fuzz
+   "returns a value or signals a TOML kit error for long nested inline tables"
+      ((depth (cl-weave:gen-integer :min 1024 :max 4096)))
+    (:trials 8 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "parsing nested inline tables"
+     (lambda ()
+       (parse (%reader-property-nested-source :inline-table depth)))))
+  (cl-weave:it-fuzz
+   "returns a value or signals a TOML kit error for bounded dotted keys in long documents"
+      ((source-length (cl-weave:gen-integer :min 2048 :max 32768)))
+    (:trials 8 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "parsing a bounded dotted key"
+     (lambda ()
+       (parse (%reader-property-dotted-key-source source-length)))))
+  (cl-weave:it-fuzz
+   "returns a value or signals a TOML kit error for generated byte files"
+      ((octets (%reader-property-octets-generator)))
+    (:trials 16 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "reading a generated byte file"
+     (lambda ()
+       (%reader-property-with-byte-file
+        octets
+        (lambda (pathname) (parse-file pathname))))))
+  (cl-weave:it-fuzz
+   "returns a byte vector or signals a TOML kit error for generated edit bytes"
+      ((octets (%reader-property-octets-generator)))
+    (:trials 16 :timeout-per-trial 8)
+    (%reader-property-run-with-fail-fast-timeout
+     "editing generated octets"
+     (lambda ()
+       (let ((edited (edit-toml octets (list "value") 0)))
+         (expect (typep edited
+                        (quote (vector (unsigned-byte 8))))))))))
