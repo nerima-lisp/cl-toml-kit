@@ -30,7 +30,9 @@ Diagnostics escape control characters and surrogate code points. Source-name lab
 
 ### Performance
 
-The continuation-based reader trades parsing throughput for the security improvements in this release.
+Parsing took roughly 1.1 to 1.6 times as long as with the earlier parser in the measured workloads.
+Measurements used two warmups followed by 10 samples of 10 iterations, with a full garbage collection
+before each sample. This throughput cost is accepted with the security changes in this release.
 
 For flat TOML inputs, an allocation optimization brought the continuation-based reader's allocations closer to those of the earlier parser.
 
