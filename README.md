@@ -8,20 +8,21 @@ and failures signal structured conditions.
 
 ## Install
 
+On `x86_64-linux` with Nix flakes enabled, build the package with Nix:
+
 ```sh
 nix build github:nerima-lisp/cl-toml-kit
 ```
 
-or put the repository where ASDF can find it:
+Or load it with ASDF after setting up the source registry as described in
+[Getting Started](https://nerima-lisp.github.io/cl-toml-kit/getting-started/):
 
 ```lisp
 (asdf:load-system "cl-toml-kit")
 ```
 
 The runtime depends on `cl-parser-kit`, `cl-date-kit`, and `cl-codec-kit`; the
-test system additionally uses `cl-weave` and `cl-json-kit`. SBCL is the
-supported implementation. See
-[Getting Started](https://nerima-lisp.github.io/cl-toml-kit/getting-started/).
+test system additionally uses `cl-weave` and `cl-json-kit`.
 
 ## Use
 
@@ -64,9 +65,10 @@ bytes, including comments, whitespace, and line endings:
 `source` and the result are UTF-8 byte vectors. A path string is one key, not a
 dot-separated path: `("a.b")` addresses the key named `a.b`, while
 `("a" "b")` addresses a nested table value. Array elements use zero-based
-integer components. Edits are parsed again and rejected if the result does
-not have the requested document value. Use `delete-toml` or `:delete t` for
-deletion; omitting the edit value is not deletion.
+integer components. Each edit result is parsed again and checked against the
+original document with the requested change applied. Call
+`cl-toml-kit:delete-toml` or `(cl-toml-kit:edit-toml source path nil :delete t)`
+to delete a value; omitting the edit value alone is not deletion.
 
 See the [editing API reference](docs/src/reference/api.md#format-preserving-editing) for
 the supported rejection conditions.
@@ -77,12 +79,6 @@ the supported rejection conditions.
 hash table with string keys, and an array is a simple vector. `nil` and lists
 are not TOML values, so a list can never be silently written as a table, an
 array, or a null.
-
-**Dates stay typed.** The four cl-date-kit date and time types are first-class
-TOML values, so a date never makes a round trip through a string.
-
-**`false` is distinct.** `+toml-false+` is an opaque sentinel, kept separate
-from Lisp `nil` and from `t`.
 
 **Structured diagnostics.** Parse failures signal `toml-parse-error` with
 source coordinates and optional expected-input and path details. Encoding
@@ -116,9 +112,18 @@ failures signal `toml-encoding-error` with a message and optional value path.
 
 ## Development
 
+With Nix flakes enabled, run the full flake checks on `x86_64-linux`; CI runs
+them there:
+
 ```sh
-nix flake check               # tests, coverage, docs, formatting, paredit lint
-sbcl --script run-tests.lisp   # tests only
+nix flake check
+```
+
+On macOS, run the Lisp test suite with SBCL and the ASDF dependencies listed
+in [Getting Started](https://nerima-lisp.github.io/cl-toml-kit/getting-started/):
+
+```sh
+sbcl --script run-tests.lisp
 ```
 
 Diagnostic benchmarks run with `sbcl --script run-benchmarks.lisp`.

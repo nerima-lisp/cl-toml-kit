@@ -61,7 +61,6 @@
     let
       systems = [
         "x86_64-linux"
-        "aarch64-darwin"
       ];
 
       # mkdocs and treefmt finish in seconds; 300 s stops a hung command

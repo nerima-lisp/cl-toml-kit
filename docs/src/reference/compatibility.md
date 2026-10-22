@@ -16,7 +16,6 @@ test suite for TOML parsers and emitters. The vendored corpus lives under
 
 | Field | Value |
 |---|---|
-| Upstream project | [toml-lang/toml-test](https://github.com/toml-lang/toml-test) |
 | Tag | `v2.2.0` |
 | Commit | `ce08da1ddb075d1c7596d663c7fcba9a2ae02c5c` |
 | Selection manifest | `tests/files-toml-1.1.0` |
@@ -26,11 +25,9 @@ upstream generates with `toml-test list -toml=1.1.0`. It contains 214 valid
 `.toml`/`.json` pairs and 467 invalid `.toml` files, 895 files in all.
 
 All checks run against the vendored files; nothing is fetched at build or test
-time. Conformance means two things. The reader must accept every valid fixture
-and produce its matching expectation, and must reject every invalid fixture.
-The writer must emit TOML that matches each valid fixture semantically, since
-TOML allows several spellings of the same value. The current test suite accepts
-all 214 valid fixtures and rejects all 467 invalid fixtures.
+time. The reader tests accept all 214 valid fixtures and reject all 467 invalid
+fixtures. A separate round-trip test parses each valid fixture, encodes the
+result, reparses it, and compares the values.
 
 To refresh the corpus from a chosen upstream tag, run
 `TOML_VERSION=1.1.0 scripts/update-toml-test-fixtures.sh [TAG]` from the
@@ -39,10 +36,12 @@ repository root.
 ## Supported implementation
 
 SBCL is the only supported implementation. The writer relies on SBCL's
-insertion-order hash-table traversal within its output groups: values, tables,
-then arrays of tables. Other Common Lisp implementations are not supported
-and not verified. The flake builds for the `x86_64-linux` and `aarch64-darwin`
-platforms.
+insertion-order hash-table traversal to preserve key order within each group.
+It writes values first, followed by tables and then arrays of tables. Other
+Common Lisp implementations are not supported and not verified. The Nix flake
+provides outputs for `x86_64-linux` only. CI runs the full flake checks there.
+macOS developers can run the Lisp test suite with SBCL by following the ASDF
+setup in [Getting Started](../getting-started.md).
 
 ## Dependencies
 
@@ -72,5 +71,5 @@ Once 1.0.0 is released, the exported surface is intended to follow
 package symbols documented in [API reference](api.md) and
 [Conditions](conditions.md), and the value mapping documented in
 [Data model](../guide/data-model.md). A breaking change to it then requires a
-major version bump. No deprecation policy exists yet. When a breaking change is
-released, it is recorded here.
+major version bump. No deprecation policy exists yet. Breaking changes are
+listed in the changelog for each release.

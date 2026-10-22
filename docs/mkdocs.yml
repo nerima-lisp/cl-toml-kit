@@ -1,8 +1,6 @@
-# cl-toml-kit documentation - MkDocs + Material configuration.
-#
-# Build:   mkdocs build -f docs/mkdocs.yml --strict
+# Build:   mkdocs build -f docs/mkdocs.yml
 # Serve:   mkdocs serve  -f docs/mkdocs.yml
-# The Nix flake (`nix build .#docs`) drives the same config offline.
+# The Nix flake docs output is available on x86_64-linux: `nix build .#docs`.
 
 site_name: cl-toml-kit
 site_description: Common Lisp toolkit for parsing and emitting TOML
@@ -18,10 +16,8 @@ docs_dir: src
 site_dir: ../site
 use_directory_urls: true
 
-# Also passed as --strict by the flake's docs build. Declaring it here as well
-# means `mkdocs serve` applies the same gate, so no invocation path silently
-# tolerates a broken link or a page missing from the nav. Use
-# `mkdocs serve --no-strict` while drafting.
+# Normal `mkdocs serve` is strict. To draft, run:
+# `mkdocs serve -f docs/mkdocs.yml --no-strict`.
 strict: true
 
 copyright: Copyright &copy; cl-toml-kit contributors. MIT License.
@@ -116,14 +112,11 @@ markdown_extensions:
       permalink: true
       title: On this page
 
-# Sections follow DOCS_STANDARD.md: Home, Getting Started, Guide, Reference.
-# There is no Project section because this repository has no project-specific
-# pages. index.md and getting-started.md stay at the root rather than under
-# guide/: a reader who has not run anything yet should not have to open the
-# Guide first.
+# Keep index.md and getting-started.md at the root rather than under guide/: a
+# reader who has not run anything yet should not have to open the Guide first.
 #
-# Every page under docs/src/ must appear here: `strict: true` fails the build
-# on an unlisted page, which is what keeps this list from falling behind.
+# List every publishable page under docs/src/ in nav. Paths in not_in_nav below
+# are excluded from navigation.
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
@@ -139,7 +132,7 @@ nav:
       - Compatibility: reference/compatibility.md
       - Benchmarks: reference/benchmarks.md
 
-# docs/notes/ holds measurements worth keeping but not worth publishing.
-# Without this declaration --strict fails the build the moment one is added.
+# MkDocs resolves not_in_nav paths relative to docs_dir (src). Use notes/ for
+# historical measurements that should remain in the site but stay out of nav.
 not_in_nav: |
   notes/

@@ -9,13 +9,15 @@ and [`cl-json-kit`](https://github.com/nerima-lisp/cl-json-kit).
 
 ## With Nix
 
-The repository is a Nix flake. To build the ASDF system:
+The Nix flake provides package, check, and development-shell outputs for
+`x86_64-linux` only. Use Nix with flakes enabled on an x86_64 Linux host; CI
+runs the full flake checks on that platform.
 
 ```sh
 nix build github:nerima-lisp/cl-toml-kit
 ```
 
-The flake also exposes per-system attributes:
+The flake also provides these commands on `x86_64-linux`:
 
 ```sh
 # Run the test suite, coverage gate, docs build, formatting, and paredit
@@ -25,6 +27,9 @@ nix flake check
 # Enter a devShell with SBCL and paredit-cli.
 nix develop
 ```
+
+The flake does not provide macOS outputs. To run the Lisp test suite there,
+use the ASDF procedure below.
 
 ## With ASDF
 
@@ -64,14 +69,36 @@ requires `cl-weave` (1.4.0 or newer) and `cl-json-kit` (1.2.0 or newer).
 
 ## Running tests
 
-The standalone test system requires the runtime dependencies above and both
-test dependencies. Download their source archives at the minimum tagged
-versions above, then add `:directory` entries for their roots to the
-`CL_SOURCE_REGISTRY` form before running:
+On macOS, install SBCL. This procedure does not pin an SBCL version. Download
+the source archives for the three runtime dependencies and two test
+dependencies at the minimum tagged versions above.
+Unpack each archive, then set `CL_SOURCE_REGISTRY` to include the repository
+and each dependency root:
+
+```sh
+export CL_SOURCE_REGISTRY='(:source-registry
+  (:directory "/path/to/cl-toml-kit/")
+  (:directory "/path/to/cl-parser-kit/")
+  (:directory "/path/to/cl-date-kit/")
+  (:directory "/path/to/cl-codec-kit/")
+  (:directory "/path/to/cl-weave/")
+  (:directory "/path/to/cl-json-kit/")
+  :inherit-configuration)'
+```
+
+Replace each example path with the repository checkout or the directory for
+that unpacked dependency.
+
+From the repository root, run:
 
 ```sh
 sbcl --script run-tests.lisp
 ```
+
+A passing suite exits with status 0; an error exits with status 1.
+
+This runs the Lisp test suite only. The full flake checks, including coverage,
+docs, formatting, and paredit lint, remain on `x86_64-linux` and CI.
 
 ## Parse a document
 
@@ -123,8 +150,8 @@ The writer rejects values that are not valid TOML with a typed condition:
 `toml-encoding-error-path` names the location of the rejected value. Malformed
 input signals `toml-parse-error`, which carries source coordinates, a path,
 and an expected-token description. See
-[Conditions](reference/conditions.md) for every reader on these condition
-objects.
+[Conditions](reference/conditions.md) for every accessor function on these
+condition objects.
 
 ## Next steps
 
