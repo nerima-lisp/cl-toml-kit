@@ -103,11 +103,7 @@
                           (gethash child created) t))
                    ((not (hash-table-p child))
                     (funcall failure error-position :inline-table nil))
-                   ((and (eq (gethash
-                              child
-                              (toml-reader-state-table-states state))
-                             :inline)
-                         (not (gethash child created)))
+                   ((not (gethash child created))
                     (funcall failure error-position :inline-table nil)))
                  (setf target child))))
     (funcall success target)))

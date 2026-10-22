@@ -400,8 +400,5 @@
                    (adjustable-vector-p
                     (loop for index downfrom (1- (length item)) to 0
                           for child = (aref item index)
-                          when (or (hash-table-p child)
-                                   (and (vectorp child)
-                                        (adjustable-array-p child)))
-                            do (push-frame child finalized index)))))))
+                          do (push-frame child finalized index)))))))
     result))
