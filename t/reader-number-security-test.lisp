@@ -87,8 +87,9 @@
       (expect (= least-positive-double-float subnormal))
       (expect (toml-float-p compensated))
       (expect (plusp compensated))))
-  (it "reports malformed date fields and positions across CRLF and CRXLF"
+  (it "reports malformed date errors and numeric CRLF/CRXLF positions"
     (dolist (text '("value = 1979-xx-27"
+                    "value = 1979-05x27"
                     "value = 1979-05-xx"))
       (let ((condition (%reader-number-error text)))
         (expect (typep condition 'toml-parse-error))

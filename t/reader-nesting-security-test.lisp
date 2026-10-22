@@ -186,6 +186,12 @@
                 (expect (eq :returned parse-result))
                 (expect (eq :returned file-result))
                 (expect (eq :returned edit-result))))
+          (it "reports a key error for malformed input at the dotted-key depth limit"
+            (let* ((*toml-max-nesting-depth* 1)
+                   (condition (%reader-test-nesting-error "a.@ = 1")))
+              (expect
+               (equal (list (find-symbol "TOML-PARSE-ERROR" "CL-TOML-KIT") 2 "key")
+                      (%reader-test-condition-report condition)))))
           (it "accepts repeated dotted keys in an inline table below the nesting limit"
     (let* ((*toml-max-nesting-depth* 6)
            (result (parse "x = {a.b.c.p = 1, a.b.c.q = 1}"))
