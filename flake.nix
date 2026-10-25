@@ -20,7 +20,7 @@
     };
 
     cl-codec-kit = {
-      url = "github:nerima-lisp/cl-codec-kit/v0.6.0";
+      url = "github:nerima-lisp/cl-codec-kit/v0.5.0";
       flake = false;
     };
 
