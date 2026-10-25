@@ -30,7 +30,7 @@
     };
 
     cl-json-kit = {
-      url = "github:nerima-lisp/cl-json-kit/v1.2.0";
+      url = "github:nerima-lisp/cl-json-kit/v1.1.0";
       flake = false;
     };
 
